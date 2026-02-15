@@ -8,6 +8,21 @@ import Link from 'next/link';
 import { useSession, signIn } from 'next-auth/react';
 import LoginLoading from './LoginLoading';
 
+// SEC-06: Validate callback URLs to prevent open redirect attacks
+function isValidCallbackUrl(url: string | null | undefined): string {
+  if (!url) return '/';
+  // Must be relative path, no protocol-relative URLs
+  if (!url.startsWith('/') || url.startsWith('//')) return '/';
+  // Reject URLs with encoded characters that could bypass checks
+  try {
+    const decoded = decodeURIComponent(url);
+    if (decoded.startsWith('//') || decoded.includes('://')) return '/';
+  } catch {
+    return '/';
+  }
+  return url;
+}
+
 export default function LoginForm() {
   const [aydoHandle, setAydoHandle] = useState('');
   const [password, setPassword] = useState('');
@@ -32,8 +47,8 @@ export default function LoginForm() {
         return;
       }
 
-      // Get the callback URL if it exists
-      const callbackUrl = searchParams?.get('callbackUrl') || '/';
+      // Get the callback URL if it exists, validate to prevent open redirect
+      const callbackUrl = isValidCallbackUrl(searchParams?.get('callbackUrl'));
       router.replace(callbackUrl);
     }
   }, [status, router, session, isLoading, searchParams]);
@@ -80,7 +95,7 @@ export default function LoginForm() {
         aydoHandle,
         password,
         redirect: false,
-        callbackUrl: searchParams?.get('callbackUrl') || '/'
+        callbackUrl: isValidCallbackUrl(searchParams?.get('callbackUrl'))
       });
 
       console.log("SignIn result:", result);
@@ -255,7 +270,7 @@ export default function LoginForm() {
           {/* Discord OAuth Button */}
           <motion.button
             type="button"
-            onClick={() => signIn('discord', { callbackUrl: searchParams?.get('callbackUrl') || '/' })}
+            onClick={() => signIn('discord', { callbackUrl: isValidCallbackUrl(searchParams?.get('callbackUrl')) })}
             className="mg-button w-full py-2 px-4 mb-4 relative overflow-hidden bg-[rgba(88,101,242,0.1)] border border-[rgba(88,101,242,0.3)] hover:bg-[rgba(88,101,242,0.2)] transition-colors"
             whileTap={{ scale: 0.98 }}
             disabled={isLoading}

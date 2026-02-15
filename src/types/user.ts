@@ -2,7 +2,7 @@ export interface User {
   id: string;
   aydoHandle: string;
   email: string;
-  passwordHash: string;
+  passwordHash: string | null;
   clearanceLevel: number;
   role: string;
   discordName: string | null;

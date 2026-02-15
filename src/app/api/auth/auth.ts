@@ -113,7 +113,7 @@ export const authOptions: NextAuthOptions = {
               id: crypto.randomUUID(),
               aydoHandle: discordProfileData.displayName || discordProfile.username || user.name || 'discord_user',
               email: user.email || '',
-              passwordHash: '', // No password for OAuth users
+              passwordHash: null, // SEC-07: null (not empty string) for OAuth users
               clearanceLevel: 1,
               role: 'user',
               discordId: user.id,
