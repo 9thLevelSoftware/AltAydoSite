@@ -20,20 +20,21 @@ const WARM_WIDTHS = [384, 96];
  */
 export async function GET(request: NextRequest) {
   try {
-    // Auth check
+    // Fail-closed cron auth: reject if CRON_SECRET not configured
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader !== `Bearer ${cronSecret}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
+    if (!cronSecret) {
+      console.error('[cron] CRON_SECRET not configured - rejecting request');
+      return NextResponse.json({ error: 'Server misconfigured' }, { status: 503 });
+    }
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     console.log('[warm-images] Starting image cache warm-up...');
 
     // Get all ship image URLs (lightweight projection)
-    const { client } = await connectToDatabase();
-    const db = client.db(process.env.COSMOS_DATABASE_ID || 'aydocorp-database');
+    const { db } = await connectToDatabase();
     const ships = await db
       .collection('ships')
       .find({}, { projection: { 'images.angledView': 1, 'images.store': 1, _id: 0 } })

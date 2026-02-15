@@ -18,8 +18,7 @@ export async function getTransactions(userEmail: string | null | undefined) {
   }
 
   try {
-    const { client } = await connectToDatabase();
-    const db = client.db();
+    const { db } = await connectToDatabase();
 
     const transactions = await db
       .collection('transactions')

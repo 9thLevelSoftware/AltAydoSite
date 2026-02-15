@@ -12,14 +12,16 @@ export async function GET(request: NextRequest) {
   try {
     console.log('🔄 Automated Discord user sync started');
     
-    // Optional: Add basic security with a cron secret
+    // Fail-closed cron auth: reject if CRON_SECRET not configured
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader !== `Bearer ${cronSecret}`) {
-        console.log('❌ Unauthorized cron request');
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
+    if (!cronSecret) {
+      console.error('[cron] CRON_SECRET not configured - rejecting request');
+      return NextResponse.json({ error: 'Server misconfigured' }, { status: 503 });
+    }
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      console.log('❌ Unauthorized cron request');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Run the sync

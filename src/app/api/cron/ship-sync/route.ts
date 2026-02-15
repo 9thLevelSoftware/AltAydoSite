@@ -14,14 +14,16 @@ export async function GET(request: NextRequest) {
   try {
     console.log('[ship-sync] API sync triggered');
 
-    // Auth check using existing CRON_SECRET pattern
+    // Fail-closed cron auth: reject if CRON_SECRET not configured
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader !== `Bearer ${cronSecret}`) {
-        console.log('[ship-sync] Unauthorized cron request');
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
+    if (!cronSecret) {
+      console.error('[cron] CRON_SECRET not configured - rejecting request');
+      return NextResponse.json({ error: 'Server misconfigured' }, { status: 503 });
+    }
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      console.log('[ship-sync] Unauthorized cron request');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const result = await syncShipsFromFleetYards();

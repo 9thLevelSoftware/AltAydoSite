@@ -106,8 +106,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { client } = await connectToDatabase();
-    const db = client.db();
+    const { db } = await connectToDatabase();
 
     const transaction: Omit<Transaction, 'id' | '_id'> = {
       type,
