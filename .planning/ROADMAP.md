@@ -20,7 +20,7 @@ See `.planning/MILESTONES.md` for v1.0 details. 26 plans across 8 phases (includ
 
 **Phase Numbering:** Integer phases (8, 9, 10): Planned milestone work. Decimal phases (9.1, 9.2): Urgent insertions if needed.
 
-- [ ] **Phase 8: MongoDB Consolidation** - Merge dual connection modules into single client with unified pool
+- [x] **Phase 8: MongoDB Consolidation** - Merge dual connection modules into single client with unified pool (completed 2026-02-15)
 - [ ] **Phase 9: Emergency Security & Dependency Cleanup** - Patch critical vulnerabilities, upgrade Next.js, remove unused packages, define missing CSS variable
 - [ ] **Phase 10: Access Control Hardening** - RBAC enforcement, rate limiting, CSP headers, ownership checks, image validation
 - [ ] **Phase 11: UX Critical Fixes** - Profile server migration, toast notifications, confirmation dialogs
@@ -178,7 +178,7 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 8. MongoDB Consolidation | v1.1 | 0/2 | Planned | - |
+| 8. MongoDB Consolidation | v1.1 | 2/2 | Complete | 2026-02-15 |
 | 9. Emergency Security & Deps | v1.1 | 0/TBD | Not started | - |
 | 10. Access Control Hardening | v1.1 | 0/TBD | Not started | - |
 | 11. UX Critical Fixes | v1.1 | 0/TBD | Not started | - |
