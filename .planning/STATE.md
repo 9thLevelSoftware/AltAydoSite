@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 ## Current Position
 
-Phase: 8 of 15 (MongoDB Consolidation) -- COMPLETE
-Plan: 2 of 2 in current phase (all plans complete)
-Status: Phase 8 complete, ready for Phase 9
-Last activity: 2026-02-15 -- Plan 08-02 executed (client consolidation + profile API versioning)
+Phase: 9 of 15 (Emergency Security & Dependency Cleanup) -- IN PROGRESS
+Plan: 2 of 4 in current phase (09-02 complete)
+Status: Executing Phase 9 plans
+Last activity: 2026-02-15 -- Plan 09-02 executed (input sanitization: ReDoS, XSS, open redirect, OAuth passwordHash)
 
-Progress: [█░░░░░░░░░] 12%
+Progress: [██░░░░░░░░] 14%
 
 ## Performance Metrics
 
@@ -24,7 +24,7 @@ Progress: [█░░░░░░░░░] 12%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 2
+- Total plans completed: 3
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -32,6 +32,7 @@ Progress: [█░░░░░░░░░] 12%
 |-------|------|----------|-------|-------|
 | 08    | 01   | 3min     | 2     | 2     |
 | 08    | 02   | 5min     | 3     | 10    |
+| 09    | 02   | 3min     | 2     | 5     |
 
 ## Accumulated Context
 
@@ -46,6 +47,8 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 08-02: Token CRUD inlined in password-reset-storage.ts (no separate token-storage module)
 08-02: Profile API ships-only detection filters __v from key count for backward compat
 08-02: __v destructured from validated updates before passing to updateUser() to prevent $set conflict
+09-02: Removed $regex fallback entirely -- Phase 8 migrated all records to have normalized fields
+09-02: User type passwordHash changed to string | null to properly represent OAuth users
 
 ### Pending Todos
 
@@ -64,5 +67,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 08-02-PLAN.md (Phase 8 complete)
-Resume file: .planning/phases/08-mongodb-consolidation/08-02-SUMMARY.md
+Stopped at: Completed 09-02-PLAN.md (input sanitization)
+Resume file: .planning/phases/09-emergency-security-dependency-cleanup/09-02-SUMMARY.md
