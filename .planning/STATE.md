@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 9 of 15 (Emergency Security & Dependency Cleanup) -- IN PROGRESS
-Plan: 2 of 4 in current phase (09-02 complete)
+Plan: 3 of 4 in current phase (09-01, 09-02, 09-03 complete)
 Status: Executing Phase 9 plans
-Last activity: 2026-02-15 -- Plan 09-02 executed (input sanitization: ReDoS, XSS, open redirect, OAuth passwordHash)
+Last activity: 2026-02-15 -- Plan 09-01 executed (endpoint security hardening: debug endpoint deletion, fail-closed cron auth, finance DB fix)
 
-Progress: [██░░░░░░░░] 14%
+Progress: [██░░░░░░░░] 15%
 
 ## Performance Metrics
 
@@ -24,7 +24,7 @@ Progress: [██░░░░░░░░] 14%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -32,6 +32,7 @@ Progress: [██░░░░░░░░] 14%
 |-------|------|----------|-------|-------|
 | 08    | 01   | 3min     | 2     | 2     |
 | 08    | 02   | 5min     | 3     | 10    |
+| 09    | 01   | 3min     | 2     | 9     |
 | 09    | 02   | 3min     | 2     | 5     |
 
 ## Accumulated Context
@@ -47,6 +48,10 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 08-02: Token CRUD inlined in password-reset-storage.ts (no separate token-storage module)
 08-02: Profile API ships-only detection filters __v from key count for backward compat
 08-02: __v destructured from validated updates before passing to updateUser() to prevent $set conflict
+09-01: Deleted /api/diagnostic and /api/force-fallback entirely (debug-only, no production use)
+09-01: Fail-closed cron pattern returns 503 (not 401) when CRON_SECRET unset to distinguish misconfiguration from bad token
+09-01: Fixed warm-images to use { db } from connectToDatabase() for consistency
+09-01: Removed migrate-users npm script proactively (depends on @azure/cosmos removal in Plan 04)
 09-02: Removed $regex fallback entirely -- Phase 8 migrated all records to have normalized fields
 09-02: User type passwordHash changed to string | null to properly represent OAuth users
 
@@ -67,5 +72,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 09-02-PLAN.md (input sanitization)
-Resume file: .planning/phases/09-emergency-security-dependency-cleanup/09-02-SUMMARY.md
+Stopped at: Completed 09-01-PLAN.md (endpoint security hardening)
+Resume file: .planning/phases/09-emergency-security-dependency-cleanup/09-01-SUMMARY.md
