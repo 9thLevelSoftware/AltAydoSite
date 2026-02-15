@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { PasswordResetToken } from '@/types/password-reset';
-import * as mongoDb from './mongodb-client';
+import { getDb } from './mongodb';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -61,7 +61,8 @@ function saveLocalToken(token: PasswordResetToken): void {
 // Check if we should use MongoDB
 async function shouldUseMongoDb(): Promise<boolean> {
   try {
-    return await mongoDb.ensureConnection();
+    await getDb();
+    return true;
   } catch (error) {
     console.error('STORAGE: MongoDB connection failed:', error);
     return false;
@@ -91,8 +92,10 @@ export async function createResetToken(userId: string, email: string): Promise<P
   
   if (await shouldUseMongoDb()) {
     try {
-      // Try to store in MongoDB
-      await mongoDb.createResetToken(token);
+      // Store in MongoDB
+      const db = await getDb();
+      await db.collection('resetTokens').insertOne(token);
+      console.log('Reset token created successfully:', token.id);
       return token;
     } catch (error) {
       console.error('STORAGE: MongoDB createResetToken failed, falling back to local storage:', error);
@@ -110,7 +113,11 @@ export async function getResetTokenByToken(tokenString: string): Promise<Passwor
   
   if (await shouldUseMongoDb()) {
     try {
-      return await mongoDb.getResetTokenByToken(tokenString);
+      const db = await getDb();
+      const doc = await db.collection('resetTokens').findOne({ token: tokenString }, { projection: { _id: 0 } });
+      if (!doc) return null;
+      const { _id, ...tokenData } = doc;
+      return tokenData as PasswordResetToken;
     } catch (error) {
       console.error('STORAGE: MongoDB getResetTokenByToken failed, falling back to local storage:', error);
     }
@@ -127,7 +134,12 @@ export async function markTokenAsUsed(tokenId: string): Promise<boolean> {
   
   if (await shouldUseMongoDb()) {
     try {
-      return await mongoDb.markResetTokenAsUsed(tokenId);
+      const db = await getDb();
+      const result = await db.collection('resetTokens').updateOne(
+        { id: tokenId },
+        { $set: { used: true } }
+      );
+      return result.modifiedCount > 0;
     } catch (error) {
       console.error('STORAGE: MongoDB markResetTokenAsUsed failed, falling back to local storage:', error);
     }
@@ -153,7 +165,15 @@ export async function cleanupExpiredTokens(): Promise<void> {
   
   if (await shouldUseMongoDb()) {
     try {
-      await mongoDb.cleanupExpiredTokens();
+      const db = await getDb();
+      const now = new Date().toISOString();
+      const result = await db.collection('resetTokens').deleteMany({
+        $or: [
+          { expiresAt: { $lt: now } },
+          { used: true }
+        ]
+      });
+      console.log(`Cleaned up ${result.deletedCount} expired or used tokens`);
       return;
     } catch (error) {
       console.error('STORAGE: MongoDB cleanupExpiredTokens failed, falling back to local storage:', error);
