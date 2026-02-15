@@ -73,9 +73,26 @@ const nextConfig = {
             {
                 source: '/:all*',
                 headers: [
-                    { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+                    {
+                        key: 'Content-Security-Policy',
+                        value: [
+                            "default-src 'self'",
+                            "script-src 'self' 'unsafe-inline'",
+                            "style-src 'self' 'unsafe-inline'",
+                            "img-src 'self' blob: data: https://cdn.fleetyards.net https://images.aydocorp.space https://aydocorp.space https://cdn.discordapp.com",
+                            "font-src 'self'",
+                            "connect-src 'self' https://discord.com https://cdn.discordapp.com",
+                            "object-src 'none'",
+                            "base-uri 'self'",
+                            "form-action 'self'",
+                            "frame-ancestors 'none'",
+                        ].join('; '),
+                    },
+                    { key: 'X-Frame-Options', value: 'DENY' },
                     { key: 'X-Content-Type-Options', value: 'nosniff' },
                     { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+                    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+                    { key: 'X-DNS-Prefetch-Control', value: 'on' },
                 ],
             },
             {
