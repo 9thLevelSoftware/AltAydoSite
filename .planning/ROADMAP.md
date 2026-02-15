@@ -74,12 +74,14 @@ Plans:
   3. Repeated failed login attempts from the same IP are throttled after a configurable threshold
   4. Browser developer tools show Content-Security-Policy and security headers on all responses
   5. Image uploads are validated server-side with magic byte checking (renaming a .exe to .jpg is rejected)
-**Plans**: TBD
+**Plans**: 5 plans in 2 waves
 
 Plans:
-- [ ] 10-01: TBD
-- [ ] 10-02: TBD
-- [ ] 10-03: TBD
+- [ ] 10-01-PLAN.md -- Create auth-guards.ts and restore RBAC enforcement across fleet-ops and mission-template routes (SEC-08)
+- [ ] 10-02-PLAN.md -- Add ownership checks to escort requests and ship assignment (SEC-09)
+- [ ] 10-03-PLAN.md -- MongoDB-backed rate limiter on auth endpoints with TTL auto-cleanup (SEC-10)
+- [ ] 10-04-PLAN.md -- Content-Security-Policy and security headers on all responses (SEC-11, SEC-12)
+- [ ] 10-05-PLAN.md -- Server-side image upload validation with magic byte checking (SEC-09, SEC-13)
 
 ### Phase 11: UX Critical Fixes
 **Goal**: User profile data persists on the server, feedback uses themed notifications instead of browser alerts, and destructive actions require confirmation
