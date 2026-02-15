@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';
+import * as userStorage from '@/lib/user-storage';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -360,9 +361,10 @@ export async function canUserAccessTemplate(userId: string, templateId: string):
       return true;
     }
     
-    // TODO: Add additional authorization logic here based on clearance levels, roles, etc.
-    // For now, allow access to all templates (can be restricted later)
-    return true;
+    // Users with clearance >= 2 can access all templates; others can only access their own
+    const user = await userStorage.getUserById(userId);
+    if (!user) return false;
+    return user.clearanceLevel >= 2;
   } catch (error) {
     console.error('STORAGE: Error checking template access:', error);
     return false;

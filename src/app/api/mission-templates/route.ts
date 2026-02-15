@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/auth';
 import { ActivityType, OperationType } from '@/types/MissionTemplate';
 import * as missionTemplateStorage from '@/lib/mission-template-storage';
+import { requireAuth } from '@/lib/auth-guards';
 
 // Validation schema for mission template ship roster
 const validateShipRoster = (shipRoster: any[]) => {
@@ -98,13 +97,10 @@ const validateMissionTemplateData = (data: any) => {
 // GET handler - List mission templates
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
+    const userId = auth.userId;
 
     // Parse query parameters
     const { searchParams } = new URL(request.url);
@@ -164,12 +160,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Check authorization
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
-    const userId = session.user.id;
+    const userId = auth.userId;
 
     // Parse request body
     const templateData = await request.json();
@@ -216,12 +210,10 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // Check authorization
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
-    const userId = session.user.id;
+    const userId = auth.userId;
 
     // Parse request body
     const templateData = await request.json();
@@ -288,13 +280,10 @@ export async function PUT(request: NextRequest) {
 // DELETE handler - Delete a mission template
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
+    const userId = auth.userId;
 
     // Parse template ID from URL
     const { searchParams } = new URL(request.url);
