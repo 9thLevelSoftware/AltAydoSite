@@ -91,12 +91,12 @@ Plans:
   1. User's fleet, preferences, and timezone persist after clearing browser data or logging in from a different device
   2. All feedback (success, error, info) appears as themed MobiGlas toast notifications -- zero alert() or confirm() calls remain
   3. Removing a ship from fleet, deleting a mission, or resetting profile triggers a confirmation dialog before executing
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 11-01: TBD
-- [ ] 11-02: TBD
-- [ ] 11-03: TBD
+- [ ] 11-01-PLAN.md — Toast notification system + confirmation dialog components (Wave 1)
+- [ ] 11-02-PLAN.md — Profile server-side migration with localStorage fallback (Wave 2)
+- [ ] 11-03-PLAN.md — Replace alert/confirm calls + add destructive action guards (Wave 2)
 
 ### Phase 12: Motion v12 Migration
 **Goal**: The framer-motion package is replaced with motion v12 across all 109 files in a single atomic migration, with LazyMotion reducing bundle size
