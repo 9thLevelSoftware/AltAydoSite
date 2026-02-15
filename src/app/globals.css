@@ -22,6 +22,8 @@
   --mg-glow: 0, 180, 255;         /* Holographic glow */
   --mg-hologram: 0, 120, 255;     /* Hologram color */
   --mg-panel-dark: 0, 12, 24;     /* Panel darker background */
+  --mg-error: 255, 70, 70;         /* Error red (matches --mg-danger) */
+  --mg-panel: 0, 20, 40;           /* Panel background */
 
   /* Increased base font size */
   font-size: 110%;
