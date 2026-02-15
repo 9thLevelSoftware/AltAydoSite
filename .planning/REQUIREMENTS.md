@@ -1,0 +1,181 @@
+# Requirements: AydoCorp Site v1.1
+
+**Defined:** 2026-02-15
+**Core Value:** AydoCorp members have a secure, polished, and performant hub for managing fleet operations, missions, and org coordination.
+
+## v1.1 Requirements
+
+Requirements for the Project Hardening & Polish milestone. Each maps to roadmap phases.
+
+### Infrastructure
+
+- [ ] **INFRA-01**: Consolidate dual MongoDB connection modules (mongodb.ts + mongodb-client.ts) into single client with unified pool
+- [ ] **INFRA-02**: Remove 8 unused npm packages (@azure/cosmos, @azure/identity, @azure/msal-node, azure-ad-verify-token, mammoth, openid-client, bcryptjs, @headlessui/react)
+- [ ] **INFRA-03**: Move @types/* packages to devDependencies
+- [ ] **INFRA-04**: Upgrade Next.js from 15.3.3 to 15.5.12
+- [ ] **INFRA-05**: Migrate framer-motion 10.x to motion 12.x across all 109 files
+
+### Security
+
+- [ ] **SEC-01**: Auth-gate or delete /api/diagnostic, /api/force-fallback, /api/storage-status endpoints
+- [ ] **SEC-02**: Make CRON_SECRET required for cron endpoints (fail closed, not fail open)
+- [ ] **SEC-03**: Fix ReDoS vulnerability in getUserByEmail/getUserByHandle by escaping regex input
+- [ ] **SEC-04**: HTML-escape user-supplied values in email templates to prevent XSS
+- [ ] **SEC-05**: Sanitize error messages in API responses to not leak internal details
+- [ ] **SEC-06**: Validate callback URLs in auth redirects (relative paths only)
+- [ ] **SEC-07**: Fix password handling (remove bcryptjs duplicate, use null hash for OAuth users)
+- [ ] **SEC-08**: Re-enable RBAC clearance enforcement on all protected routes
+- [ ] **SEC-09**: Add ownership checks to missions, escort requests, and ship assignment APIs
+- [ ] **SEC-10**: Implement MongoDB-backed rate limiting on auth endpoints
+- [ ] **SEC-11**: Add Content-Security-Policy header with split strategy (hash for static, nonce for auth pages)
+- [ ] **SEC-12**: Add security headers to API route responses
+- [ ] **SEC-13**: Implement server-side image upload validation with magic byte checking
+- [ ] **SEC-14**: Fix finance transactions POST to use correct database (COSMOS_DATABASE_ID)
+- [ ] **SEC-15**: Remove debug information from 401 responses (assign-synced-role)
+
+### UX
+
+- [ ] **UX-01**: Migrate user profile data from localStorage to server-side storage (MongoDB)
+- [ ] **UX-02**: Replace all alert()/confirm() calls with themed MobiGlas toast notifications
+- [ ] **UX-03**: Add confirmation dialogs for all destructive actions (ship removal, mission delete, profile reset)
+- [ ] **UX-04**: Add htmlFor/id label associations to all form inputs across 55+ files
+- [ ] **UX-05**: Implement keyboard navigation for modals (focus trapping, Escape-to-close)
+- [ ] **UX-06**: Add global focus-visible indicators styled with MobiGlas cyan glow
+- [ ] **UX-07**: Add loading states to high-frequency async actions (mission create, profile save, escort submit)
+- [ ] **UX-08**: Replace hardcoded fake dashboard metrics with real data or clear "Demo" label
+- [ ] **UX-09**: Add "skip to main content" link for screen reader users
+- [ ] **UX-10**: Close mobile menu automatically on route change
+
+### Performance
+
+- [ ] **PERF-01**: Set immutable cache headers for /_next/static assets (max-age=31536000)
+- [ ] **PERF-02**: Push user and mission pagination to MongoDB with skip/limit (replace in-memory slicing)
+- [ ] **PERF-03**: Implement LazyMotion provider with domMax features to reduce bundle size
+- [ ] **PERF-04**: Convert home page from client component to Server Component (use getServerSession)
+- [ ] **PERF-05**: Cap starfield canvas animation to 30fps with timestamp-based frame skipping
+- [ ] **PERF-06**: Fix carousel to lazy-load images (only priority on current, preload next)
+- [ ] **PERF-07**: Remove 800ms artificial delay on dashboard authentication check
+- [ ] **PERF-08**: Move About page 1-second timer into AboutHero component only (stop full-tree re-renders)
+
+### Design System
+
+- [ ] **DS-01**: Define --mg-error and --mg-panel CSS variables in globals.css :root
+- [ ] **DS-02**: Consolidate 3 button implementations (mg-button CSS, MobiGlasButton, HolographicButton) to MobiGlasButton
+- [ ] **DS-03**: Consolidate 4+ corner accent patterns to CornerAccents component
+- [ ] **DS-04**: Migrate auth forms (LoginForm, SignupForm) to use MobiGlas design system components
+- [ ] **DS-05**: Unify error display into 3 tiers (field-level, form-level, system-level notifications)
+- [ ] **DS-06**: Fix MissionCard status colors to use MobiGlas palette variables
+- [ ] **DS-07**: Change global *:focus to *:focus-visible for better mouse/keyboard UX
+- [ ] **DS-08**: Remove !important from .mg-button background to enable variant overrides
+
+### Code Quality
+
+- [ ] **QUAL-01**: Replace console.* calls with structured Logger across ~50+ files
+- [ ] **QUAL-02**: Add mission status state machine validation (reject invalid transitions)
+- [ ] **QUAL-03**: Add optimistic locking with version field for concurrent edit detection
+- [ ] **QUAL-04**: Fix MongoDB race condition in updateUser() by using atomic $set operations
+- [ ] **QUAL-05**: Add page-level metadata titles to all pages for multi-tab distinction
+
+## v2 Requirements
+
+Deferred to future milestones. Tracked but not in current roadmap.
+
+### Testing
+
+- **TEST-01**: Comprehensive test suite for API routes (45+ routes)
+- **TEST-02**: Component test coverage for interactive components
+- **TEST-03**: Integration tests for auth flows
+
+### Migration
+
+- **MIG-01**: Upgrade to Next.js 16 + React 19
+- **MIG-02**: Migrate NextAuth v4 to Auth.js v5
+- **MIG-03**: Evaluate Tailwind CSS v4 migration
+
+### Refactoring
+
+- **REF-01**: Decompose MissionPlanner.tsx (1211 lines)
+- **REF-02**: Decompose MissionForm.tsx (1178 lines)
+- **REF-03**: Decompose HomeContent.tsx (921 lines)
+
+## Out of Scope
+
+Explicitly excluded from v1.1. Documented to prevent scope creep.
+
+| Feature | Reason |
+|---------|--------|
+| Full test suite | High effort, separate testing milestone. Add tests only for new security fixes. |
+| NextAuth to Auth.js v5 | Different cookies, logs everyone out. Separate migration after v1.1 stabilizes. |
+| Monolithic component refactoring | MissionPlanner, HomeContent are large but functional. Fix issues within, don't restructure. |
+| Real-time collaboration | Optimistic locking (QUAL-03) handles conflicts. WebSocket collab is a separate feature. |
+| WCAG AAA compliance | MobiGlas dark theme may not meet AAA contrast. Target AA for now. |
+| Redis infrastructure | MongoDB-backed rate limiting sufficient for current scale (<100 concurrent). |
+| Tailwind CSS v4 | Major rewrite with different config approach. Consolidate within v3 first. |
+| Component decomposition | Fix bugs and polish within large components, don't restructure during hardening. |
+
+## Traceability
+
+Which phases cover which requirements. Updated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| INFRA-01 | Phase 8 | Pending |
+| INFRA-02 | Phase 9 | Pending |
+| INFRA-03 | Phase 9 | Pending |
+| INFRA-04 | Phase 9 | Pending |
+| INFRA-05 | Phase 12 | Pending |
+| SEC-01 | Phase 9 | Pending |
+| SEC-02 | Phase 9 | Pending |
+| SEC-03 | Phase 9 | Pending |
+| SEC-04 | Phase 9 | Pending |
+| SEC-05 | Phase 9 | Pending |
+| SEC-06 | Phase 9 | Pending |
+| SEC-07 | Phase 9 | Pending |
+| SEC-08 | Phase 10 | Pending |
+| SEC-09 | Phase 10 | Pending |
+| SEC-10 | Phase 10 | Pending |
+| SEC-11 | Phase 10 | Pending |
+| SEC-12 | Phase 10 | Pending |
+| SEC-13 | Phase 10 | Pending |
+| SEC-14 | Phase 9 | Pending |
+| SEC-15 | Phase 9 | Pending |
+| UX-01 | Phase 11 | Pending |
+| UX-02 | Phase 11 | Pending |
+| UX-03 | Phase 11 | Pending |
+| UX-04 | Phase 13 | Pending |
+| UX-05 | Phase 13 | Pending |
+| UX-06 | Phase 13 | Pending |
+| UX-07 | Phase 14 | Pending |
+| UX-08 | Phase 13 | Pending |
+| UX-09 | Phase 13 | Pending |
+| UX-10 | Phase 13 | Pending |
+| PERF-01 | Phase 13 | Pending |
+| PERF-02 | Phase 13 | Pending |
+| PERF-03 | Phase 12 | Pending |
+| PERF-04 | Phase 15 | Pending |
+| PERF-05 | Phase 15 | Pending |
+| PERF-06 | Phase 15 | Pending |
+| PERF-07 | Phase 13 | Pending |
+| PERF-08 | Phase 15 | Pending |
+| DS-01 | Phase 9 | Pending |
+| DS-02 | Phase 14 | Pending |
+| DS-03 | Phase 14 | Pending |
+| DS-04 | Phase 14 | Pending |
+| DS-05 | Phase 14 | Pending |
+| DS-06 | Phase 14 | Pending |
+| DS-07 | Phase 14 | Pending |
+| DS-08 | Phase 14 | Pending |
+| QUAL-01 | Phase 15 | Pending |
+| QUAL-02 | Phase 15 | Pending |
+| QUAL-03 | Phase 15 | Pending |
+| QUAL-04 | Phase 8 | Pending |
+| QUAL-05 | Phase 15 | Pending |
+
+**Coverage:**
+- v1.1 requirements: 51 total
+- Mapped to phases: 51
+- Unmapped: 0
+
+---
+*Requirements defined: 2026-02-15*
+*Last updated: 2026-02-15 after initial definition*
