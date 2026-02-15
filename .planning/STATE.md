@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 8 of 15 (MongoDB Consolidation)
-Plan: 0 of TBD in current phase
-Status: Context gathered, ready to plan
-Last activity: 2026-02-15 -- Phase 8 context gathered
+Plan: 1 of 2 in current phase
+Status: Plan 08-01 complete, ready for 08-02
+Last activity: 2026-02-15 -- Plan 08-01 executed (canonical client + user CRUD)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 6%
 
 ## Performance Metrics
 
@@ -24,9 +24,13 @@ Progress: [░░░░░░░░░░] 0%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 0
+- Total plans completed: 1
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
+
+| Phase | Plan | Duration | Tasks | Files |
+|-------|------|----------|-------|-------|
+| 08    | 01   | 3min     | 2     | 2     |
 
 ## Accumulated Context
 
@@ -34,6 +38,10 @@ Progress: [░░░░░░░░░░] 0%
 
 All v1.0 decisions logged in PROJECT.md Key Decisions table with outcomes.
 v1.1 decision: Address all project review findings in v1.1 (100+ issues across security/UX/perf/UI).
+08-01: Pool reduced to 50 (from 100), minPoolSize=2 for warm connections
+08-01: Index creation fire-and-forget with once-per-process guard (no per-call ping)
+08-01: expectedVersion optional on updateUser() for backward-compatible rollout
+08-01: StaleDocumentError never triggers local fallback -- must propagate to API routes
 
 ### Pending Todos
 
@@ -52,5 +60,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-mongodb-consolidation/08-CONTEXT.md
+Stopped at: Completed 08-01-PLAN.md
+Resume file: .planning/phases/08-mongodb-consolidation/08-01-SUMMARY.md
