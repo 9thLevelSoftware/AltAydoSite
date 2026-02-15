@@ -34,6 +34,7 @@ const nextConfig = {
             },
         ],
     },
+    serverExternalPackages: ['file-type'],
     webpack: (config, { isServer }) => {
         // Handle discord.js and its dependencies safely
         if (isServer) {

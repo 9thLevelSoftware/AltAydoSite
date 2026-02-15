@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { shouldUseMongoDb } from '@/lib/storage-utils';
+import { requireAuth } from '@/lib/auth-guards';
+import { validateImageBuffer, MAX_IMAGE_SIZE } from '@/lib/file-validation';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -24,16 +24,15 @@ function ensureDirectories() {
 
 export async function POST(request: Request) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // 1. Authentication (requireAuth replaces bare getServerSession)
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
     const formData = await request.formData();
     const image = formData.get('image') as File;
     const missionId = formData.get('missionId') as string;
 
+    // 2. Basic validation
     if (!image) {
       return NextResponse.json({ error: 'No image file provided' }, { status: 400 });
     }
@@ -42,18 +41,62 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Mission ID is required' }, { status: 400 });
     }
 
-    // Validate file
-    if (image.size > 5000000) { // 5MB limit
+    // 3. Size check using shared constant
+    if (image.size > MAX_IMAGE_SIZE) {
       return NextResponse.json({ error: 'File size exceeds 5MB limit' }, { status: 400 });
     }
 
-    if (!image.type.startsWith('image/')) {
-      return NextResponse.json({ error: 'Only image files are allowed' }, { status: 400 });
-    }
-
-    // Get file buffer
+    // 4. Get file buffer
     const bytes = await image.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // 5. Magic byte validation (SEC-13) -- replaces Content-Type header check
+    const validation = await validateImageBuffer(buffer, image.type);
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: validation.error || 'Invalid image file' },
+        { status: 400 }
+      );
+    }
+
+    // 6. Authorization check (SEC-09) -- verify uploader is participant/leader
+    const isTempId = missionId.startsWith('temp-');
+    if (!isTempId) {
+      // For existing missions, verify the user is a participant, leader, or has leadership clearance
+      try {
+        const { db } = await connectToDatabase();
+        let mongoMissionIdForAuth: string | ObjectId = missionId;
+        try {
+          mongoMissionIdForAuth = new ObjectId(missionId);
+        } catch {
+          // Use as string if not a valid ObjectId
+        }
+
+        const mission = await db.collection('missions').findOne(
+          { _id: mongoMissionIdForAuth as any },
+          { projection: { leader: 1, participants: 1, createdBy: 1 } }
+        );
+
+        if (mission) {
+          const isLeader = mission.leader === auth.userId || mission.createdBy === auth.userId;
+          const isParticipant = Array.isArray(mission.participants) &&
+            mission.participants.some((p: { userId?: string }) => p.userId === auth.userId);
+          const hasLeadershipClearance = auth.clearanceLevel >= 3;
+
+          if (!isLeader && !isParticipant && !hasLeadershipClearance) {
+            console.log(`RBAC_AUDIT: User ${auth.userId} denied upload to mission ${missionId} -- not participant/leader`);
+            return NextResponse.json(
+              { error: 'You must be a participant or leader of this operation to upload images' },
+              { status: 403 }
+            );
+          }
+        }
+        // If mission not found, allow upload (mission may be in local storage or about to be created)
+      } catch (authCheckError) {
+        console.error('Error checking mission ownership for upload:', authCheckError);
+        // Fail open for auth check DB errors -- the upload will still be attributed to the user
+      }
+    }
 
     // Generate a unique ID for the image
     const imageId = crypto.randomUUID();
@@ -64,15 +107,12 @@ export async function POST(request: Request) {
         console.log('Storing image in MongoDB...');
         const { db } = await connectToDatabase();
 
-        // Check if it's a temporary ID (starts with 'temp-')
-        const isTempId = missionId.startsWith('temp-');
-        
         // Convert to ObjectId if not a temp ID and if possible
         let mongoMissionId: string | ObjectId = missionId;
         if (!isTempId) {
           try {
             mongoMissionId = new ObjectId(missionId);
-          } catch (err) {
+          } catch {
             console.log('Could not convert mission ID to ObjectId, using as string');
           }
         }
@@ -80,9 +120,9 @@ export async function POST(request: Request) {
         // Store image in MongoDB
         const imageDoc = {
           filename: image.name,
-          contentType: image.type,
+          contentType: validation.detectedType || image.type,
           size: image.size,
-          uploadedBy: session.user.id,
+          uploadedBy: auth.userId,
           uploadedAt: new Date(),
           data: buffer,
           missionId: mongoMissionId
@@ -102,12 +142,12 @@ export async function POST(request: Request) {
                     "images": {
                       "_id": result.insertedId.toString(),
                       "filename": image.name,
-                      "uploadedBy": session.user.id,
+                      "uploadedBy": auth.userId,
                       "uploadedAt": new Date()
                     }
                   }
                 };
-                
+
                 // Use the raw update object
                 await db.collection('missions').updateOne(
                   { _id: mongoMissionId },
@@ -120,13 +160,13 @@ export async function POST(request: Request) {
             }
           }
 
-          return NextResponse.json({ 
+          return NextResponse.json({
             success: true,
             message: 'Image uploaded successfully',
             data: {
               imageId: result.insertedId.toString(),
               filename: image.name,
-              contentType: image.type,
+              contentType: validation.detectedType || image.type,
               size: image.size
             }
           });
@@ -157,22 +197,22 @@ export async function POST(request: Request) {
       id: imageId,
       missionId: missionId,
       filename: image.name,
-      contentType: image.type,
+      contentType: validation.detectedType || image.type,
       size: image.size,
-      uploadedBy: session.user.id,
+      uploadedBy: auth.userId,
       uploadedAt: new Date().toISOString(),
       storagePath: imagePath
     };
 
     fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       message: 'Image uploaded successfully (local storage)',
       data: {
         imageId: imageId,
         filename: image.name,
-        contentType: image.type,
+        contentType: validation.detectedType || image.type,
         size: image.size
       }
     });
