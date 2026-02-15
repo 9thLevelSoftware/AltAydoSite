@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { z } from 'zod';
 import { authOptions } from '../auth/auth';
 import * as userStorage from '@/lib/user-storage';
+import { StaleDocumentError } from '@/lib/user-storage';
 import { UserShip } from '@/types/user';
 
 // Define the UserShip schema
@@ -24,6 +25,7 @@ const profileUpdateSchema = z.object({
   division: z.string().optional().nullable(),
   timezone: z.string().optional().nullable(),
   ships: z.array(userShipSchema).optional(),
+  __v: z.number().int().optional(),
 });
 
 export async function GET() {
@@ -57,6 +59,7 @@ export async function GET() {
       division: user.division || null,
       timezone: user.timezone || null,
       ships: user.ships || [],
+      __v: (user as any).__v ?? 0,
     };
     
     return NextResponse.json(response);
@@ -89,7 +92,8 @@ export async function PUT(request: NextRequest) {
     }
     
     // Handle ships-only updates specially
-    const isShipsOnlyUpdate = Object.keys(body).length === 1 && body.ships !== undefined;
+    const bodyKeys = Object.keys(body).filter(k => k !== '__v');
+    const isShipsOnlyUpdate = bodyKeys.length === 1 && bodyKeys[0] === 'ships';
     if (isShipsOnlyUpdate) {
       
       if (!Array.isArray(body.ships)) {
@@ -118,10 +122,10 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       
-      // Only update ships field
+      // Only update ships field (pass __v for optimistic locking if provided)
       const updatedUser = await userStorage.updateUser(userId, {
         ships: body.ships
-      });
+      }, body.__v);
       
       if (!updatedUser) {
         console.error(`PUT Profile - Failed to update ships for user ${userId}`);
@@ -142,11 +146,12 @@ export async function PUT(request: NextRequest) {
         division: updatedUser.division || null,
         timezone: updatedUser.timezone || null,
         ships: updatedUser.ships || [],
+        __v: (updatedUser as any).__v ?? 0,
       };
-      
+
       return NextResponse.json(response);
     }
-    
+
     // Validate request body (for non-ships-only updates)
     const result = profileUpdateSchema.safeParse(body);
     if (!result.success) {
@@ -156,10 +161,10 @@ export async function PUT(request: NextRequest) {
     }
     
     // Get validated data
-    const updates = result.data;
-    
-    // Update the user profile
-    const updatedUser = await userStorage.updateUser(userId, updates);
+    const { __v: expectedVersion, ...updates } = result.data;
+
+    // Update the user profile (pass __v for optimistic locking if provided)
+    const updatedUser = await userStorage.updateUser(userId, updates, expectedVersion);
     
     if (!updatedUser) {
       console.error(`PUT Profile - Failed to update profile for user ${userId}`);
@@ -180,11 +185,18 @@ export async function PUT(request: NextRequest) {
       division: updatedUser.division || null,
       timezone: updatedUser.timezone || null,
       ships: updatedUser.ships || [],
+      __v: (updatedUser as any).__v ?? 0,
     };
-    
+
     return NextResponse.json(response);
-    
+
   } catch (error: any) {
+    if (error instanceof StaleDocumentError) {
+      return NextResponse.json(
+        { error: 'CONFLICT', message: error.message },
+        { status: 409 }
+      );
+    }
     console.error('Profile update error:', error);
     return NextResponse.json(
       { error: `Failed to update profile: ${error.message}` },
