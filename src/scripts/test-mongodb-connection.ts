@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as mongoDb from '../lib/mongodb-client';
 import { connectToDatabase } from '../lib/mongodb';
 
 // SECURITY: Prevent execution in production
@@ -82,12 +81,12 @@ async function testMongoDBConnection() {
 
   try {
     // Try to connect to MongoDB
-    await connectToDatabase();
+    const { client, db } = await connectToDatabase();
     console.log('✅ Successfully connected to MongoDB!');
 
     // Test getting all users
     console.log('Fetching all users...');
-    const users = await mongoDb.getAllUsers();
+    const users = await db.collection('users').find({}, { projection: { _id: 0 } }).toArray();
     console.log(`Found ${users.length} users`);
 
     if (users.length > 0) {
@@ -96,7 +95,7 @@ async function testMongoDBConnection() {
     }
 
     // Close the connection
-    await mongoDb.close();
+    await client.close();
     console.log('Connection closed');
 
     console.log('All tests passed!');

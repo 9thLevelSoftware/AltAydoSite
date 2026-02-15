@@ -2,7 +2,6 @@ import { MissionResponse, MissionStatus, MissionType } from '@/types/Mission';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import * as mongoDb from './mongodb-client';
 import { shouldUseMongoDb } from './storage-utils';
 import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';

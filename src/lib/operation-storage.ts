@@ -2,7 +2,7 @@ import { Operation, OperationStatus } from '@/types/Operation';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import * as mongoDb from './mongodb-client';
+import { connectToDatabase } from './mongodb';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -76,21 +76,19 @@ function deleteLocalOperation(id: string): void {
 
 // Function to check if we should use MongoDB or local storage
 async function shouldUseMongoDb(): Promise<boolean> {
-  if (mongoDbConnectionAttempted) {
-    console.log(`STORAGE: Using ${mongoDbConnectionFailed ? 'local storage (fallback)' : 'MongoDB'} based on previous attempt`);
-    return !mongoDbConnectionFailed;
-  }
-  
+  if (mongoDbConnectionFailed) return false;
+  if (mongoDbConnectionAttempted) return true;
+
   try {
     console.log('STORAGE: Testing MongoDB connection...');
+    await connectToDatabase();
     mongoDbConnectionAttempted = true;
-    // Try to get all users from MongoDB as a test
-    await mongoDb.getAllUsers();
     console.log('STORAGE: Successfully connected to MongoDB');
     return true;
   } catch (error) {
     console.error('STORAGE: Failed to connect to MongoDB, falling back to local storage:', error);
     mongoDbConnectionFailed = true;
+    mongoDbConnectionAttempted = true;
     usingFallbackStorage = true;
     return false;
   }

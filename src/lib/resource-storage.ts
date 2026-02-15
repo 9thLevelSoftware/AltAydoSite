@@ -2,7 +2,6 @@ import { Resource, ResourceAllocation } from '@/types/Resource';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import * as mongoDb from './mongodb-client';
 import { shouldUseMongoDb } from './storage-utils';
 
 // File storage paths

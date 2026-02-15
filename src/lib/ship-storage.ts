@@ -14,11 +14,9 @@
  *   upsert fallback for Cosmos DB compatibility
  */
 
-import { connectToDatabase } from '@/lib/mongodb-client';
+import { connectToDatabase } from '@/lib/mongodb';
 import type { Sort } from 'mongodb';
 import type { ShipDocument, SyncStatusDocument } from '@/types/ship';
-
-const DATABASE_ID = process.env.COSMOS_DATABASE_ID || 'aydocorp-database';
 
 /** UUID v4 pattern for distinguishing FleetYards UUIDs from slugs */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,8 +25,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * Get the ships collection from the database.
  */
 async function getShipsCollection() {
-  const { client } = await connectToDatabase();
-  const db = client.db(DATABASE_ID);
+  const { db } = await connectToDatabase();
   return db.collection('ships');
 }
 
@@ -36,8 +33,7 @@ async function getShipsCollection() {
  * Get the sync-status collection from the database.
  */
 async function getSyncStatusCollection() {
-  const { client } = await connectToDatabase();
-  const db = client.db(DATABASE_ID);
+  const { db } = await connectToDatabase();
   return db.collection('sync-status');
 }
 
