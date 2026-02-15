@@ -1,12 +1,23 @@
-# Dynamic Ship Database
+# AydoCorp Site
 
 ## What This Is
 
-AydoCorp's ship database is powered by the FleetYards.net API, with periodic sync into Cosmos DB/MongoDB. Ships are referenced by FleetYards UUID throughout the application and use FleetYards CDN images directly. The ship browsing UI provides multi-axis filtering, detailed specs, image galleries, and an org fleet composition dashboard. The fleet builder and mission planner use live API data with search and filtering.
+AydoCorp's organizational website built with Next.js, featuring a dynamic ship database powered by FleetYards.net API, fleet operations management, mission planning, Discord integration, and a MobiGlas-themed UI. The site serves Star Citizen org members with tools for fleet coordination, mission briefings, escort requests, and financial tracking.
 
 ## Core Value
 
-The ship database is always current with the latest Star Citizen ships and data without any manual maintenance.
+AydoCorp members have a secure, polished, and performant hub for managing fleet operations, missions, and org coordination.
+
+## Current Milestone: v1.1 Project Hardening & Polish
+
+**Goal:** Address 100+ findings from comprehensive project review — security vulnerabilities, UX pain points, performance bottlenecks, dependency debt, and UI inconsistencies.
+
+**Target features:**
+- Security hardening (unauthenticated endpoints, RBAC, input sanitization, XSS prevention)
+- Dependency remediation (Next.js 15.5.12+, framer-motion v12, remove 8 unused packages)
+- UX improvements (profile server persistence, confirmations, accessibility, keyboard nav)
+- Performance optimization (cache headers, SSR conversion, bundle reduction, DB pagination)
+- UI consistency (MobiGlas design system consolidation, missing CSS variables, button/corner unification)
 
 ## Requirements
 
@@ -35,7 +46,12 @@ The ship database is always current with the latest Star Citizen ships and data 
 
 ### Active
 
-(None — next milestone requirements to be defined via `/gsd:new-milestone`)
+<!-- v1.1 — Project Hardening & Polish -->
+- [ ] Security hardening across all API routes and auth flows
+- [ ] Dependency updates (Next.js, framer-motion) and unused package removal
+- [ ] UX remediation (profile persistence, accessibility, confirmations)
+- [ ] Performance optimization (caching, SSR, bundle size, DB queries)
+- [ ] UI design system consolidation (MobiGlas component adoption, CSS fixes)
 
 ### Out of Scope
 
@@ -51,15 +67,17 @@ The ship database is always current with the latest Star Citizen ships and data 
 
 ## Context
 
-Shipped v1.0 with 19,464 net new lines of TypeScript/React across 168 files.
+Shipped v1.0 (Dynamic Ship Database) with 19,464 net new lines across 168 files. Comprehensive project review (Feb 2026) identified 100+ findings:
+- 6 critical security vulnerabilities (unauthenticated endpoints, ReDoS, XSS)
+- 8 high-priority auth bypass / RBAC issues
+- 29 npm audit vulnerabilities (1 critical Next.js RCE)
+- 8 completely unused npm packages
+- 3 critical UX issues (profile data loss, no undo, no delete confirmation)
+- 18 performance bottlenecks (cache headers, SSR, bundle size)
+- MobiGlas design system underutilized (3 button implementations, 4 corner accent patterns)
+- `--mg-error` CSS variable undefined affecting error display in 13 files
 
-**Tech stack:** Next.js 15.3.3, TypeScript, Azure Cosmos DB for MongoDB vCore, Tailwind CSS, Recharts.
-
-**Current ship data flow:** FleetYards API → sync orchestrator (cron) → MongoDB `ships` collection → REST API (`/api/ships/*`) → React hooks (`useShips`, `useShipBatch`, `useOrgFleet`) → UI components.
-
-**Ship modules:** `src/lib/ships/` (client, transform, sync, storage, image), `src/types/ship.ts` (ShipDocument, schemas).
-
-**Key components:** ShipBrowsePage, FleetShipPickerModal, MissionShipPickerModal, FleetCompositionPage, ShipDetailPanel, ShipImageGallery.
+**Tech stack:** Next.js 15.3.3 (upgrading to 15.5.12+), TypeScript, Azure Cosmos DB for MongoDB vCore, Tailwind CSS 3.4, framer-motion 10 (upgrading to 12), Recharts.
 
 **Build status:** 69/69 pages, 0 TypeScript errors, 0 ESLint errors.
 
@@ -86,5 +104,7 @@ Shipped v1.0 with 19,464 net new lines of TypeScript/React across 168 files.
 | CSS-only empty states (no placeholder images) | Eliminates placeholder PNG dependency, cleaner fallback | ✓ Good — works consistently across all ship display contexts |
 | useReducer for ship browse state | Centralized filter state, avoids stale closures | ✓ Good — clean state management in ShipBrowsePage |
 
+| Address all project review findings in v1.1 | Review surfaced 100+ issues across security/UX/perf/UI; systematic remediation | — Pending |
+
 ---
-*Last updated: 2026-02-04 after v1.0 milestone*
+*Last updated: 2026-02-15 after v1.1 milestone start*

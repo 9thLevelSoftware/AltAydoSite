@@ -2,19 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-04)
+See: .planning/PROJECT.md (updated 2026-02-15)
 
-**Core value:** The ship database is always current with the latest Star Citizen ships and data without any manual maintenance.
-**Current focus:** v1.0 SHIPPED — Planning next milestone
+**Core value:** AydoCorp members have a secure, polished, and performant hub for managing fleet operations, missions, and org coordination.
+**Current focus:** v1.1 Project Hardening & Polish
 
 ## Current Position
 
-Phase: v1.0 complete (8 phases, 26 plans)
-Plan: N/A
-Status: Milestone complete — ready for next milestone
-Last activity: 2026-02-04 — v1.0 milestone archived
-
-Progress: [██████████████████████████] 100% (26 of 26 total plans)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-15 — Milestone v1.1 started
 
 ## Performance Metrics
 
@@ -38,21 +36,24 @@ All v1.0 decisions logged in PROJECT.md Key Decisions table with outcomes.
 
 ### Pending Todos
 
-None — v1.0 complete.
+None — defining v1.1 requirements.
 
 ### Blockers/Concerns
 
 - [Tech Debt]: MissionParticipant.fleetyardsId and OperationParticipant.fleetyardsId are optional (string?) — tighten after confirming all records migrated
 - [Tech Debt]: Planned mission idempotency partial (3/4 re-updated on second migration run)
 - [Tech Debt]: Human runtime testing recommended for sync execution, cron scheduling
+- [Security]: 6 critical vulnerabilities identified in project review (unauthenticated endpoints, ReDoS, XSS)
+- [Security]: RBAC hardcoded to return true — all authorization bypassed
+- [Security]: Next.js 15.3.3 has known RCE vulnerability
 
 ## Session Continuity
 
-Last session: 2026-02-04
-Stopped at: v1.0 milestone archived. Ready for next milestone.
+Last session: 2026-02-15
+Stopped at: Defining v1.1 requirements
 Resume file: None
 
 IMPORTANT CONTEXT:
 - commit_docs is true (commit planning artifacts)
 - Model profile is "quality"
-- Next step: `/gsd:new-milestone` to define v1.1+ requirements and roadmap
+- Full project review completed with 100+ findings across security/UX/perf/deps/UI
