@@ -15,7 +15,6 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .next",
     "kill-port": "node scripts/kill-port.js",
-    "migrate-users": "tsx src/scripts/migrate-users.ts",
     "migrate-timezone": "tsx src/scripts/migrate-timezone.ts",
     "migrate-ships": "cross-env DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config src/scripts/migrate-ship-references.ts",
     "test-cosmos": "tsx src/scripts/test-cosmos-connection.ts",
