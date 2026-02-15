@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 10 of 15 (Access Control Hardening)
-Plan: 2 of 5 in current phase (10-01, 10-02, 10-03, 10-04 complete)
-Status: Executing Phase 10
-Last activity: 2026-02-15 -- Plan 10-02 executed (ownership enforcement)
+Plan: 5 of 5 in current phase (10-01, 10-02, 10-03, 10-04, 10-05 complete)
+Status: Phase 10 Complete
+Last activity: 2026-02-15 -- Plan 10-05 executed (file upload validation)
 
-Progress: [████░░░░░░] 30%
+Progress: [████░░░░░░] 35%
 
 ## Performance Metrics
 
@@ -24,7 +24,7 @@ Progress: [████░░░░░░] 30%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -40,6 +40,7 @@ Progress: [████░░░░░░] 30%
 | 10    | 01   | 5min     | 3     | 8     |
 | 10    | 04   | 2min     | 2     | 1     |
 | 10    | 02   | 4min     | 3     | 2     |
+| 10    | 05   | 4min     | 2     | 4     |
 
 ## Accumulated Context
 
@@ -81,6 +82,10 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 10-02: Escort PUT allows creator/officer/leadership; DELETE restricts to creator/leadership only
 10-02: Ship assignment self-assignment allowed, cross-user requires leadership clearance >= 3
 10-02: Planned-missions canUserModifyMission/canUserDeleteMission verified -- no bypasses found
+10-05: Dynamic import for file-type ESM package -- static import breaks Next.js build
+10-05: Fail open on ownership DB errors -- upload still attributed to authenticated user
+10-05: Store detected MIME type instead of client-declared for data integrity
+10-05: serverExternalPackages needed for file-type ESM-only package in Next.js
 
 ### Pending Todos
 
@@ -99,5 +104,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 10-02-PLAN.md (ownership enforcement)
-Resume file: .planning/phases/10-access-control-hardening/10-02-SUMMARY.md
+Stopped at: Completed 10-05-PLAN.md (file upload validation) -- Phase 10 complete
+Resume file: .planning/phases/10-access-control-hardening/10-05-SUMMARY.md
