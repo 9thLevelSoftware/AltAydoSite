@@ -109,6 +109,18 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
   }
 
   try {
+    const rateLimits = db.collection('rateLimits');
+    await Promise.all([
+      // Lookup by rate limit key within current window
+      rateLimits.createIndex({ key: 1 }).catch(() => {}),
+      // TTL index: MongoDB automatically removes documents when expiresAt passes
+      rateLimits.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }).catch(() => {}),
+    ]);
+  } catch (err) {
+    console.warn('Index setup (rateLimits) skipped or failed:', err);
+  }
+
+  try {
     const syncStatus = db.collection('sync-status');
     await Promise.all([
       // Find latest sync by type
