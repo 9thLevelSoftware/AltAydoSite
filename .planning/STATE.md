@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** AydoCorp members have a secure, polished, and performant hub for managing fleet operations, missions, and org coordination.
-**Current focus:** Phase 9 - Emergency Security & Dependency Cleanup
+**Current focus:** Phase 9 - Emergency Security & Dependency Cleanup -- COMPLETE
 
 ## Current Position
 
-Phase: 9 of 15 (Emergency Security & Dependency Cleanup) -- IN PROGRESS
-Plan: 3 of 4 in current phase (09-01, 09-02, 09-03 complete)
-Status: Executing Phase 9 plans
-Last activity: 2026-02-15 -- Plan 09-03 executed (error response sanitization and CSS variable fixes)
+Phase: 9 of 15 (Emergency Security & Dependency Cleanup) -- COMPLETE
+Plan: 4 of 4 in current phase (09-01, 09-02, 09-03, 09-04 complete)
+Status: Phase 9 complete, ready for Phase 10
+Last activity: 2026-02-15 -- Plan 09-04 executed (dependency cleanup and Next.js security upgrade)
 
-Progress: [██░░░░░░░░] 17%
+Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -24,7 +24,7 @@ Progress: [██░░░░░░░░] 17%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -35,6 +35,7 @@ Progress: [██░░░░░░░░] 17%
 | 09    | 01   | 3min     | 2     | 9     |
 | 09    | 02   | 3min     | 2     | 5     |
 | 09    | 03   | 7min     | 2     | 36    |
+| 09    | 04   | 4min     | 2     | 3     |
 
 ## Accumulated Context
 
@@ -59,6 +60,10 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 09-03: --mg-panel: 0, 20, 40 slightly lighter than --mg-panel-dark for visible panel background
 09-03: StaleDocumentError 409 uses user-friendly message instead of error.message
 09-03: Per-user errors in assign-synced-role logged server-side instead of returned in response
+09-04: Removed 8 unused packages in single npm uninstall for atomic operation
+09-04: Accepted 2 high-severity tar vulns as build-time only (bcrypt native addon, not runtime exploitable)
+09-04: Accepted 4 moderate undici/discord.js vulns as requiring major version change (out of scope)
+09-04: @types/bcrypt and @types/nodemailer moved to devDependencies (development-only tooling)
 
 ### Pending Todos
 
@@ -67,9 +72,9 @@ None yet.
 ### Blockers/Concerns
 
 - [Tech Debt]: MissionParticipant.fleetyardsId optional -- tighten after confirming all records migrated
-- [Security]: 6 critical vulnerabilities -- addressed in Phases 9-10
+- [Security]: npm audit 2 high (build-time tar/bcrypt only), 4 moderate (discord.js/undici) -- remaining after Phase 9
 - [Security]: RBAC hardcoded to return true -- addressed in Phase 10
-- [Security]: Next.js 15.3.3 RCE vulnerability -- addressed in Phase 9
+- [RESOLVED]: Next.js RCE vulnerability CVE-2025-55182 -- patched by upgrade to 15.5.12 in Plan 09-04
 - [Risk]: CSP nonces force dynamic rendering -- Phase 10 uses split strategy (hash for static, nonces for auth pages)
 - [Risk]: framer-motion migration affects 109 files atomically -- Phase 12
 - [Risk]: Profile localStorage migration needs conflict resolution strategy -- Phase 11
@@ -77,5 +82,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 09-03-PLAN.md (error response sanitization)
-Resume file: .planning/phases/09-emergency-security-dependency-cleanup/09-03-SUMMARY.md
+Stopped at: Completed 09-04-PLAN.md (dependency cleanup and Next.js upgrade) -- Phase 9 COMPLETE
+Resume file: .planning/phases/09-emergency-security-dependency-cleanup/09-04-SUMMARY.md
