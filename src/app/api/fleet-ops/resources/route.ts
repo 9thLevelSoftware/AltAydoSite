@@ -5,6 +5,7 @@ import * as resourceStorage from '@/lib/resource-storage';
 import * as userStorage from '@/lib/user-storage';
 import { ResourceType, ResourceStatus } from '@/types/Resource';
 import { z } from 'zod';
+import { requireLeadership } from '@/lib/auth-guards';
 
 // Validation schema for creating a resource
 const resourceSchema = z.object({
@@ -22,22 +23,6 @@ const resourceSchema = z.object({
   model: z.string().optional(),
   imageUrl: z.string().optional()
 });
-
-// Helper to check if user has leadership role
-async function hasLeadershipRole(_userId: string): Promise<boolean> {
-  // Remove role restrictions
-  return true;
-
-  // Commented out original implementation for future reference
-  /*
-  const user = await userStorage.getUserById(userId);
-  if (!user) return false;
-  
-  // Check for leadership roles or clearance level
-  const leadershipRoles = ['Director', 'Manager', 'Board Member'];
-  return leadershipRoles.includes(user.role) || user.clearanceLevel >= 3;
-  */
-}
 
 // GET /api/fleet-ops/resources - Get all resources or filter by type, status, owner
 export async function GET(req: NextRequest) {
@@ -117,18 +102,10 @@ export async function GET(req: NextRequest) {
 // POST /api/fleet-ops/resources - Create a new resource
 export async function POST(req: NextRequest) {
   try {
-    // Get the session to check if the user is authenticated
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
     // Only leadership can create resources
-    const userHasLeadershipRole = await hasLeadershipRole(session.user.id);
-    if (!userHasLeadershipRole) {
-      return NextResponse.json({ error: 'Insufficient privileges' }, { status: 403 });
-    }
-    
+    const auth = await requireLeadership();
+    if (auth instanceof NextResponse) return auth;
+
     // Parse and validate request body
     const requestData = await req.json();
     

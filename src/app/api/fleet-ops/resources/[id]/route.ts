@@ -5,22 +5,7 @@ import * as resourceStorage from '@/lib/resource-storage';
 import * as userStorage from '@/lib/user-storage';
 import { Resource } from '@/types/Resource';
 import { z } from 'zod';
-
-// Helper to check if user has leadership role
-async function hasLeadershipRole(_userId: string): Promise<boolean> {
-  // Remove role restrictions
-  return true;
-
-  // Commented out original implementation for future reference
-  /*
-  const user = await userStorage.getUserById(userId);
-  if (!user) return false;
-
-  // Check for leadership roles or clearance level
-  const leadershipRoles = ['Director', 'Manager', 'Board Member'];
-  return leadershipRoles.includes(user.role) || user.clearanceLevel >= 3;
-  */
-}
+import { requireAuth, requireLeadership } from '@/lib/auth-guards';
 
 // GET /api/fleet-ops/resources/[id] - Get a specific resource
 export async function GET(
@@ -72,11 +57,9 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    // Get the session to check if the user is authenticated
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Authenticate user
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
     const resourceId = id;
 
@@ -87,8 +70,9 @@ export async function PUT(
     }
 
     // Check if the user has permission to update this resource
-    const userHasLeadershipRole = await hasLeadershipRole(session.user.id);
-    const isOwner = existingResource.owner === session.user.id;
+    const leadershipCheck = await requireLeadership();
+    const userHasLeadershipRole = !(leadershipCheck instanceof NextResponse);
+    const isOwner = existingResource.owner === auth.userId;
 
     if (!userHasLeadershipRole && !isOwner) {
       return NextResponse.json({ error: 'Insufficient privileges' }, { status: 403 });
@@ -187,11 +171,9 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    // Get the session to check if the user is authenticated
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Authenticate user
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
     const resourceId = id;
 
@@ -202,8 +184,9 @@ export async function DELETE(
     }
 
     // Check if the user has permission to delete this resource
-    const userHasLeadershipRole = await hasLeadershipRole(session.user.id);
-    const isOwner = existingResource.owner === session.user.id;
+    const leadershipCheck = await requireLeadership();
+    const userHasLeadershipRole = !(leadershipCheck instanceof NextResponse);
+    const isOwner = existingResource.owner === auth.userId;
 
     if (!userHasLeadershipRole && !isOwner) {
       return NextResponse.json({ error: 'Insufficient privileges' }, { status: 403 });

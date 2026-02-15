@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/auth';
 import * as operationStorage from '@/lib/operation-storage';
 import * as userStorage from '@/lib/user-storage';
-import { Operation, OperationStatus } from '@/types/Operation';
 import { z } from 'zod';
+import { requireAuth, requireLeadership } from '@/lib/auth-guards';
 
 // Validation schema for creating an operation
 const operationParticipantSchema = z.object({
@@ -27,29 +25,16 @@ const createOperationSchema = z.object({
   commsChannel: z.string().optional().default('')
 });
 
-// Helper to check if user has leadership role (keeping for future use)
-async function hasLeadershipRole(userId: string): Promise<boolean> {
-  const user = await userStorage.getUserById(userId);
-  if (!user) return false;
-  
-  // Check for leadership roles
-  const leadershipRoles = ['Director', 'Manager', 'Board Member'];
-  return leadershipRoles.includes(user.role) || user.clearanceLevel >= 3;
-}
-
 // GET handler - List operations
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    const userId = session.user.id;
-    // Everyone can see all operations for now
-    const isLeadership = true; // Remove role restriction 
-    
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+
+    const userId = auth.userId;
+    // Leadership users see all operations; others see only their own
+    const isLeadership = auth.role === 'Director' || auth.role === 'Manager' || auth.role === 'Board Member' || auth.clearanceLevel >= 3;
+
     // Parse query parameters
     const { searchParams } = new URL(request.url);
     const filters: { status?: string; leaderId?: string; userId?: string } = {};
@@ -93,14 +78,12 @@ export async function GET(request: NextRequest) {
 // POST handler - Create a new operation
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    const userId = session.user.id;
-    
+    // Only leadership can create operations
+    const auth = await requireLeadership();
+    if (auth instanceof NextResponse) return auth;
+
+    const userId = auth.userId;
+
     // Parse and validate request body
     let body;
     try {

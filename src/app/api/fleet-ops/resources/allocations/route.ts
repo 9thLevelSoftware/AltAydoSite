@@ -6,6 +6,7 @@ import * as userStorage from '@/lib/user-storage';
 import * as operationStorage from '@/lib/operation-storage';
 import { ResourceAllocation } from '@/types/Resource';
 import { z } from 'zod';
+import { requireAuth, requireLeadership } from '@/lib/auth-guards';
 
 // Validation schema for resource allocation
 const allocationSchema = z.object({
@@ -18,22 +19,6 @@ const allocationSchema = z.object({
   endDateTime: z.string(),
   allocatedById: z.string()
 });
-
-// Helper to check if user has leadership role
-async function hasLeadershipRole(userId: string): Promise<boolean> {
-  // Remove role restrictions
-  return true;
-
-  // Commented out original implementation for future reference
-  /*
-  const user = await userStorage.getUserById(userId);
-  if (!user) return false;
-  
-  // Check for leadership roles or clearance level
-  const leadershipRoles = ['Director', 'Manager', 'Board Member'];
-  return leadershipRoles.includes(user.role) || user.clearanceLevel >= 3;
-  */
-}
 
 // GET /api/fleet-ops/resources/allocations - Get allocations by operation
 export async function GET(req: NextRequest) {
@@ -99,38 +84,37 @@ export async function GET(req: NextRequest) {
 // POST /api/fleet-ops/resources/allocations - Allocate a resource to an operation
 export async function POST(req: NextRequest) {
   try {
-    // Get the session to check if the user is authenticated
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    // Only leadership or operation leaders can allocate resources
-    const userHasLeadershipRole = await hasLeadershipRole(session.user.id);
-    
+    // Authenticate user
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+
+    // Check leadership status (non-blocking -- used for permission check below)
+    const leadershipCheck = await requireLeadership();
+    const userHasLeadershipRole = !(leadershipCheck instanceof NextResponse);
+
     // Parse and validate request body
     const requestData = await req.json();
-    
+
     try {
       // Validate the data
       const validatedData = allocationSchema.parse(requestData);
-      
+
       // Check if the resource exists
       const resource = await resourceStorage.getResourceById(validatedData.resourceId);
       if (!resource) {
         return NextResponse.json({ error: 'Resource not found' }, { status: 404 });
       }
-      
+
       // Check if the operation exists
       const operation = await operationStorage.getOperationById(validatedData.operationId);
       if (!operation) {
         return NextResponse.json({ error: 'Operation not found' }, { status: 404 });
       }
-      
+
       // Check if user has permission to allocate this resource
-      const isOperationLeader = operation.leaderId === session.user.id;
-      const isResourceOwner = resource.owner === session.user.id;
-      
+      const isOperationLeader = operation.leaderId === auth.userId;
+      const isResourceOwner = resource.owner === auth.userId;
+
       if (!userHasLeadershipRole && !isOperationLeader && !isResourceOwner) {
         return NextResponse.json({ error: 'Insufficient privileges' }, { status: 403 });
       }
@@ -146,7 +130,7 @@ export async function POST(req: NextRequest) {
       // Allocate the resource
       const allocation = await resourceStorage.allocateResource({
         ...validatedData,
-        allocatedById: session.user.id // Override with actual user ID
+        allocatedById: auth.userId // Override with actual user ID
       });
       
       return NextResponse.json(allocation, { status: 201 });
@@ -168,41 +152,40 @@ export async function POST(req: NextRequest) {
 // DELETE /api/fleet-ops/resources/allocations - Deallocate a resource from an operation
 export async function DELETE(req: NextRequest) {
   try {
-    // Get the session to check if the user is authenticated
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
+    // Authenticate user
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+
     // Parse query parameters
     const searchParams = req.nextUrl.searchParams;
     const resourceId = searchParams.get('resourceId');
     const operationId = searchParams.get('operationId');
-    
+
     if (!resourceId || !operationId) {
       return NextResponse.json(
         { error: 'Both resourceId and operationId must be provided' },
         { status: 400 }
       );
     }
-    
+
     // Check if the resource exists
     const resource = await resourceStorage.getResourceById(resourceId);
     if (!resource) {
       return NextResponse.json({ error: 'Resource not found' }, { status: 404 });
     }
-    
+
     // Check if the operation exists
     const operation = await operationStorage.getOperationById(operationId);
     if (!operation) {
       return NextResponse.json({ error: 'Operation not found' }, { status: 404 });
     }
-    
+
     // Check if user has permission to deallocate this resource
-    const userHasLeadershipRole = await hasLeadershipRole(session.user.id);
-    const isOperationLeader = operation.leaderId === session.user.id;
-    const isResourceOwner = resource.owner === session.user.id;
-    
+    const leadershipCheck = await requireLeadership();
+    const userHasLeadershipRole = !(leadershipCheck instanceof NextResponse);
+    const isOperationLeader = operation.leaderId === auth.userId;
+    const isResourceOwner = resource.owner === auth.userId;
+
     if (!userHasLeadershipRole && !isOperationLeader && !isResourceOwner) {
       return NextResponse.json({ error: 'Insufficient privileges' }, { status: 403 });
     }

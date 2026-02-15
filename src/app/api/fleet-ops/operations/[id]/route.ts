@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/auth';
 import * as operationStorage from '@/lib/operation-storage';
 import * as userStorage from '@/lib/user-storage';
-import { Operation } from '@/types/Operation';
 import { z } from 'zod';
+import { requireAuth, requireLeadership, AuthResult } from '@/lib/auth-guards';
 
 // Validation schema for updating an operation
 const operationParticipantSchema = z.object({
@@ -27,38 +25,6 @@ const updateOperationSchema = z.object({
   commsChannel: z.string().optional()
 });
 
-// Helper to check if user has leadership role
-async function hasLeadershipRole(_userId: string): Promise<boolean> {
-  // Remove role restrictions
-  return true;
-
-  // Commented out original implementation for future reference
-  /*
-  const user = await userStorage.getUserById(userId);
-  if (!user) return false;
-
-  // Check for leadership roles
-  const leadershipRoles = ['Director', 'Manager', 'Board Member'];
-  return leadershipRoles.includes(user.role) || user.clearanceLevel >= 3;
-  */
-}
-
-// Helper to check if user can modify an operation
-async function canModifyOperation(_userId: string, _operation: Operation): Promise<boolean> {
-  // Remove role restrictions - anyone can modify any operation
-  return true;
-
-  // Commented out original implementation for future reference
-  /*
-  // Leaders can modify any operation
-  const isLeadership = await hasLeadershipRole(userId);
-  if (isLeadership) return true;
-
-  // Operation leaders can modify their own operations
-  return operation.leaderId === userId;
-  */
-}
-
 // GET handler - Get a specific operation
 export async function GET(
   request: Request,
@@ -66,13 +32,10 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
+    const userId = auth.userId;
 
     // Get the operation
     const operation = await operationStorage.getOperationById(id);
@@ -82,7 +45,8 @@ export async function GET(
     }
 
     // Check if the user has access to this operation
-    const isLeadership = await hasLeadershipRole(userId);
+    const leadershipRoles = ['Director', 'Manager', 'Board Member'];
+    const isLeadership = leadershipRoles.includes(auth.role) || auth.clearanceLevel >= 3;
     const isParticipant = operation.participants.some(p => p.userId === userId);
     const isLeader = operation.leaderId === userId;
 
@@ -115,13 +79,11 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    const session = await getServerSession(authOptions);
+    // Leadership OR operation leader can modify
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
+    const userId = auth.userId;
 
     // Get the operation
     const operation = await operationStorage.getOperationById(id);
@@ -130,9 +92,12 @@ export async function PUT(
       return NextResponse.json({ error: 'Operation not found' }, { status: 404 });
     }
 
-    // Check if the user can modify this operation
-    const canModify = await canModifyOperation(userId, operation);
-    if (!canModify) {
+    // Check if the user can modify this operation (leadership or operation leader)
+    const leadershipCheck = await requireLeadership();
+    const isLeadership = !(leadershipCheck instanceof NextResponse);
+    const isOperationLeader = operation.leaderId === userId;
+
+    if (!isLeadership && !isOperationLeader) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
@@ -189,13 +154,11 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    const session = await getServerSession(authOptions);
+    // Leadership OR operation leader can delete
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
+    const userId = auth.userId;
     const operationId = id;
 
     // Get the operation
@@ -205,9 +168,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Operation not found' }, { status: 404 });
     }
 
-    // Check if the user can modify this operation
-    const canModify = await canModifyOperation(userId, operation);
-    if (!canModify) {
+    // Check if the user can delete this operation (leadership or operation leader)
+    const leadershipCheck = await requireLeadership();
+    const isLeadership = !(leadershipCheck instanceof NextResponse);
+    const isOperationLeader = operation.leaderId === userId;
+
+    if (!isLeadership && !isOperationLeader) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
