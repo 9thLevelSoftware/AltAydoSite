@@ -47,10 +47,10 @@ export async function GET(
     res.headers.set('Cache-Control', 'no-store');
     return res;
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching mission template:', error);
     return NextResponse.json(
-      { error: `Failed to fetch mission template: ${error.message}` },
+      { error: 'Failed to fetch mission template' },
       { status: 500 }
     );
   }
@@ -101,10 +101,10 @@ export async function PUT(
 
     return NextResponse.json(template, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating mission template:', error);
     return NextResponse.json(
-      { error: `Failed to update mission template: ${error.message}` },
+      { error: 'Failed to update mission template' },
       { status: 500 }
     );
   }
@@ -152,10 +152,10 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting mission template:', error);
     return NextResponse.json(
-      { error: `Failed to delete mission template: ${error.message}` },
+      { error: 'Failed to delete mission template' },
       { status: 500 }
     );
   }

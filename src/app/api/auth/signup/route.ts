@@ -119,17 +119,17 @@ export async function POST(request: NextRequest) {
         },
         { status: 201 }
       );
-    } catch (createError: any) {
+    } catch (createError) {
       console.error('Error creating user in database:', createError);
       return NextResponse.json(
-        { error: `Database error: ${createError.message || 'Failed to save user data'}` },
+        { error: 'Failed to create account' },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error during user registration:', error);
     return NextResponse.json(
-      { error: `Registration failed: ${error.message || 'Unknown error'}` },
+      { error: 'Registration failed' },
       { status: 500 }
     );
   }

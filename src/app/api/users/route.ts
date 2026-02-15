@@ -44,10 +44,10 @@ export async function GET(request: NextRequest) {
     res.headers.set('Cache-Control', 'no-store');
     return res;
     
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(
-      { error: `Failed to fetch users: ${error.message}` },
+      { error: 'Failed to fetch users' },
       { status: 500 }
     );
   }

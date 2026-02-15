@@ -105,10 +105,10 @@ export async function GET(req: NextRequest) {
     });
     res.headers.set('Cache-Control', 'no-store');
     return res;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error getting resources:', error);
     return NextResponse.json(
-      { error: `Failed to get resources: ${error.message || 'Unknown error'}` },
+      { error: 'Failed to get resources' },
       { status: 500 }
     );
   }
@@ -145,10 +145,10 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating resource:', error);
     return NextResponse.json(
-      { error: `Failed to create resource: ${error.message || 'Unknown error'}` },
+      { error: 'Failed to create resource' },
       { status: 500 }
     );
   }

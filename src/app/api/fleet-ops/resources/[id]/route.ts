@@ -56,10 +56,10 @@ export async function GET(
       ownerName,
       assignedToName
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error getting resource:', error);
     return NextResponse.json(
-      { error: `Failed to get resource: ${error.message || 'Unknown error'}` },
+      { error: 'Failed to get resource' },
       { status: 500 }
     );
   }
@@ -171,10 +171,10 @@ export async function PUT(
         { status: 400 }
       );
     }
-  } catch (error: any) {
-    console.error(`Error updating resource: ${error}`);
+  } catch (error) {
+    console.error('Error updating resource:', error);
     return NextResponse.json(
-      { error: `Failed to update resource: ${error.message || 'Unknown error'}` },
+      { error: 'Failed to update resource' },
       { status: 500 }
     );
   }
@@ -213,10 +213,10 @@ export async function DELETE(
     await resourceStorage.deleteResource(resourceId);
 
     return NextResponse.json({ message: 'Resource deleted successfully' });
-  } catch (error: any) {
-    console.error(`Error deleting resource: ${error}`);
+  } catch (error) {
+    console.error('Error deleting resource:', error);
     return NextResponse.json(
-      { error: `Failed to delete resource: ${error.message || 'Unknown error'}` },
+      { error: 'Failed to delete resource' },
       { status: 500 }
     );
   }

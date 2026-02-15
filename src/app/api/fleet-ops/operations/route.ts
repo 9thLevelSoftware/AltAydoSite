@@ -81,10 +81,10 @@ export async function GET(request: NextRequest) {
     res.headers.set('Cache-Control', 'no-store');
     return res;
     
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching operations:', error);
     return NextResponse.json(
-      { error: `Failed to fetch operations: ${error.message}` },
+      { error: 'Failed to fetch operations' },
       { status: 500 }
     );
   }
@@ -136,10 +136,10 @@ export async function POST(request: NextRequest) {
       leaderName: leader?.aydoHandle || 'Unknown'
     }, { status: 201 });
     
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating operation:', error);
     return NextResponse.json(
-      { error: `Failed to create operation: ${error.message}` },
+      { error: 'Failed to create operation' },
       { status: 500 }
     );
   }

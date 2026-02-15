@@ -151,10 +151,10 @@ export async function GET(request: NextRequest) {
     res.headers.set('Cache-Control', 'no-store');
     return res;
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching mission templates:', error);
     return NextResponse.json(
-      { error: `Failed to fetch mission templates: ${error.message}` },
+      { error: 'Failed to fetch mission templates' },
       { status: 500 }
     );
   }
@@ -194,32 +194,19 @@ export async function POST(request: NextRequest) {
       const template = await missionTemplateStorage.createMissionTemplate(templateToCreate);
       console.log('Mission template created successfully:', template.id);
       return NextResponse.json(template, { status: 201 });
-    } catch (storageError: any) {
+    } catch (storageError) {
       console.error('Error in mission template storage layer:', storageError);
-      
+
       return NextResponse.json(
-        { 
-          error: `Database error: ${storageError.message || 'Unknown error'}`,
-          details: {
-            message: 'Error occurred while saving mission template data to the database'
-          }
-        },
+        { error: 'Failed to create mission template' },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating mission template:', error);
-    
-    // Prepare a user-friendly error message
-    let errorMessage = 'Failed to create mission template';
-    if (error.message) {
-      errorMessage = `${errorMessage}: ${error.message}`;
-    }
-    
+
     return NextResponse.json(
-      { 
-        error: errorMessage
-      },
+      { error: 'Failed to create mission template' },
       { status: 500 }
     );
   }
@@ -280,32 +267,19 @@ export async function PUT(request: NextRequest) {
 
       console.log('Mission template updated successfully:', template.id);
       return NextResponse.json(template, { status: 200 });
-    } catch (storageError: any) {
+    } catch (storageError) {
       console.error('Error in mission template storage layer:', storageError);
-      
+
       return NextResponse.json(
-        { 
-          error: `Database error: ${storageError.message || 'Unknown error'}`,
-          details: {
-            message: 'Error occurred while updating mission template data in the database'
-          }
-        },
+        { error: 'Failed to update mission template' },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating mission template:', error);
-    
-    // Prepare a user-friendly error message
-    let errorMessage = 'Failed to update mission template';
-    if (error.message) {
-      errorMessage = `${errorMessage}: ${error.message}`;
-    }
-    
+
     return NextResponse.json(
-      { 
-        error: errorMessage
-      },
+      { error: 'Failed to update mission template' },
       { status: 500 }
     );
   }
@@ -352,31 +326,11 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting mission template:', error);
 
-    // Prepare a user-friendly error message
-    let errorMessage = 'Failed to delete mission template';
-    let errorDetails = null;
-
-    if (error.message) {
-      errorMessage = `${errorMessage}: ${error.message}`;
-    }
-
-    // Check if we're using fallback storage
-    if (missionTemplateStorage.isUsingFallbackStorage()) {
-      console.log('Using fallback storage due to MongoDB connection issues');
-      errorDetails = {
-        usingFallback: true,
-        message: 'Using local storage due to database connection issues'
-      };
-    }
-
     return NextResponse.json(
-      { 
-        error: errorMessage,
-        details: errorDetails
-      },
+      { error: 'Failed to delete mission template' },
       { status: 500 }
     );
   }

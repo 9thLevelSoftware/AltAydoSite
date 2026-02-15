@@ -81,10 +81,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(requests);
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching escort requests:', error);
     return NextResponse.json(
-      { error: `Failed to fetch escort requests: ${error.message}` },
+      { error: 'Failed to fetch escort requests' },
       { status: 500 }
     );
   }
@@ -139,32 +139,19 @@ export async function POST(request: NextRequest) {
       const escortRequest = await escortRequestStorage.createEscortRequest(escortRequestData);
       console.log('Escort request created successfully:', escortRequest.id);
       return NextResponse.json(escortRequest, { status: 201 });
-    } catch (storageError: any) {
+    } catch (storageError) {
       console.error('Error in escort request storage layer:', storageError);
-      
+
       return NextResponse.json(
-        { 
-          error: `Database error: ${storageError.message || 'Unknown error'}`,
-          details: {
-            message: 'Error occurred while saving escort request data to the database'
-          }
-        },
+        { error: 'Failed to create escort request' },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating escort request:', error);
-    
-    // Prepare a user-friendly error message
-    let errorMessage = 'Failed to create escort request';
-    if (error.message) {
-      errorMessage = `${errorMessage}: ${error.message}`;
-    }
-    
+
     return NextResponse.json(
-      { 
-        error: errorMessage
-      },
+      { error: 'Failed to create escort request' },
       { status: 500 }
     );
   }
@@ -203,32 +190,19 @@ export async function PUT(request: NextRequest) {
 
       console.log('Escort request updated successfully:', escortRequest.id);
       return NextResponse.json(escortRequest, { status: 200 });
-    } catch (storageError: any) {
+    } catch (storageError) {
       console.error('Error in escort request storage layer:', storageError);
-      
+
       return NextResponse.json(
-        { 
-          error: `Database error: ${storageError.message || 'Unknown error'}`,
-          details: {
-            message: 'Error occurred while updating escort request data in the database'
-          }
-        },
+        { error: 'Failed to update escort request' },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating escort request:', error);
-    
-    // Prepare a user-friendly error message
-    let errorMessage = 'Failed to update escort request';
-    if (error.message) {
-      errorMessage = `${errorMessage}: ${error.message}`;
-    }
-    
+
     return NextResponse.json(
-      { 
-        error: errorMessage
-      },
+      { error: 'Failed to update escort request' },
       { status: 500 }
     );
   }
@@ -267,32 +241,19 @@ export async function DELETE(request: NextRequest) {
 
       console.log('Escort request deleted successfully:', id);
       return NextResponse.json({ message: 'Escort request deleted successfully' }, { status: 200 });
-    } catch (storageError: any) {
+    } catch (storageError) {
       console.error('Error in escort request storage layer:', storageError);
-      
+
       return NextResponse.json(
-        { 
-          error: `Database error: ${storageError.message || 'Unknown error'}`,
-          details: {
-            message: 'Error occurred while deleting escort request data from the database'
-          }
-        },
+        { error: 'Failed to delete escort request' },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting escort request:', error);
-    
-    // Prepare a user-friendly error message
-    let errorMessage = 'Failed to delete escort request';
-    if (error.message) {
-      errorMessage = `${errorMessage}: ${error.message}`;
-    }
-    
+
     return NextResponse.json(
-      { 
-        error: errorMessage
-      },
+      { error: 'Failed to delete escort request' },
       { status: 500 }
     );
   }

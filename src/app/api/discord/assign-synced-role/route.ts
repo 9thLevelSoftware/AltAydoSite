@@ -118,9 +118,10 @@ async function handler(request: NextRequest) {
         } else {
           perUserResults.push({ userId: user.id, aydoHandle: user.aydoHandle, status: result.reason });
         }
-      } catch (err: any) {
+      } catch (err) {
         summary.errors++;
-        perUserResults.push({ userId: user.id, aydoHandle: user.aydoHandle, status: 'error', error: err?.message || 'unknown' });
+        console.error(`Error assigning role to user ${user.id}:`, err);
+        perUserResults.push({ userId: user.id, aydoHandle: user.aydoHandle, status: 'error' });
       }
       if (delayMs > 0) {
         await new Promise(res => setTimeout(res, Math.min(2000, delayMs))); // cap delay per user

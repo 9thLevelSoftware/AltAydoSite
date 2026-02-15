@@ -29,9 +29,7 @@ export async function POST(request: NextRequest) {
     console.error('Error initializing Discord role monitor via API:', error);
     
     return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : 'Failed to initialize'
-      },
+      { error: 'Failed to initialize' },
       { status: 500 }
     );
   }

@@ -31,10 +31,10 @@ export async function GET(
     res.headers.set('Cache-Control', 'no-store');
     return res;
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching planned mission:', error);
     return NextResponse.json(
-      { error: `Failed to fetch planned mission: ${error.message}` },
+      { error: 'Failed to fetch planned mission' },
       { status: 500 }
     );
   }
@@ -78,10 +78,10 @@ export async function PUT(
     console.log('Planned mission updated successfully:', mission.id);
     return NextResponse.json(mission, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating planned mission:', error);
     return NextResponse.json(
-      { error: `Failed to update planned mission: ${error.message}` },
+      { error: 'Failed to update planned mission' },
       { status: 500 }
     );
   }
@@ -125,10 +125,10 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting planned mission:', error);
     return NextResponse.json(
-      { error: `Failed to delete planned mission: ${error.message}` },
+      { error: 'Failed to delete planned mission' },
       { status: 500 }
     );
   }

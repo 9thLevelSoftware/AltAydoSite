@@ -95,10 +95,10 @@ export async function GET(request: NextRequest) {
     res.headers.set('Cache-Control', 'no-store');
     return res;
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching missions:', error);
     return NextResponse.json(
-      { error: `Failed to fetch missions: ${error.message}` },
+      { error: 'Failed to fetch missions' },
       { status: 500 }
     );
   }
@@ -132,32 +132,19 @@ export async function POST(request: NextRequest) {
       const mission = await missionStorage.createMission(missionData);
       console.log('Mission created successfully:', mission.id);
       return NextResponse.json(mission, { status: 201 });
-    } catch (storageError: any) {
+    } catch (storageError) {
       console.error('Error in mission storage layer:', storageError);
-      
+
       return NextResponse.json(
-        { 
-          error: `Database error: ${storageError.message || 'Unknown error'}`,
-          details: {
-            message: 'Error occurred while saving mission data to the database'
-          }
-        },
+        { error: 'Failed to create mission' },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating mission:', error);
-    
-    // Prepare a user-friendly error message
-    let errorMessage = 'Failed to create mission';
-    if (error.message) {
-      errorMessage = `${errorMessage}: ${error.message}`;
-    }
-    
+
     return NextResponse.json(
-      { 
-        error: errorMessage
-      },
+      { error: 'Failed to create mission' },
       { status: 500 }
     );
   }
@@ -196,32 +183,19 @@ export async function PUT(request: NextRequest) {
 
       console.log('Mission updated successfully:', mission.id);
       return NextResponse.json(mission, { status: 200 });
-    } catch (storageError: any) {
+    } catch (storageError) {
       console.error('Error in mission storage layer:', storageError);
-      
+
       return NextResponse.json(
-        { 
-          error: `Database error: ${storageError.message || 'Unknown error'}`,
-          details: {
-            message: 'Error occurred while updating mission data in the database'
-          }
-        },
+        { error: 'Failed to update mission' },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating mission:', error);
-    
-    // Prepare a user-friendly error message
-    let errorMessage = 'Failed to update mission';
-    if (error.message) {
-      errorMessage = `${errorMessage}: ${error.message}`;
-    }
-    
+
     return NextResponse.json(
-      { 
-        error: errorMessage
-      },
+      { error: 'Failed to update mission' },
       { status: 500 }
     );
   }
@@ -257,31 +231,11 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting mission:', error);
 
-    // Prepare a user-friendly error message
-    let errorMessage = 'Failed to delete mission';
-    let errorDetails = null;
-
-    if (error.message) {
-      errorMessage = `${errorMessage}: ${error.message}`;
-    }
-
-    // Check if we're using fallback storage
-    if (missionStorage.isUsingFallbackStorage()) {
-      console.log('Using fallback storage due to MongoDB connection issues');
-      errorDetails = {
-        usingFallback: true,
-        message: 'Using local storage due to database connection issues'
-      };
-    }
-
     return NextResponse.json(
-      { 
-        error: errorMessage,
-        details: errorDetails
-      },
+      { error: 'Failed to delete mission' },
       { status: 500 }
     );
   }

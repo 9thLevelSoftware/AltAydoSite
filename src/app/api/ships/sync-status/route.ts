@@ -35,12 +35,10 @@ export async function GET() {
       'public, max-age=60, stale-while-revalidate=30'
     );
     return response;
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown error';
+  } catch (error) {
     console.error('[sync-status] Error fetching sync status:', error);
     return NextResponse.json(
-      { error: `Failed to fetch sync status: ${message}` },
+      { error: 'Failed to fetch sync status' },
       { status: 500 }
     );
   }

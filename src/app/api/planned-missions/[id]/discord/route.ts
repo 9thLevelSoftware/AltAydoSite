@@ -159,10 +159,10 @@ export async function POST(
       mission: updatedMission
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error publishing mission to Discord:', error);
     return NextResponse.json(
-      { error: `Failed to publish to Discord: ${error.message}` },
+      { error: 'Failed to publish to Discord' },
       { status: 500 }
     );
   }
@@ -246,10 +246,10 @@ export async function GET(
     res.headers.set('Cache-Control', 'no-store, max-age=0');
     return res;
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching Discord RSVPs:', error);
     return NextResponse.json(
-      { error: `Failed to fetch RSVPs: ${error.message}` },
+      { error: 'Failed to fetch RSVPs' },
       { status: 500 }
     );
   }
@@ -321,10 +321,10 @@ export async function DELETE(
       mission: updatedMission
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error unpublishing mission from Discord:', error);
     return NextResponse.json(
-      { error: `Failed to unpublish from Discord: ${error.message}` },
+      { error: 'Failed to unpublish from Discord' },
       { status: 500 }
     );
   }
@@ -413,10 +413,10 @@ export async function PATCH(
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating Discord event:', error);
     return NextResponse.json(
-      { error: `Failed to update Discord event: ${error.message}` },
+      { error: 'Failed to update Discord event' },
       { status: 500 }
     );
   }

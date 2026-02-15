@@ -99,10 +99,10 @@ export async function GET(
       leaderName: leader ? leader.aydoHandle : 'Unknown'
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching operation:', error);
     return NextResponse.json(
-      { error: `Failed to fetch operation: ${error.message}` },
+      { error: 'Failed to fetch operation' },
       { status: 500 }
     );
   }
@@ -173,10 +173,10 @@ export async function PUT(
       leaderName: leader ? leader.aydoHandle : 'Unknown'
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating operation:', error);
     return NextResponse.json(
-      { error: `Failed to update operation: ${error.message}` },
+      { error: 'Failed to update operation' },
       { status: 500 }
     );
   }
@@ -221,10 +221,10 @@ export async function DELETE(
     // Return success response
     return NextResponse.json({ success: true });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting operation:', error);
     return NextResponse.json(
-      { error: `Failed to delete operation: ${error.message}` },
+      { error: 'Failed to delete operation' },
       { status: 500 }
     );
   }

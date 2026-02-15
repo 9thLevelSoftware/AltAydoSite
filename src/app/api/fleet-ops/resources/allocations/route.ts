@@ -87,10 +87,10 @@ export async function GET(req: NextRequest) {
     }));
     
     return NextResponse.json(enhancedAllocations);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error getting resource allocations:', error);
     return NextResponse.json(
-      { error: `Failed to get resource allocations: ${error.message || 'Unknown error'}` },
+      { error: 'Failed to get resource allocations' },
       { status: 500 }
     );
   }
@@ -156,10 +156,10 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error allocating resource:', error);
     return NextResponse.json(
-      { error: `Failed to allocate resource: ${error.message || 'Unknown error'}` },
+      { error: 'Failed to allocate resource' },
       { status: 500 }
     );
   }
@@ -211,10 +211,10 @@ export async function DELETE(req: NextRequest) {
     await resourceStorage.deallocateResource(resourceId, operationId);
     
     return NextResponse.json({ message: 'Resource deallocated successfully' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deallocating resource:', error);
     return NextResponse.json(
-      { error: `Failed to deallocate resource: ${error.message || 'Unknown error'}` },
+      { error: 'Failed to deallocate resource' },
       { status: 500 }
     );
   }

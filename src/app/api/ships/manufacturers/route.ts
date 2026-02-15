@@ -21,12 +21,10 @@ export async function GET() {
     const response = NextResponse.json({ items: manufacturers });
     response.headers.set('Cache-Control', 'public, max-age=3600');
     return response;
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown error';
+  } catch (error) {
     console.error('[ships/manufacturers] Error fetching manufacturers:', error);
     return NextResponse.json(
-      { error: `Failed to fetch manufacturers: ${message}` },
+      { error: 'Failed to fetch manufacturers' },
       { status: 500 }
     );
   }

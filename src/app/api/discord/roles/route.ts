@@ -41,9 +41,7 @@ export async function GET(request: NextRequest) {
     console.error('Error getting Discord role monitor status:', error);
     
     return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : 'Failed to get monitor status'
-      },
+      { error: 'Failed to get monitor status' },
       { status: 500 }
     );
   }
@@ -116,9 +114,7 @@ export async function POST(request: NextRequest) {
     console.error('Error in Discord role monitor POST:', error);
     
     return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : 'Failed to process request'
-      },
+      { error: 'Failed to process request' },
       { status: 500 }
     );
   }

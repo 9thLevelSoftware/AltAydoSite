@@ -45,10 +45,10 @@ export async function GET(request: NextRequest) {
     res.headers.set('Cache-Control', 'no-store, max-age=0');
     return res;
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching leaders:', error);
     return NextResponse.json(
-      { error: `Failed to fetch leaders: ${error.message}` },
+      { error: 'Failed to fetch leaders' },
       { status: 500 }
     );
   }

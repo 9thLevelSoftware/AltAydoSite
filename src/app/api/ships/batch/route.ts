@@ -59,12 +59,10 @@ export async function POST(request: NextRequest) {
       'public, max-age=300, stale-while-revalidate=60'
     );
     return response;
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown error';
+  } catch (error) {
     console.error('[ships/batch] Error resolving batch ships:', error);
     return NextResponse.json(
-      { error: `Failed to resolve ships: ${message}` },
+      { error: 'Failed to resolve ships' },
       { status: 500 }
     );
   }

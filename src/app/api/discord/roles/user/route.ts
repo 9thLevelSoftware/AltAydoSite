@@ -87,9 +87,7 @@ export async function POST(request: NextRequest) {
     console.error('Error checking user Discord roles:', error);
     
     return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : 'Failed to check user roles'
-      },
+      { error: 'Failed to check user roles' },
       { status: 500 }
     );
   }

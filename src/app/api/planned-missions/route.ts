@@ -72,9 +72,9 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
 
     console.log('Auto-published mission to Discord:', mission.id, '-> Event:', discordEvent.id);
     return { success: true, discordEvent };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to auto-publish to Discord:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Failed to publish to Discord' };
   }
 }
 
@@ -237,10 +237,10 @@ export async function GET(request: NextRequest) {
     res.headers.set('Cache-Control', 'no-store');
     return res;
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching planned missions:', error);
     return NextResponse.json(
-      { error: `Failed to fetch planned missions: ${error.message}` },
+      { error: 'Failed to fetch planned missions' },
       { status: 500 }
     );
   }
@@ -311,20 +311,17 @@ export async function POST(request: NextRequest) {
         discordPublished: discordPublishResult?.success || false,
         discordError: discordPublishResult?.error
       }, { status: 201 });
-    } catch (storageError: any) {
+    } catch (storageError) {
       console.error('Error in planned mission storage layer:', storageError);
       return NextResponse.json(
-        {
-          error: `Database error: ${storageError.message || 'Unknown error'}`,
-          details: { message: 'Error occurred while saving planned mission data' }
-        },
+        { error: 'Failed to create planned mission' },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating planned mission:', error);
     return NextResponse.json(
-      { error: `Failed to create planned mission: ${error.message}` },
+      { error: 'Failed to create planned mission' },
       { status: 500 }
     );
   }
@@ -403,20 +400,17 @@ export async function PUT(request: NextRequest) {
         discordPublished: discordPublishResult?.success || false,
         discordError: discordPublishResult?.error
       }, { status: 200 });
-    } catch (storageError: any) {
+    } catch (storageError) {
       console.error('Error in planned mission storage layer:', storageError);
       return NextResponse.json(
-        {
-          error: `Database error: ${storageError.message || 'Unknown error'}`,
-          details: { message: 'Error occurred while updating planned mission data' }
-        },
+        { error: 'Failed to update planned mission' },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating planned mission:', error);
     return NextResponse.json(
-      { error: `Failed to update planned mission: ${error.message}` },
+      { error: 'Failed to update planned mission' },
       { status: 500 }
     );
   }
@@ -460,10 +454,10 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting planned mission:', error);
     return NextResponse.json(
-      { error: `Failed to delete planned mission: ${error.message}` },
+      { error: 'Failed to delete planned mission' },
       { status: 500 }
     );
   }

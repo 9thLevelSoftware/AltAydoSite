@@ -76,9 +76,9 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
 
     console.log('Auto-published mission to Discord:', mission.id, '-> Event:', discordEvent.id);
     return { success: true, discordEvent };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to auto-publish to Discord:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Failed to publish to Discord' };
   }
 }
 

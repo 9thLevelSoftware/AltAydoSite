@@ -64,10 +64,10 @@ export async function GET() {
     
     return NextResponse.json(response);
     
-  } catch (error: any) {
+  } catch (error) {
     console.error('Profile fetch error:', error);
     return NextResponse.json(
-      { error: `Failed to fetch profile: ${error.message}` },
+      { error: 'Failed to fetch profile' },
       { status: 500 }
     );
   }
@@ -190,16 +190,16 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json(response);
 
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof StaleDocumentError) {
       return NextResponse.json(
-        { error: 'CONFLICT', message: error.message },
+        { error: 'CONFLICT', message: 'Profile was modified by another session. Please refresh and try again.' },
         { status: 409 }
       );
     }
     console.error('Profile update error:', error);
     return NextResponse.json(
-      { error: `Failed to update profile: ${error.message}` },
+      { error: 'Failed to update profile' },
       { status: 500 }
     );
   }

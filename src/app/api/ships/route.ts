@@ -59,12 +59,10 @@ export async function GET(request: NextRequest) {
       'public, max-age=300, stale-while-revalidate=60'
     );
     return response;
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown error';
+  } catch (error) {
     console.error('[ships] Error fetching ship list:', error);
     return NextResponse.json(
-      { error: `Failed to fetch ships: ${message}` },
+      { error: 'Failed to fetch ships' },
       { status: 500 }
     );
   }

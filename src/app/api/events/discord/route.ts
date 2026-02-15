@@ -69,9 +69,8 @@ export async function GET(request: NextRequest) {
     try {
       discordEvents = await discordService.getScheduledEvents();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to fetch Discord events';
-      console.error('[Events API][GET] Discord fetch error:', msg);
-      return buildErrorResponse(msg, userTimezone);
+      console.error('[Events API][GET] Discord fetch error:', err);
+      return buildErrorResponse('Failed to fetch Discord events', userTimezone);
     }
 
     // If no events, short-circuit
@@ -93,8 +92,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Events API][GET] Unexpected error:', error);
-    const msg = error instanceof Error ? error.message : 'Unexpected server error';
-    return buildErrorResponse(msg, userTimezone);
+    return buildErrorResponse('Unexpected server error', userTimezone);
   }
 }
 
@@ -117,8 +115,8 @@ export async function POST(request: NextRequest) {
         const mapped = mapDiscordEventToEventData(event, userTimezone);
         return NextResponse.json({ event: mapped, source: 'discord', userTimezone, lastSync: new Date().toISOString() });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to fetch event';
-        return buildErrorResponse(msg, userTimezone);
+        console.error('[Events API][POST] Event fetch error:', err);
+        return buildErrorResponse('Failed to fetch event', userTimezone);
       }
     }
 
@@ -127,8 +125,8 @@ export async function POST(request: NextRequest) {
     try {
       discordEvents = await discordService.getScheduledEvents();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to fetch Discord events';
-      return buildErrorResponse(msg, userTimezone);
+      console.error('[Events API][POST] Discord fetch error:', err);
+      return buildErrorResponse('Failed to fetch Discord events', userTimezone);
     }
 
     const mapped = mapDiscordEventsToEventData(discordEvents, userTimezone, expandFlag ? horizonDays : 1);
@@ -144,7 +142,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Events API][POST] Unexpected error:', error);
-    const msg = error instanceof Error ? error.message : 'Unexpected server error';
-    return buildErrorResponse(msg, userTimezone);
+    return buildErrorResponse('Unexpected server error', userTimezone);
   }
 }
