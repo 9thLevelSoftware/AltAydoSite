@@ -22,7 +22,7 @@ See `.planning/MILESTONES.md` for v1.0 details. 26 plans across 8 phases (includ
 
 - [x] **Phase 8: MongoDB Consolidation** - Merge dual connection modules into single client with unified pool (completed 2026-02-15)
 - [x] **Phase 9: Emergency Security & Dependency Cleanup** - Patch critical vulnerabilities, upgrade Next.js, remove unused packages, define missing CSS variable (completed 2026-02-15)
-- [ ] **Phase 10: Access Control Hardening** - RBAC enforcement, rate limiting, CSP headers, ownership checks, image validation
+- [x] **Phase 10: Access Control Hardening** - RBAC enforcement, rate limiting, CSP headers, ownership checks, image validation (completed 2026-02-15)
 - [ ] **Phase 11: UX Critical Fixes** - Profile server migration, toast notifications, confirmation dialogs
 - [ ] **Phase 12: Motion v12 Migration** - Atomic framer-motion to motion package migration across 109 files with LazyMotion
 - [ ] **Phase 13: Accessibility & Performance Foundations** - Form labels, keyboard nav, focus indicators, cache headers, DB pagination
@@ -183,7 +183,7 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15
 |-------|-----------|----------------|--------|-----------|
 | 8. MongoDB Consolidation | v1.1 | 2/2 | Complete | 2026-02-15 |
 | 9. Emergency Security & Deps | v1.1 | 4/4 | Complete | 2026-02-15 |
-| 10. Access Control Hardening | v1.1 | 0/TBD | Not started | - |
+| 10. Access Control Hardening | v1.1 | Complete    | 2026-02-15 | - |
 | 11. UX Critical Fixes | v1.1 | 0/TBD | Not started | - |
 | 12. Motion v12 Migration | v1.1 | 0/TBD | Not started | - |
 | 13. Accessibility & Performance | v1.1 | 0/TBD | Not started | - |
