@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 10 of 15 (Access Control Hardening)
-Plan: 3 of 5 in current phase (10-01, 10-03, 10-04 complete)
+Plan: 2 of 5 in current phase (10-01, 10-02, 10-03, 10-04 complete)
 Status: Executing Phase 10
-Last activity: 2026-02-15 -- Plan 10-01 executed (RBAC authorization guards)
+Last activity: 2026-02-15 -- Plan 10-02 executed (ownership enforcement)
 
-Progress: [███░░░░░░░] 25%
+Progress: [████░░░░░░] 30%
 
 ## Performance Metrics
 
@@ -24,7 +24,7 @@ Progress: [███░░░░░░░] 25%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 8
+- Total plans completed: 9
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -39,6 +39,7 @@ Progress: [███░░░░░░░] 25%
 | 10    | 03   | 4min     | 3     | 6     |
 | 10    | 01   | 5min     | 3     | 8     |
 | 10    | 04   | 2min     | 2     | 1     |
+| 10    | 02   | 4min     | 3     | 2     |
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 10-01: canUserAccessTemplate clearance >= 2 sees all templates, lower clearance own-only
 10-01: missions/route.ts return true left alone -- validates participant data structure, not RBAC
 10-04: X-Frame-Options DENY kept alongside CSP frame-ancestors none for older browser fallback
+10-02: Escort PUT allows creator/officer/leadership; DELETE restricts to creator/leadership only
+10-02: Ship assignment self-assignment allowed, cross-user requires leadership clearance >= 3
+10-02: Planned-missions canUserModifyMission/canUserDeleteMission verified -- no bypasses found
 
 ### Pending Todos
 
@@ -95,5 +99,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 10-01-PLAN.md (RBAC authorization guards)
-Resume file: .planning/phases/10-access-control-hardening/10-01-SUMMARY.md
+Stopped at: Completed 10-02-PLAN.md (ownership enforcement)
+Resume file: .planning/phases/10-access-control-hardening/10-02-SUMMARY.md
