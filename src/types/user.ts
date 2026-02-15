@@ -15,6 +15,7 @@ export interface User {
   position?: string | null;
   division?: string | null;
   timezone?: string | null;
+  preferredGameplayLoops?: string[];
   ships?: UserShip[];
   createdAt?: string;
   updatedAt?: string;

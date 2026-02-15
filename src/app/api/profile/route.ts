@@ -24,6 +24,7 @@ const profileUpdateSchema = z.object({
   position: z.string().optional().nullable(),
   division: z.string().optional().nullable(),
   timezone: z.string().optional().nullable(),
+  preferredGameplayLoops: z.array(z.string()).optional(),
   ships: z.array(userShipSchema).optional(),
   __v: z.number().int().optional(),
 });
@@ -58,12 +59,13 @@ export async function GET() {
       position: user.position || null,
       division: user.division || null,
       timezone: user.timezone || null,
+      preferredGameplayLoops: user.preferredGameplayLoops || [],
       ships: user.ships || [],
       __v: (user as any).__v ?? 0,
     };
-    
+
     return NextResponse.json(response);
-    
+
   } catch (error) {
     console.error('Profile fetch error:', error);
     return NextResponse.json(
@@ -145,6 +147,7 @@ export async function PUT(request: NextRequest) {
         position: updatedUser.position || null,
         division: updatedUser.division || null,
         timezone: updatedUser.timezone || null,
+        preferredGameplayLoops: updatedUser.preferredGameplayLoops || [],
         ships: updatedUser.ships || [],
         __v: (updatedUser as any).__v ?? 0,
       };
@@ -184,6 +187,7 @@ export async function PUT(request: NextRequest) {
       position: updatedUser.position || null,
       division: updatedUser.division || null,
       timezone: updatedUser.timezone || null,
+      preferredGameplayLoops: updatedUser.preferredGameplayLoops || [],
       ships: updatedUser.ships || [],
       __v: (updatedUser as any).__v ?? 0,
     };
