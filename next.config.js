@@ -96,6 +96,13 @@ const nextConfig = {
                 ],
             },
             {
+                source: '/api/:path*',
+                headers: [
+                    { key: 'Cache-Control', value: 'no-store' },
+                    { key: 'Pragma', value: 'no-cache' },
+                ],
+            },
+            {
                 source: '/_next/static/:path*',
                 headers: [
                     { key: 'Cache-Control', value: 'public, max-age=3600, must-revalidate' },
