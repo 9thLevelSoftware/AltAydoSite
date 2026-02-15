@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { User } from '@/types/user';
 import * as userStorage from '@/lib/user-storage';
 import { syncDiscordProfile } from '@/lib/discord-oauth';
+import { checkRateLimit, AUTH_RATE_LIMIT } from '@/lib/rate-limit-store';
 
 // SECURITY FIX: Hardcoded admin user removed for production security
 // Admin users must be created in the database with secure, unique passwords
@@ -30,12 +31,26 @@ export const authOptions: NextAuthOptions = {
         aydoHandle: { label: 'AydoCorp Handle', type: 'text' },
         password: { label: 'Password', type: 'password' }
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.aydoHandle || !credentials?.password) {
           return null;
         }
 
         try {
+          // Rate limit login attempts by client IP (MongoDB-backed, persistent)
+          const ip = (req?.headers?.['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 'unknown';
+          const rateLimitKey = `auth:login:${ip}`;
+          try {
+            const rateLimit = await checkRateLimit(rateLimitKey, AUTH_RATE_LIMIT.maxRequests, AUTH_RATE_LIMIT.windowMs);
+            if (!rateLimit.allowed) {
+              throw new Error('Too many login attempts. Please try again later.');
+            }
+          } catch (e) {
+            // Re-throw rate limit errors; fail open on MongoDB errors
+            if (e instanceof Error && e.message.includes('Too many')) throw e;
+            console.warn('Rate limit check failed, allowing request:', e);
+          }
+
           let user: User | null = null;
 
           // Try to find user by handle

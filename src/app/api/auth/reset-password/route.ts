@@ -3,6 +3,7 @@ import { z } from 'zod';
 import bcrypt from 'bcrypt';
 import * as userStorage from '@/lib/user-storage';
 import * as resetTokenStorage from '@/lib/password-reset-storage';
+import { checkRateLimit, getRateLimitKey, AUTH_RATE_LIMIT } from '@/lib/rate-limit-store';
 
 // Define validation schema for reset password request
 const resetPasswordSchema = z.object({
@@ -16,6 +17,27 @@ const resetPasswordSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit reset-password attempts by client IP
+    const rateLimitKey = getRateLimitKey('auth:reset-password', request);
+    try {
+      const rateLimit = await checkRateLimit(rateLimitKey, AUTH_RATE_LIMIT.maxRequests, AUTH_RATE_LIMIT.windowMs);
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          { error: 'Too many requests. Please try again later.' },
+          {
+            status: 429,
+            headers: {
+              'Retry-After': String(Math.ceil((rateLimit.resetAt.getTime() - Date.now()) / 1000)),
+              'X-RateLimit-Remaining': '0',
+            },
+          }
+        );
+      }
+    } catch (e) {
+      // Fail open: if MongoDB is unavailable, allow the request
+      console.warn('Rate limit check failed, allowing request:', e);
+    }
+
     console.log('Reset password API called');
     const body = await request.json();
     console.log('Reset password request body received', { token: body.token?.substring(0, 8) + '...', password: '[REDACTED]' });

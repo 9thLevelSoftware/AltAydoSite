@@ -3,6 +3,7 @@ import { z } from 'zod';
 import * as userStorage from '@/lib/user-storage';
 import * as resetTokenStorage from '@/lib/password-reset-storage';
 import { sendPasswordResetEmail } from '@/lib/email-service';
+import { checkRateLimit, getRateLimitKey, AUTH_RATE_LIMIT } from '@/lib/rate-limit-store';
 
 // Define validation schema for forgot password request
 const forgotPasswordSchema = z.object({
@@ -11,6 +12,27 @@ const forgotPasswordSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit forgot-password attempts by client IP
+    const rateLimitKey = getRateLimitKey('auth:forgot-password', request);
+    try {
+      const rateLimit = await checkRateLimit(rateLimitKey, AUTH_RATE_LIMIT.maxRequests, AUTH_RATE_LIMIT.windowMs);
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          { error: 'Too many requests. Please try again later.' },
+          {
+            status: 429,
+            headers: {
+              'Retry-After': String(Math.ceil((rateLimit.resetAt.getTime() - Date.now()) / 1000)),
+              'X-RateLimit-Remaining': '0',
+            },
+          }
+        );
+      }
+    } catch (e) {
+      // Fail open: if MongoDB is unavailable, allow the request
+      console.warn('Rate limit check failed, allowing request:', e);
+    }
+
     console.log('Forgot password API called');
     const body = await request.json();
     console.log('Forgot password request body received', { email: body.email });

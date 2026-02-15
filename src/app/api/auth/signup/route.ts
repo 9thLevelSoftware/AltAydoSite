@@ -4,6 +4,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { User } from '@/types/user';
 import * as userStorage from '@/lib/user-storage';
+import { checkRateLimit, getRateLimitKey, AUTH_RATE_LIMIT } from '@/lib/rate-limit-store';
 
 // Define validation schema for signup data
 const signupSchema = z.object({
@@ -20,6 +21,27 @@ const signupSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit signup attempts by client IP
+    const rateLimitKey = getRateLimitKey('auth:signup', request);
+    try {
+      const rateLimit = await checkRateLimit(rateLimitKey, AUTH_RATE_LIMIT.maxRequests, AUTH_RATE_LIMIT.windowMs);
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          { error: 'Too many requests. Please try again later.' },
+          {
+            status: 429,
+            headers: {
+              'Retry-After': String(Math.ceil((rateLimit.resetAt.getTime() - Date.now()) / 1000)),
+              'X-RateLimit-Remaining': '0',
+            },
+          }
+        );
+      }
+    } catch (e) {
+      // Fail open: if MongoDB is unavailable, allow the request
+      console.warn('Rate limit check failed, allowing request:', e);
+    }
+
     console.log('Signup API called');
     const body = await request.json();
     console.log('Signup request body received', { ...body, password: '[REDACTED]', confirmPassword: '[REDACTED]' });
