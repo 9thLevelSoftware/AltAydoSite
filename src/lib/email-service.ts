@@ -1,5 +1,15 @@
 import nodemailer from 'nodemailer';
 
+// SEC-04: Escape user-supplied values before HTML interpolation to prevent XSS
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Email configuration
 const emailConfig = {
   host: process.env.EMAIL_HOST,
@@ -38,7 +48,7 @@ export async function sendPasswordResetEmail(
           </div>
           
           <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #0070f3; margin-bottom: 20px;">
-            <p>Hello, <strong>${aydoHandle}</strong>,</p>
+            <p>Hello, <strong>${escapeHtml(aydoHandle)}</strong>,</p>
             <p>We received a request to reset your AydoCorp account password. If you did not make this request, please ignore this email.</p>
           </div>
           
@@ -93,21 +103,21 @@ export async function sendContactFormEmail(
 
           <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #0070f3; margin-bottom: 20px;">
             <h2 style="margin-top: 0; color: #333;">Contact Form Submission</h2>
-            <p><strong>From:</strong> ${name}</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Subject:</strong> ${subject}</p>
+            <p><strong>From:</strong> ${escapeHtml(name)}</p>
+            <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+            <p><strong>Subject:</strong> ${escapeHtml(subject)}</p>
           </div>
 
           <div style="margin-bottom: 30px;">
             <h3 style="color: #333;">Message:</h3>
             <div style="background-color: #fff; padding: 15px; border: 1px solid #ddd; border-radius: 4px; white-space: pre-wrap;">
-${message}
+${escapeHtml(message)}
             </div>
           </div>
 
           <div style="font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 15px;">
             <p>This message was sent via the AydoCorp website contact form.</p>
-            <p>Reply directly to this email to respond to ${email}</p>
+            <p>Reply directly to this email to respond to ${escapeHtml(email)}</p>
             <p style="margin-top: 15px;">© ${new Date().getFullYear()} AydoCorp. All rights reserved.</p>
           </div>
         </div>

@@ -67,12 +67,12 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   try {
     const db = await getDb();
     const emailLower = email.toLowerCase();
-    const doc = await db.collection('users').findOne({
-      $or: [
-        { emailLower },
-        { email: { $regex: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
-      ],
-    }, { projection: { _id: 0 } });
+    // SEC-03: Use normalized field only (no $regex) to prevent ReDoS.
+    // All records have emailLower since Phase 8 migration.
+    const doc = await db.collection('users').findOne(
+      { emailLower },
+      { projection: { _id: 0 } }
+    );
     if (!doc) return null;
     if ((doc as any).__v === undefined) (doc as any).__v = 0;
     return doc as unknown as User;
@@ -93,12 +93,12 @@ export async function getUserByHandle(aydoHandle: string): Promise<User | null> 
   try {
     const db = await getDb();
     const aydoHandleLower = aydoHandle.toLowerCase();
-    const doc = await db.collection('users').findOne({
-      $or: [
-        { aydoHandleLower },
-        { aydoHandle: { $regex: new RegExp(`^${aydoHandle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
-      ],
-    }, { projection: { _id: 0 } });
+    // SEC-03: Use normalized field only (no $regex) to prevent ReDoS.
+    // All records have aydoHandleLower since Phase 8 migration.
+    const doc = await db.collection('users').findOne(
+      { aydoHandleLower },
+      { projection: { _id: 0 } }
+    );
     if (!doc) return null;
     if ((doc as any).__v === undefined) (doc as any).__v = 0;
     return doc as unknown as User;
