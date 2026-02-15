@@ -1,307 +1,231 @@
 # Project Research Summary
 
-**Project:** AydoCorp Website - Dynamic Ship Database (FleetYards API Integration)
-**Domain:** Third-party API data synchronization for Star Citizen org management tool
-**Researched:** 2026-02-03
+**Project:** AydoCorp Website - v1.1 Hardening & Polish Milestone
+**Domain:** Production remediation — security hardening, Next.js 15.5 upgrade, dependency cleanup, UX fixes, design system consolidation
+**Researched:** 2026-02-15
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This milestone integrates the FleetYards community API to replace a static 200-ship JSON file with a dynamic, self-updating ship database for AydoCorp's org management platform. The recommended approach uses a periodic sync service (node-cron) running in Azure App Service's persistent Node.js process to fetch 500+ ships from FleetYards, validate with Zod, and upsert to MongoDB via bulkWrite. Ships are stored with FleetYards UUIDs as canonical identifiers and served through RESTful API routes with filtering, search, and pagination.
+This milestone addresses 100+ findings from a comprehensive project audit across security, UX, performance, dependencies, and UI consistency. The AydoCorp website shipped a successful v1.0 (dynamic ship database), but the audit uncovered critical vulnerabilities (unauthenticated admin endpoints exposing user data, a CVSS 10.0 RCE in Next.js 15.3.3, dual MongoDB connection pools exhausting resources), severe UX issues (localStorage-only profile data causing data loss, `alert()` for feedback, missing form labels), and a fragmented design system with 530+ inline style references and 4 competing button implementations.
 
-The critical risk is the big-bang migration from name-based ship references to UUID-based references across five MongoDB collections (users, missions, operations, planned-missions, escort-requests). Name-matching fuzzy logic with manual fallbacks is essential to prevent orphaned fleet data. Secondary risks include FleetYards CDN dependency for all ship images (no local fallback planned) and Cosmos DB MongoDB compatibility gaps that could silently break text search or bulk operations. Mitigation strategies include comprehensive name mapping tables pre-migration, storing original ship names for reference, and validating 100% match rate before cutover.
+The recommended approach is **sequential dependency-driven remediation**: fix the dual MongoDB connection pool problem first (prerequisite for rate limiting storage), then apply emergency security patches (auth-gate exposed routes, upgrade Next.js to 15.5.12 to patch CVE-2025-66478 RCE), then harden access control (RBAC enforcement, rate limiting, CSP headers), then fix UX data loss risks (move profile to server, replace `alert()` with notifications), then optimize performance (motion v12 migration with LazyMotion, cache headers, SSR), and finally consolidate the design system (109 files using framer-motion must migrate atomically to avoid bundle bloat).
 
-The architecture follows existing codebase patterns: storage modules per entity, cron routes with bearer auth, denormalized references with ID + display fields, and index-first schema design. The build sequence is strictly ordered by dependencies: foundation (sync + storage) -> API routes -> migration script -> type updates -> frontend component updates -> cleanup. No dual-format transition period means the migration is a single, carefully orchestrated cutover.
+The key risk is **dependency ordering violations**. The dual MongoDB client modules must be consolidated before adding rate limiting (which adds a third DB consumer). The framer-motion package rename affects 109 files and must be done atomically in a single commit. CSP nonces force pages to dynamic rendering, requiring a split strategy (hash-based for static pages, nonces only for authenticated routes). Attempting to parallelize security fixes with design system work or Server Component conversion creates integration conflicts. The safe path is linear: infrastructure fixes → security → UX → performance → polish.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The project requires only two new dependencies: node-cron for scheduling and p-limit for API request concurrency control. Everything else uses existing infrastructure: native fetch for HTTP (no need for Axios server-side), Zod 3.x already installed for validation, MongoDB driver 6.x for database operations. The deployment target is Azure App Service with standalone Next.js output, ruling out Vercel-specific solutions like Vercel Cron Jobs.
+**Core decision:** Upgrade Next.js from 15.3.3 to **15.5.12** (NOT 16.x). This patches a CVSS 10.0 critical RCE (CVE-2025-66478) with active exploitation in the wild, while avoiding the massive React 19 migration and middleware-to-proxy rename that Next.js 16 requires. Next.js 15.x is supported through October 2026, giving 8 months of runway.
 
 **Core technologies:**
-- **node-cron (^4.2.1)**: Periodic sync scheduler - runs in Next.js instrumentation hook, persists with Azure App Service "Always On," zero infrastructure overhead vs. Azure Functions or WebJobs
-- **Native fetch (built-in)**: FleetYards API client - no additional bundle weight, simple REST API needs no Axios features, Next.js extends fetch with caching semantics
-- **Zod 3.x (existing)**: API response validation - safeParse at trust boundary to skip malformed records without crashing sync, staying on v3 avoids breaking change migration
-- **MongoDB bulkWrite (existing driver 6.x)**: Upsert pattern - updateOne with fleetyardsId match key and upsert:true, ordered:false for parallel execution and partial failure tolerance
-- **FleetYards CDN (direct linking)**: Ship images - no mirroring to R2, Next.js Image handles optimization, requires adding cdn.fleetyards.net to remotePatterns
+- **Next.js 15.5.12** — patches critical RCE, SSRF, and DoS vulnerabilities; minimal breaking changes from 15.3.3; `next lint` deprecation handled via codemod
+- **motion 12.34.0** (replaces framer-motion 10.x) — package rename from `framer-motion` to `motion`; import path changes to `motion/react`; 109 files affected; LazyMotion with `domMax` features reduces bundle by 30kb
+- **@nosecone/next 1.1.0** — Next.js-specific security headers with nonce-based CSP; from Arcjet team; middleware integration
+- **@arcjet/next 1.0.0-beta.15** (optional) — rate limiting + bot detection + WAF; alternative: MongoDB-backed custom rate limiter for single-instance deployment
+- **Zod 3.24.4** (existing, expand coverage) — input validation for all API routes; 14 routes currently use it, audit remaining 31+ routes
+- **Remove 8 unused packages** — `@azure/cosmos`, `@azure/identity`, `@azure/msal-node`, `azure-ad-verify-token`, `mammoth`, `openid-client`, `bcrypt`, `@types/bcrypt` — eliminates ~25 of 29 npm vulnerabilities
 
-**What NOT to add:** Mongoose/Prisma (dual data access patterns), Vercel Cron (not on Vercel), external schedulers (node-cron sufficient), Zod 4 or MongoDB 7 upgrades (separate migration tasks unrelated to this feature).
+**Critical version constraints:**
+- Do NOT upgrade to Next.js 16 (requires React 19, breaks next-auth v4, middleware-to-proxy rename, Turbopack default breaks custom webpack config)
+- Do NOT upgrade to next-auth v5 (different cookies, logs everyone out, separate migration)
+- Use `domMax` for LazyMotion (NOT `domAnimation`) — codebase uses `layoutId` animations which require layout features
 
 ### Expected Features
 
-The feature landscape divides into table stakes (features users expect from any Star Citizen ship database), differentiators (features specific to org management tools), and anti-features (scope traps to avoid). The current implementation is sparse: static JSON, single image per ship, manufacturer dropdown only, no detail views.
+This is a remediation milestone, not new features. The "features" are fixes categorized by severity.
 
 **Must have (table stakes):**
-- T7: Data sync from FleetYards API - the entire point of this milestone, all else depends on this
-- T8: Graceful degradation / offline fallback - extends existing hybrid storage pattern to ship data
-- T1: Multi-axis search and filter - manufacturer + size + role + status + text search (current code only has manufacturer + text)
-- T2: Ship detail card/panel - FleetYards, RSI Ship Matrix, and every community tool shows full specs on click
-- T3: Multiple ship image views - angledView, sideView, topView, storeImage in multiple resolutions (currently single angle only)
-- T6: Production status indicator - Flight Ready vs In Concept critical for mission planning accuracy
-- T5: Ship specs display - length/beam/height, crew min/max, cargo SCU, SCM speed are "baseball card stats" users compare constantly
+- **S1 — Auth-gate sensitive API routes** — `/api/diagnostic`, `/api/force-fallback`, `/api/storage-status` are fully unauthenticated; diagnostic exposes user emails and file paths
+- **S2 — Define `--mg-error` CSS variable** — referenced in 40+ files but never declared; error messages are invisible
+- **S3 — Re-enable RBAC/clearance enforcement** — clearance levels 1-5 exist but are not enforced; only mission creation checks clearance
+- **S6 — Secure cron endpoints** — ship-sync and discord-sync have OPTIONAL auth (fail open, not fail closed)
+- **S7 — Remove second force-fallback route** — `/api/force-fallback` GET route is unauthenticated and dumps all user data
+- **U1 — Migrate profile from localStorage to server** — ALL profile data (ships, preferences, timezone) is in browser localStorage; clearing browser data loses everything
+- **U2 — Replace `alert()` with notifications** — 8 alert() calls in MissionPlanner break immersion and block UI
+- **DB Consolidation — Merge dual MongoDB clients** — `mongodb.ts` and `mongodb-client.ts` both create 100-connection pools; app uses 200 connections to same database
 
 **Should have (competitive):**
-- D2: Mission-aware ship selection - existing MissionComposer integration point, enhance with richer ship data showing cargo for haul missions, weapons for combat
-- D1: Org fleet composition dashboard - aggregate user ships from profiles, show role breakdown with charts
-- D4: Data freshness indicators - "Last synced: 2 hours ago" builds trust, uses FleetYards lastUpdatedAt field
-- D5: Image gallery with view switcher - thumbnail strip, click to enlarge, angle selector aligns with MobiGlas aesthetic
-- D9: Loaner ship awareness - FleetYards loaners array shows what players actually fly when concept ships assigned to missions
+- **S8-S12 — Security hardening** — rate limiting on auth endpoints, CSP headers, server-side image validation, security headers on API routes
+- **U3-U7 — UX improvements** — confirmation dialogs, form labels, keyboard navigation, visible focus indicators, loading states
+- **P1-P2 — Performance quick wins** — DB-level pagination (not client-side), immutable cache headers for `/_next/static` (currently 1 hour, should be 1 year)
+- **D1-D2 — Design system consolidation** — unify 4 button implementations into MobiGlasButton, consolidate corner accent patterns
 
 **Defer (v2+):**
-- D3: Ship comparison side-by-side - medium-high complexity, FleetYards has this, nice-to-have not essential
-- D6-D8: Smart suggestions, gap analysis, manufacturer pages - require D1/D2 maturity first
-- A1-A9: Full loadout builder, 3D viewer, trade calculator, CCU optimizer, price tracking - massive scope creep, other tools do these extremely well, link out instead
+- Full test suite (separate testing milestone)
+- Next.js 16 + React 19 migration (after v1.1 stabilizes)
+- NextAuth v4 → Auth.js v5 (after security stabilizes)
+- Component decomposition (MissionPlanner 1211 lines, HomeContent 921 lines — separate refactoring milestone)
+- WCAG AAA compliance (target AA for now)
+- Redis infrastructure (MongoDB-backed rate limiting sufficient for current scale)
 
 ### Architecture Approach
 
-The architecture follows a sync-to-database-then-serve pattern with six primary components: Sync Service fetches paginated FleetYards data and transforms to internal schema, Ship Storage provides CRUD for the ships collection, Cron Route triggers sync on schedule, Ship API Routes serve filtered/paginated ship lists to frontend, Migration Script converts name-based references to UUIDs one-time, and Image Resolution maps ship documents to FleetYards CDN URLs. The data flow separates write path (periodic sync upsert) from read path (API routes from MongoDB cache).
+The remediation follows a **dependency-driven phase sequence** dictated by infrastructure constraints. The dual MongoDB connection pool issue is the prerequisite for all database-backed features (rate limiting, session storage, profile migration). Security hardening must happen before UX work because auth-gating routes changes what data is accessible. The framer-motion package rename must be atomic (109 files in one commit) and must happen before design system consolidation (which refactors the components using motion). CSP nonces force dynamic rendering, requiring a split strategy to preserve static optimization for public pages.
 
 **Major components:**
-1. **Sync Service (src/lib/ship-sync.ts)** - Fetches all ships from FleetYards API with pagination, validates with Zod schemas, transforms nested objects to flat internal structure, bulk upserts to MongoDB by fleetyardsId, tracks syncVersion for staleness detection, logs to sync-status collection
-2. **Ship Storage (src/lib/ship-storage.ts)** - MongoDB CRUD following existing *-storage.ts pattern, indexes on fleetyardsId (unique), slug (unique), name+manufacturer (text search), manufacturer+size (filter combo), syncVersion (housekeeping)
-3. **Cron Route (/api/cron/ship-sync)** - Protected by CRON_SECRET bearer token, mirrors existing discord-sync route, triggers Sync Service, returns result with counts and errors, called by external scheduler or Azure Timer Function
-4. **Ship API Routes** - GET /api/ships with filters/search/pagination, GET /api/ships/[id] by UUID or slug, GET /api/ships/batch for multi-ship resolution, GET /api/ships/manufacturers for faceted filtering
-5. **Migration Script (src/scripts/migrate-ship-refs.ts)** - Builds lookup map from ship names to fleetyardsIds using fuzzy matching, updates users.ships[], planned-missions.ships[], missions.participants[], operations.participants[], stores original names, requires 100% match rate, writes rollback file
-6. **Image Resolution (src/lib/ships/image.ts)** - Resolves ship document images object to specific view (store/angled/side/top) with resolution fallbacks, replaces old R2 CDN name-based convention, returns placeholder on null ship
-
-**Key patterns:** Denormalize for display (store fleetyardsId + name + manufacturer in references, avoid JOIN queries), bulk operations (bulkWrite for sync, batch API for multi-ship fetches), upsert-never-delete (stale ships marked by syncVersion, not removed), syncVersion tracking (detect which ships disappeared from API without breaking references), index-first design (7 indexes covering all query patterns before queries written).
+1. **Unified MongoDB connector** — merge `mongodb.ts` and `mongodb-client.ts` into single client with shared pool; reduce `maxPoolSize` from 100 to 50; eliminates connection exhaustion risk
+2. **Security middleware** — extend `src/middleware.ts` to generate CSP nonces, apply rate limiting (MongoDB-backed), expand auth coverage; split CSP strategy: hash-based for static pages, nonces for authenticated routes only
+3. **Input validation layer** — expand Zod coverage to all 45+ API routes; fix NoSQL injection in `getUserByEmail` (uses unescaped regex); sanitize error messages to not leak MongoDB details
+4. **Rate limiter (MongoDB-backed)** — replace in-memory `Map` with MongoDB collection + TTL index; survives restarts, works across instances; alternative to Arcjet for single-instance deployment
+5. **LazyMotion provider** — wrap app in `<LazyMotion features={domMax} strict>` and migrate 109 files from `motion` to `m` components; reduces bundle by ~30kb
+6. **Canonical MobiGlas components** — consolidate 4 button implementations (.mg-button CSS, MobiGlasButton, HolographicButton, .mg-button-small) into single MobiGlasButton with variants; consolidate 4+ corner accent patterns into CornerAccents component; affects 530+ inline style references
 
 ### Critical Pitfalls
 
-The research identified 12 pitfalls across critical/moderate/minor severity. The top risks are migration data corruption, CDN dependency, and sync reliability.
-
-1. **Name-matching migration produces orphaned references** - Ship names between current JSON and FleetYards don't align exactly (manufacturer prefixes, special characters, variant naming changes). Prevention: multi-pass fuzzy matching (exact, case-insensitive, with/without manufacturer, Levenshtein), manual mapping table for known discrepancies, 100% match requirement before proceeding, store original name alongside UUID as shipNameLegacy, verify post-migration that every reference still resolves.
-
-2. **Big-bang migration corrupts production with no rollback** - Cross-collection updates can't be transactional on Cosmos DB (5-second timeout, no cross-collection transactions). Partial failure leaves mixed format. Prevention: point-in-time backup verified restorable, per-collection progress tracking with resume capability, schema version field on documents, rollback script built before migration script, read-only mode during migration, dry-run on staging data clone first.
-
-3. **FleetYards CDN outage breaks all ship images site-wide** - No local fallback planned, community API has no SLA. Prevention: proxy/cache layer storing CDN URLs but serving from R2/blob with TTL (if within scope), or at minimum comprehensive onError placeholder handling per ship size category, store URLs in database not constructed client-side so CDN structure changes only affect sync not clients, health check monitoring CDN availability.
-
-4. **Sync job silently overwrites good data with malformed API response** - FleetYards schema evolves without versioned contracts, empty page returns could be misinterpreted as "delete all". Prevention: never replace-all (upsert only, mark stale not delete), validate total count against expected range (400-700 ships, abort if <80% of previous), schema validation requiring non-null id/name/manufacturer before writing, keep previous syncVersion data until new validated, store raw response hash for debugging.
-
-5. **Cosmos DB MongoDB compatibility gaps break operations** - Text search indexes not supported, bulkWrite behavior differs under partitioning, retryWrites already disabled. Prevention: test every query against Cosmos DB specifically not local MongoDB, simple indexes only (no text, <8 compound keys), application-level filtering on cached dataset for ship search (small enough to cache in-memory), individual upserts with per-document error handling instead of bulk if needed, verify indexes exist before sync, monitor RU consumption.
+1. **CVE-2025-29927 — Middleware authorization bypass** — Next.js versions before 15.2.3 allowed attackers to bypass middleware by injecting `x-middleware-subrequest` header; current 15.3.3 should be patched, but verify after upgrade; never rely solely on middleware auth; add `getServerSession()` checks in every API route
+2. **CSP nonces force all pages to dynamic rendering** — nonce-based CSP eliminates SSG and CDN caching; split strategy required: hash-based CSP for static pages, nonces only for `/dashboard/*`, `/admin/*`, `/userprofile/*`; otherwise TTFB increases 200-500ms across entire site
+3. **framer-motion to motion package rename breaks 109 files** — must be done atomically in single commit; cannot install both packages simultaneously (bundle duplication); import path changes from `'framer-motion'` to `'motion/react'`; `MotionProps` type import also changes
+4. **Removing `'use client'` from hook-using components** — 109 files use framer-motion (requires client), 50+ use session hooks; attempting to convert to Server Components breaks builds; realistic opportunity is data-fetching wrappers, not eliminating client components
+5. **In-memory rate limiter fails in production** — current `Map`-based rate limiter resets on deployment, has no cleanup, works only on single instance; must move to MongoDB or Redis before production traffic
+6. **Dual MongoDB clients create pool exhaustion** — `mongodb.ts` and `mongodb-client.ts` both create 100-connection pools; consolidate before adding new DB consumers (rate limiting, profile storage)
 
 ## Implications for Roadmap
 
-Based on research, the build order is strictly sequenced by dependencies. Each phase must complete before the next can begin. The migration is the critical gate: it runs after sync infrastructure works but before any code expecting UUIDs deploys.
+Based on research, the milestone must be executed in strict dependency order. Parallelization opportunities exist within phases but NOT across them.
 
-### Phase 1: Foundation & Sync Infrastructure
-**Rationale:** Isolated infrastructure with no modifications to existing code. Can be built and tested independently by running sync and inspecting MongoDB. Establishes the data source everything else depends on.
+### Phase 8: MongoDB Connection Consolidation (v1.0 ended at phase 7)
+**Rationale:** Prerequisite for all DB-backed features. The dual client modules create 200-connection pools to the same database. Adding rate limiting (another DB consumer) worsens the problem. Must fix infrastructure before adding consumers.
+**Delivers:** Single MongoDB client with unified pool (50 connections), consistent error handling, health check with reconnect logic
+**Addresses:** Pitfall 6 (dual client exhaustion), prerequisite for S8 (rate limiting), prerequisite for U1 (profile server-side migration)
+**Complexity:** Medium — touches 8 storage modules; must update imports and test each module
+**Research needed:** None — pattern is well-documented Next.js/MongoDB practice
 
-**Delivers:**
-- ShipDocument TypeScript types and database schema
-- ship-storage.ts MongoDB CRUD module with 7 indexes
-- ship-sync.ts sync service with FleetYards API client, pagination, validation, transformation
-- /api/cron/ship-sync route protected by CRON_SECRET
-- Ships collection populated with 500+ ships from FleetYards
-- Sync-status audit collection tracking sync history
+### Phase 9: Emergency Security Fixes
+**Rationale:** Critical vulnerabilities exist NOW. Auth bypass routes, RCE-vulnerable Next.js version, missing CSS variable breaking error visibility. Must ship immediately.
+**Delivers:** Auth-gated diagnostic/force-fallback routes, Next.js 15.5.12 upgrade, `--mg-error` CSS variable defined, cron endpoint hardening
+**Addresses:** S1, S2, S6, S7 (critical security), CVE-2025-66478 RCE patch, Pitfall 1 (middleware bypass)
+**Avoids:** Pitfall 2 (CSP nonces) — deferred to Phase 10; Pitfall 3 (framer-motion) — separate phase
+**Complexity:** Low — each fix is <10 lines; Next.js upgrade is patch bump with codemod
+**Research needed:** None — audit findings are explicit
 
-**Addresses:**
-- T7 (API sync) - core infrastructure
-- T8 foundation (storage layer for offline fallback)
-- STACK.md recommendations (node-cron, native fetch, Zod validation, bulkWrite pattern)
+### Phase 10: Access Control Hardening
+**Rationale:** With emergency holes plugged, harden the access control model. Rate limiting requires consolidated DB (Phase 8 complete). CSP requires split strategy to preserve static optimization.
+**Delivers:** MongoDB-backed rate limiter, RBAC enforcement (clearance levels 1-5), CSP headers (split: hash-based for static, nonces for auth pages), Zod validation on all API routes
+**Addresses:** S3, S8, S9, S10, S12, Pitfall 2 (CSP nonce dynamic rendering), Pitfall 5 (in-memory rate limiter)
+**Uses:** Unified MongoDB client from Phase 8, @nosecone/next for CSP headers
+**Complexity:** Medium-High — rate limiter requires TTL collection, CSP strategy requires middleware routing logic, RBAC mapping
+**Research needed:** None — patterns are standard
 
-**Avoids:**
-- Pitfall 4 (malformed API response) - validation at trust boundary, count checking
-- Pitfall 5 (Cosmos DB compatibility) - index-first design, tested against Cosmos specifically
-- Pitfall 6 (schema drift) - explicit mapper function with field defaults
+### Phase 11: UX Critical Fixes
+**Rationale:** Fix data loss risks and worst UX violations. Profile migration requires auth (Phase 10 RBAC enforced). Notification system replaces `alert()` and enables confirmation dialogs.
+**Delivers:** Profile API endpoints (GET/PUT), localStorage→server migration, toast notification system (generalizes ErrorNotification), confirmation dialogs for destructive actions
+**Addresses:** U1, U2, U3 (critical UX)
+**Complexity:** High — U1 (profile migration) is complex: new API endpoints, data migration script, localStorage sync logic
+**Research needed:** None — notification patterns exist in ErrorNotification component
 
-**Dependencies:** None. Purely additive.
+### Phase 12: Dependency Upgrades (framer-motion Migration)
+**Rationale:** The framer-motion package rename affects 109 files and must be atomic. LazyMotion reduces bundle but requires motion (not framer-motion). Must happen before design system consolidation (Phase 14) to avoid refactoring components twice.
+**Delivers:** `motion@12.34.0` installed, all 109 files migrated to `import from 'motion/react'`, LazyMotion provider with `domMax` features, ~30kb bundle reduction
+**Addresses:** P4 (bundle size), Pitfall 3 (atomic migration), Pitfall 10 (AnimatePresence behavioral changes)
+**Complexity:** Medium — mechanical find-and-replace across 109 files, but must be tested (AnimatePresence with `mode="wait"` and `layoutId` are susceptible to bugs)
+**Research needed:** None — Motion upgrade guide is explicit
 
-### Phase 2: Ship API Routes
-**Rationale:** API routes depend on ship-storage from Phase 1 but still don't modify existing code. Can be tested with Postman/curl before any UI changes. Establishes the read path for frontend consumption.
+### Phase 13: Accessibility & Performance Foundations
+**Rationale:** Independent of Phases 8-12; can run in parallel with Phase 12 if resourced separately. Accessibility fixes improve quality for all users. Performance fixes (pagination, cache headers) are low-effort high-impact.
+**Delivers:** Form labels (55 files audited), keyboard navigation (Headless UI Dialog for modals), focus indicators (global CSS), DB pagination for missions/users, immutable cache headers for `/_next/static`
+**Addresses:** U4, U5, U6 (accessibility), P1, P2 (performance)
+**Complexity:** Medium — form label audit is tedious but mechanical; Headless UI migration is per-modal
+**Research needed:** None — WCAG 2.1 AA requirements are standard
 
-**Delivers:**
-- GET /api/ships with manufacturer/size/status/role/search filters and pagination
-- GET /api/ships/[id] single ship by UUID or slug
-- GET /api/ships/batch multi-ship resolution by IDs
-- GET /api/ships/manufacturers faceted filter list
-- Response types (ShipResponse, pagination metadata)
+### Phase 14: Design System Consolidation
+**Rationale:** Depends on Phase 12 (framer-motion migration) because buttons and components use motion heavily. Consolidating 530+ inline style references is page-by-page visual work, not find-and-replace.
+**Delivers:** MobiGlasButton canonical (4 variants consolidated), CornerAccents canonical (4+ patterns consolidated), CSS class deduplication (globals.css cleanup), error display unification
+**Addresses:** D1, D2, D4, D5 (UI consistency), U7 (loading states via MobiGlasButton.isLoading)
+**Avoids:** Pitfall 9 (visual inconsistency during migration) — build new components first, migrate page-by-page
+**Complexity:** Medium-High — 530+ inline references, visual regression risk
+**Research needed:** None — patterns exist in ui/mobiglas/ components
 
-**Addresses:**
-- T1 (multi-axis filter) - backend implementation
-- T2 foundation (ship detail endpoint)
-- API contract for frontend components
-
-**Implements:**
-- Ship API Routes component from architecture
-- Read path separate from sync write path
-
-**Avoids:**
-- Pitfall 11 (memory pressure) - lean projections for list views, full specs only for detail
-
-**Dependencies:** Phase 1 (ship-storage, ships collection must exist)
-
-### Phase 3: Migration Script & Data Cutover
-**Rationale:** Migration requires populated ships collection to build lookup map (Phase 1). Must run BEFORE Phase 4 deploys code expecting fleetyardsId. This is the critical gate - the point of no return.
-
-**Delivers:**
-- Name-to-UUID lookup map with fuzzy matching
-- Migration of users.ships[] to add fleetyardsId, remove image
-- Migration of planned-missions.ships[] to add fleetyardsId
-- Migration of missions.participants[] shipName references
-- Migration of operations.participants[] shipName references
-- Dry-run mode, rollback file, migration report
-- 100% match rate verification
-
-**Addresses:**
-- Big-bang migration requirement from architecture
-- Converting 5 collections to UUID references
-
-**Avoids:**
-- Pitfall 1 (orphaned references) - multi-pass fuzzy matching, 100% match requirement, manual override map
-- Pitfall 2 (corruption with no rollback) - backup verification, per-collection progress, rollback script, read-only mode, staging dry-run
-- Pitfall 10 (image URL staleness) - migrate image fields alongside ship references
-
-**Dependencies:** Phase 1 (ships collection populated)
-
-**WARNING:** Production outage window required. Put app in maintenance mode during execution.
-
-### Phase 4: Type Updates & Image Resolution
-**Rationale:** Type changes are the code-level pivot point. After this, all code expects UUIDs in ship references. Data must already be migrated (Phase 3) before these types deploy.
-
-**Delivers:**
-- UserShip type: add fleetyardsId, remove image field
-- MissionShip type: add fleetyardsId
-- MissionParticipant, OperationParticipant types: add fleetyardsId
-- Updated resolveShipImage() taking ship document instead of name
-- next.config.js remotePatterns for cdn.fleetyards.net
-- API validation schemas (Zod) updated for new UserShip shape
-
-**Addresses:**
-- Type safety for UUID references
-- T3 foundation (multiple image view support in types)
-- Image CDN switch
-
-**Implements:**
-- Image Resolution component from architecture
-
-**Avoids:**
-- Pitfall 3 (CDN outage) - next.config.js remotePatterns added, onError handling prepared
-- Pitfall 9 (missing remotePatterns) - prerequisite for image work
-
-**Dependencies:** Phase 3 (data migrated to new shape)
-
-### Phase 5: Frontend Component Updates
-**Rationale:** Frontend consumes both API routes (Phase 2) and updated types (Phase 4). This is where users see the new functionality.
-
-**Delivers:**
-- UserFleetBuilder.tsx using /api/ships instead of getShipsByManufacturer()
-- Mission planner ship picker with enhanced search/filter
-- MissionDetail.tsx resolving images from ship documents
-- OperationDetailView.tsx resolving images from ship documents
-- UserProfileContent.tsx displaying FleetYards ship images
-- Multi-angle image display (store/angled/side/top views)
-
-**Addresses:**
-- T1 (multi-axis filter) - frontend UI
-- T2 (ship detail card) - clickable detail panels
-- T3 (multiple image views) - UI for angle switching
-- T4 (manufacturer logos) - enhanced dropdown
-- T5 (ship specs) - display all fields
-- T6 (production status) - flight-ready indicators
-- T9 (role display) - classification labels
-- D2 (mission-aware selection) - richer ship data in MissionComposer
-
-**Avoids:**
-- Pitfall 8 (search regression) - preserve manufacturer dropdown UX, add autocomplete with aliases
-
-**Dependencies:** Phase 2 (API routes), Phase 4 (updated types)
-
-### Phase 6: Polish & Differentiators
-**Rationale:** Core functionality working, now add org-specific features that distinguish AydoCorp from generic ship browsers.
-
-**Delivers:**
-- D1: Org fleet composition dashboard (aggregate user ships, role breakdown charts)
-- D4: Data freshness indicators ("Last synced: 2 hours ago")
-- D5: Image gallery with smooth view switcher (thumbnail strip, Framer Motion transitions)
-- Sync frequency configuration (daily via external cron service)
-- Sync audit logging and monitoring
-
-**Addresses:**
-- Differentiator features from FEATURES.md
-- Operational monitoring
-
-**Dependencies:** Phase 5 (frontend consuming API)
-
-### Phase 7: Cleanup & Decommission
-**Rationale:** Only after all consumers migrated can old code be safely removed.
-
-**Delivers:**
-- Remove public/data/ships.json
-- Remove/deprecate src/lib/ship-data.ts
-- Remove shipManufacturers array, formatShipImageName(), getShipImagePath()
-- Update CLAUDE.md documentation
-- 30-day grace period before R2 ship images decommission
-
-**Avoids:**
-- Pitfall 10 (R2 dead links) - grace period, redirects to placeholders
-
-**Dependencies:** Phase 5 (all consumers migrated)
+### Phase 15: Code Quality & Optimization (Stretch)
+**Rationale:** Professional polish. Not blocking production but improves maintainability. Can be partially deferred if timeline pressure exists.
+**Delivers:** Structured logging (replace console.*), mission state machine validation, optimistic locking (version-based conflict detection), SSR for home page, remaining bundle cleanup
+**Addresses:** Q1, Q2, Q3 (code quality), P3, P5 (performance stretch)
+**Complexity:** Medium — logging sweep is large (50+ files) but mechanical; SSR conversion is only 1 page (home)
+**Research needed:** None — standard patterns
 
 ### Phase Ordering Rationale
 
-- **Foundation before API before UI**: Each layer depends on the previous. Sync must populate data before API can serve it, API must exist before UI can consume it.
-- **Migration as a gate**: The big-bang cutover happens after data infrastructure works but before code expecting UUIDs deploys. No going back after this point.
-- **Types pivot point**: Phase 4 type updates are when the codebase switches from name-based to UUID-based references. Data migrated first (Phase 3), then types change, then UI updates.
-- **Isolation for testing**: Phases 1-2 are pure backend with no UI changes, testable via API clients. Phase 3 is data-only. Phase 4-5 are code changes consuming validated infrastructure.
-- **Pitfall avoidance built-in**: Each phase explicitly addresses specific pitfalls identified in research. Migration includes all prevention strategies for Pitfalls 1-2. Sync includes validation for Pitfall 4. API includes Cosmos DB accommodations for Pitfall 5.
+- **Phase 8 is the prerequisite** — dual MongoDB clients must be consolidated before adding rate limiting (Phase 10), profile migration (Phase 11), or any other DB consumer
+- **Security is sequential** — emergency fixes (Phase 9) → access control hardening (Phase 10) → data migration (Phase 11); cannot parallelize because each layer depends on the previous
+- **framer-motion migration is atomic** — Phase 12 must be a single commit across 109 files; do NOT attempt incrementally
+- **Design system depends on motion** — Phase 14 must follow Phase 12 because MobiGlasButton, CornerAccents, and other components use framer-motion extensively; migrating imports before consolidating components avoids double work
+- **Accessibility/performance (Phase 13) is independent** — can run in parallel with Phase 12 or Phase 14 if resourced separately
+
+**Parallelization opportunities:**
+- Phase 8 standalone
+- Phases 9-11 are sequential (security dependency chain)
+- Phase 12 standalone (but blocks Phase 14)
+- Phase 13 independent (can run alongside Phase 12)
+- Phase 14 depends on Phase 12 only
+- Phase 15 independent (can start anytime after Phase 10)
+
+**No parallelization:**
+- Do NOT run security (9-11) in parallel with design system (14) — creates merge conflicts and integration risk
+- Do NOT run framer-motion migration (12) in parallel with design system (14) — migrating imports while refactoring components causes wasted work
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 3 (Migration):** Fuzzy name matching algorithms need testing against actual ship name corpus from production database. Cosmos DB transaction limits may require chunked migration strategy research.
-- **Phase 6 (Cron Setup):** Azure Timer Function vs external cron service decision needs deployment architecture research. Distributed locking pattern for multi-instance scenarios needs verification.
+**Phases needing deeper research during planning:**
+- **Phase 10:** CSP nonce strategy for Next.js hydration scripts — test that `__next_f.push()` inline scripts work with nonces; known issue GitHub #80997
+- **Phase 11:** Profile localStorage→server migration — design migration script, handle conflicts between localStorage and server data
+- **Phase 12:** AnimatePresence behavioral changes in motion v12 — test all 20+ AnimatePresence instances with rapid state changes, especially `mode="wait"` and `layoutId` usages
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1 (Foundation):** Well-documented MongoDB patterns, existing storage module templates in codebase, FleetYards API confirmed via live testing.
-- **Phase 2 (API Routes):** Next.js App Router API routes follow existing patterns (see /api/cron/discord-sync), pagination/filtering is standard REST.
-- **Phase 4 (Type Updates):** TypeScript type evolution, standard Zod schema updates, Next.js image config well-documented.
-- **Phase 5 (Frontend):** React component updates consuming REST APIs, existing UI patterns in UserFleetBuilder and MissionComposer.
+**Phases with standard patterns (skip research-phase):**
+- **Phase 8:** MongoDB connection consolidation — well-documented Next.js pattern
+- **Phase 9:** Emergency security fixes — audit findings are explicit, no research needed
+- **Phase 13:** Accessibility — WCAG 2.1 AA is standard, Headless UI Dialog is documented
+- **Phase 14:** Design system consolidation — patterns exist in codebase (ui/mobiglas/)
+- **Phase 15:** Code quality — logging, state machines, optimistic locking are standard patterns
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | FleetYards API verified via live calls, node-cron confirmed compatible with Azure App Service standalone mode, MongoDB patterns verified in existing codebase, package versions checked via npm registry |
-| Features | HIGH | Table stakes cross-verified across 5+ community tools (FleetYards, RSI Ship Matrix, starcitizen.tools, SC Org Tools, FleetPlanner), FleetYards API structure confirmed to support all planned features |
-| Architecture | HIGH | Based on direct codebase analysis of existing storage modules, API routes, and MongoDB client patterns. FleetYards response structure verified via actual API calls. Build order dependencies are logical and tested. |
-| Pitfalls | HIGH | Critical pitfalls identified from codebase analysis (name matching complexity in ShipData.ts, Cosmos DB retryWrites limitation in mongodb.ts), FleetYards GitHub issues (CORS errors #3514, schema refactoring #2652), and Cosmos DB compatibility documentation |
+| Stack | **HIGH** | Next.js 15.5.12 upgrade path verified against official release notes and CVE advisories; motion v12 migration verified against upgrade guide; breaking changes analyzed against codebase grep results |
+| Features | **HIGH** | All findings verified by direct codebase analysis (read route handlers, counted form elements, confirmed CSS variable definitions, verified dual MongoDB clients); severity assigned based on OWASP 2025 and WCAG 2.1 standards |
+| Architecture | **HIGH** | Dependency graph derived from codebase structure analysis; dual MongoDB client issue confirmed by reading both files; framer-motion usage confirmed via grep (109 files); design system fragmentation confirmed by CSS analysis (530+ inline references) |
+| Pitfalls | **HIGH** | CVE-2025-29927 verified via Datadog, JFrog, and NVD disclosures; CSP nonce issue confirmed in Next.js GitHub discussion #80997; framer-motion breaking changes verified in Motion changelog; all other pitfalls verified via codebase analysis |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-While research confidence is high, several areas require validation during implementation:
+**CSP nonce implementation strategy:** The split CSP strategy (hash-based for static, nonces for dynamic) is recommended but needs empirical testing. Next.js GitHub discussion #80997 reports CSP issues in production builds. During Phase 10 planning, test CSP headers on a staging build before production deployment.
 
-- **Cosmos DB text search performance**: Confirmed text indexes not supported on classic Cosmos DB, but vCore compatibility unclear. May need to test in-memory search vs application-level filtering vs upgrading to vCore for text index support. Validate during Phase 2 API development.
+**framer-motion AnimatePresence v12 behavior:** Motion changelog mentions velocity calculation changes and layout animation improvements, but does not explicitly confirm whether AnimatePresence bugs (#2554, #2023) are resolved. During Phase 12 execution, test all `mode="wait"` and `layoutId` instances with rapid state changes to verify behavior.
 
-- **FleetYards API rate limits**: Not documented in FleetYards API docs or OpenAPI spec. Conservative approach assumed (1 req/sec with p-limit concurrency=1). Monitor during Phase 1 sync testing for 429 responses or connection throttling.
+**Profile migration conflict resolution:** The localStorage→server migration (Phase 11) must handle cases where localStorage data conflicts with server data (user edited profile in two browsers). Design the conflict resolution strategy during Phase 11 planning: last-write-wins, merge strategies, or user-prompted resolution.
 
-- **Azure App Service cron persistence**: node-cron lifecycle tied to process lifetime. Documented that "Always On" keeps process alive, but unclear how deployment/scaling events affect cron state. Need to test that lastSyncedAt recovery mechanism works across deployments. Validate during Phase 6.
+**Rate limiter TTL index performance:** MongoDB TTL indexes run background cleanup every 60 seconds by default. For a rate limiter checking limits on every request, verify that the TTL index does not cause performance degradation. If latency is critical, consider Upstash Redis as fallback (mentioned in STACK.md as alternative).
 
-- **Ship name matching accuracy**: Migration dry-run will reveal actual mismatch rate between current ships.json names and FleetYards canonical names. Research assumes <10% manual mapping required, but if significantly higher, may need manual curation phase. Assess during Phase 3 dry-run.
-
-- **Image CDN reliability**: FleetYards CDN uptime/availability not tracked. No historical data on outage frequency. Decision to skip proxy/cache layer based on simplicity, but may need to revisit if CDN proves unreliable. Monitor in production after Phase 5.
+**Next.js 16 future compatibility:** This milestone stays on Next.js 15.x, but the eventual Next.js 16 migration (React 19, middleware-to-proxy rename) should be tracked as a future milestone. After v1.1 stabilizes, create a separate assessment for Next.js 16 + next-auth v5 migration.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- **Codebase analysis**: Direct inspection of src/types/ShipData.ts (ship data model, name formatting), src/lib/ship-data.ts (current loader, fuzzy matching), src/lib/mongodb-client.ts (Cosmos DB config with retryWrites:false), src/lib/user-storage.ts (storage pattern), src/app/api/cron/discord-sync/route.ts (cron route pattern), .github/workflows/main_aydocorp.yml (Azure deployment), scripts/next.config.js (image config, standalone output)
-- **FleetYards API**: Live inspection of https://api.fleetyards.net/v1/models endpoint with pagination testing (pages 1-15), single ship detail via /v1/models/aurora-mr and /v1/models/carrack, manufacturer endpoint /v1/manufacturers, confirmed UUID format, response structure, CDN hostname (cdn.fleetyards.net), pagination headers
-- **npm registry**: Verified versions for node-cron@4.2.1, @types/node-cron@3.0.11, p-limit@7.3.0, zod@4.3.6 vs installed 3.25.76, mongodb@7.0.0 vs installed 6.21.0
+- **Next.js 15.5 release blog** — upgrade path, breaking changes, deprecations
+- **Next.js Security Update Dec 2025** — CVE-2025-66478 RCE advisory
+- **CVE-2025-29927 disclosure (Datadog, JFrog, NVD)** — middleware authorization bypass
+- **Motion upgrade guide** — framer-motion to motion migration, breaking changes
+- **Motion changelog** — v10 to v12 changes, AnimatePresence updates
+- **Next.js CSP documentation** — nonce generation, hydration script handling
+- **OWASP Top 10 2025** — security misconfiguration, input validation
+- **WCAG 2.1/2.2 guidelines** — accessibility requirements (form labels, keyboard nav, focus indicators)
+- **Codebase analysis** — direct reading of middleware.ts, rate-limiter.ts, mongodb.ts, mongodb-client.ts, 109 framer-motion files, 530+ CSS references, 45+ API routes
 
 ### Secondary (MEDIUM confidence)
-- **FleetYards GitHub**: Repository at https://github.com/fleetyards/fleetyards showing active maintenance (v5.32.12 Dec 2025, 6672 commits), open issues #2502 (API failures), #3514 (CORS errors), #2652 (schema refactoring effort)
-- **Cosmos DB compatibility**: Microsoft Learn feature support for MongoDB 4.0/4.2 API, MongoDB official Cosmos DB support docs, WillowTree migration guide identifying text search and transaction limitations
-- **Community tools research**: FleetYards.net, RSI Ship Matrix, starcitizen.tools wiki, SC Org Tools (scorg.tools), FleetPlanner GitHub, Starjump Fleetviewer, Erkul.games, CCU Game, Hangar Link for feature landscape and anti-feature identification
-- **Next.js documentation**: Image remotePatterns config, instrumentation hooks for node-cron initialization, standalone output mode
+- **Arcjet Next.js security checklist** — CSP, rate limiting, bot protection patterns
+- **Next.js production checklist** — deployment best practices
+- **Upstash rate limiting guide** — Redis-based alternative to MongoDB rate limiter
+- **Next.js GitHub discussion #80997** — CSP in production builds issue
+- **framer-motion GitHub issues #2554, #2023** — AnimatePresence bugs with rapid state changes
 
 ### Tertiary (LOW confidence)
-- **Azure App Service behavior**: "Always On" keeps Node.js process alive 24/7 preventing cold starts, but process recycling on deployments/scaling inferred from general Azure docs not specifically tested with Next.js standalone + node-cron
-- **UUID migration patterns**: Code with Jason UUID migration lessons, Django UUID migration pitfalls Medium article - different frameworks but applicable patterns for name matching and rollback strategies
-- **FleetYards rate limits**: Completely undocumented, conservative 1 req/sec assumption based on community API best practices, not verified
+- **Arcjet beta status** — @arcjet/next is beta; alternative MongoDB-backed rate limiter recommended for risk aversion
+- **Motion v12 AnimatePresence bug fixes** — changelog mentions improvements but does not explicitly list resolved issues; needs empirical testing
 
 ---
-*Research completed: 2026-02-03*
+
+*Research completed: 2026-02-15*
 *Ready for roadmap: yes*

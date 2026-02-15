@@ -1,825 +1,734 @@
-# Architecture: FleetYards API Sync Integration
+# Architecture: Security Hardening, Performance Optimization, and Design System Consolidation
 
-**Domain:** Periodic external API data synchronization in a Next.js 15 App Router + MongoDB application
-**Researched:** 2026-02-03
-**Overall confidence:** HIGH (based on direct codebase analysis + live FleetYards API inspection)
+**Domain:** Cross-cutting infrastructure improvements to an existing Next.js 15 App Router application
+**Researched:** 2026-02-15
+**Overall confidence:** HIGH (based on direct codebase analysis + official documentation + web research)
+
+---
+
+## System Overview
+
+This milestone addresses three interconnected concerns across the existing AydoCorp Next.js 15 application:
+
+1. **Security Hardening** -- CSP headers, input sanitization standardization, auth middleware expansion, rate limiting
+2. **Performance Optimization** -- framer-motion bundle reduction, SSR conversion, cache header tuning, DB connection consolidation
+3. **Design System Consolidation** -- eliminating competing component implementations, unifying CSS variable usage, canonicalizing the MobiGlas component library
+
+These are NOT independent workstreams. They have deep dependency relationships that dictate build order.
+
+```
+DEPENDENCY GRAPH (must be built in dependency order)
+
+DB Connection Consolidation ─────────────────────────────────────────┐
+  (mongodb.ts + mongodb-client.ts → unified module)                  │
+                                                                     │
+Rate Limiter (depends on consolidated DB OR external store) ─────────┤
+                                                                     │
+CSP Headers (independent, but blocks inline style cleanup) ──────────┤
+                                                                     │
+Input Sanitization (Zod standardization across all API routes) ──────┤
+                                                                     │
+Auth Middleware Expansion (independent) ─────────────────────────────-┤
+                                                                     │
+Cache Header Tuning (independent) ──────────────────────────────────-┤
+                                                                     │
+Design System Consolidation (independent of above) ─────────────────-┤
+  Corner Accents → unified CornerAccents component                   │
+  Button variants → unified MobiGlasButton                           │
+  CSS class deduplication                                            │
+                                                                     │
+LazyMotion Migration (depends on design system consolidation) ───────┤
+  (must know final component boundaries before migrating motion)     │
+                                                                     │
+SSR Conversion (depends on LazyMotion + design system) ──────────────┘
+  (pages must use m components, not motion, for SSR compatibility)
+```
+
+---
+
+## Current Architecture Analysis
+
+### Dual MongoDB Connection Problem
+
+Two separate MongoDB connection modules exist, each maintaining independent connection pools:
+
+| Module | Pattern | Used By | Connection Style |
+|--------|---------|---------|-----------------|
+| `mongodb.ts` | Promise-based singleton with dev HMR caching | `finance.ts`, `mission-template-storage.ts`, `planned-mission-storage.ts`, `ship-name-matcher.ts`, `storage-utils.ts` | `clientPromise` pattern, exports `connectToDatabase()` returning `{client, db}` |
+| `mongodb-client.ts` | Mutable singleton with reconnect/retry logic | `user-storage.ts`, `operation-storage.ts`, `mission-storage.ts`, `escort-request-storage.ts`, `resource-storage.ts`, `password-reset-storage.ts`, `ship-storage.ts` | Direct `client` reference, exports collection handles + CRUD helpers |
+
+**Critical issue:** Both create `MongoClient` with `maxPoolSize: 100`, meaning the app potentially opens **200 connections** to the same database. Azure Cosmos DB for MongoDB vCore has connection limits, and this wastes resources.
+
+**Additional issue:** Some storage modules import BOTH connectors. `escort-request-storage.ts`, `mission-storage.ts`, and `storage-utils.ts` import from both `mongodb.ts` AND `mongodb-client.ts`, creating ambiguity about which connection is actually used.
+
+### Rate Limiter (Dead Code)
+
+`src/lib/rate-limiter.ts` exists but is only imported in `src/lib/finance.ts`. The rest of the 45 API routes have zero rate limiting. The implementation is in-memory (`Map<string, RateLimitEntry>`), which means:
+
+1. State is lost on server restart
+2. In multi-instance deployments, each instance has independent counters
+3. Memory grows unbounded (no cleanup of expired entries)
+
+### Authentication Middleware Gaps
+
+Current `src/middleware.ts` protects only 3 route prefixes:
+- `/dashboard`
+- `/userprofile`
+- `/admin`
+
+**Not protected:** All `/api/*` routes are excluded from middleware via the matcher regex. API routes handle their own auth individually via `getServerSession(authOptions)`, but this is inconsistent -- some routes check, some don't.
+
+### CSP Headers: Non-Existent
+
+`next.config.js` sets `X-Frame-Options`, `X-Content-Type-Options`, and `Referrer-Policy`, but has NO Content-Security-Policy header. The app uses:
+- Inline styles extensively (Tailwind + MobiGlas CSS)
+- External CDN images (FleetYards, aydocorp.space)
+- External fonts (local font files, loaded via `next/font/local`)
+- `data:` URIs in CSS (SVG backgrounds in globals.css)
+- `framer-motion` which injects inline styles at runtime
+
+This means a CSP must accommodate `style-src 'unsafe-inline'` (or use nonces) and several image sources.
+
+### Input Validation: Mixed Approaches
+
+| Approach | Routes Using It |
+|----------|----------------|
+| Zod schemas | 14 files (signup, contact, profile, ships, fleet-ops resources/operations, forgot-password, reset-password, mission-builder validation) |
+| Manual validation functions | missions, escort-requests, mission-templates |
+| No validation | several GET-only routes, some admin routes |
+
+### framer-motion: 109 Files, No Optimization
+
+Every file imports `{ motion }` from `framer-motion` which bundles the full 34kb feature set per entry point. No `LazyMotion`, no `m` component, no code splitting. The app is on `framer-motion@^10.16.4` (not the latest `motion` package rename).
+
+### Design System Fragmentation
+
+**Button implementations (4 competing patterns):**
+
+| Implementation | Location | Usage Count |
+|----------------|----------|-------------|
+| `.mg-button` CSS class | `globals.css` line 125 | ~17 files via raw CSS class |
+| `MobiGlasButton` React component | `mobiglas/MobiGlasButton.tsx` | ~3 files (component itself + imports) |
+| `.mg-button-small` CSS class | `globals.css` line 923 | Used in Navigation, various forms |
+| `.mg-button-secondary` CSS class | `globals.css` line 1125 | Mission template components |
+| `.mg-btn-icon` CSS class | `globals.css` line 1144 | Icon-only buttons |
+
+The `MobiGlasButton` component wraps `motion.button` and adds the `.mg-button` CSS class, creating a layered but underutilized abstraction.
+
+**Corner accent implementations (4 competing patterns):**
+
+| Implementation | Location | Files |
+|----------------|----------|-------|
+| `CornerAccents` React component | `mobiglas/CornerAccents.tsx` | Mostly unused outside its own file |
+| Inline corner divs in `MobiGlasContainer` | `MobiGlasContainer.tsx` lines 80-84 | Used when `withCorners=true` |
+| Inline corner divs in `MobiGlasPanel` | `MobiGlasPanel.tsx` lines 121-135 | Used when `cornerAccents=true` |
+| Inline corner divs in `MobiGlasInput` | `MobiGlasInput.tsx` lines 57-62 | Always rendered when `cornerAccents=true` |
+| Inline corner divs in `layout.tsx` | `layout.tsx` lines 51-54 | Fixed global corner brackets |
+| Inline corner divs in other components | `EventCarousel`, `LocationSection`, `AuthError`, `dashboard/page.tsx` | Ad-hoc implementations |
+
+### Page Rendering: Almost All Client-Side
+
+Only 1 of 33 page files uses `"use client"` directive explicitly (the root `page.tsx`), but most dashboard pages are effectively client-rendered because they import client components that use `useSession`, `useState`, `useEffect`, etc. The pattern is:
+
+```tsx
+// Dashboard pages: "use client" at top, useSession() for auth, client-side fetch for data
+'use client';
+const { data: session, status } = useSession();
+// ... useEffect to fetch data after auth check
+```
+
+This means:
+- No server-side data fetching
+- Auth is checked client-side (flash of loading state)
+- Pages are not cacheable at the CDN layer
+- SEO is not a concern for dashboard pages (auth-gated), but public pages could benefit from SSR
 
 ---
 
 ## Recommended Architecture
 
+### Phase 1: Foundation (DB + Security Infrastructure)
+
+#### 1A. MongoDB Connection Consolidation
+
+**Merge `mongodb.ts` and `mongodb-client.ts` into a single unified module.**
+
 ```
-                  EXTERNAL                          SERVER                              CLIENT
-              +----------------+          +---------------------------+          +------------------+
-              |  FleetYards    |          |  Next.js 15 App Router    |          |  React UI        |
-              |  API           |          |                           |          |                  |
-              |  /v1/models    |  ------> |  Sync Service             |          |                  |
-              |  (no auth)     |  (cron)  |  src/lib/ship-sync.ts     |          |                  |
-              +----------------+          |         |                 |          |                  |
-                                          |         v                 |          |                  |
-                                          |  Ship Storage             |          |                  |
-                                          |  src/lib/ship-storage.ts  |          |                  |
-                                          |         |                 |          |                  |
-                                          |         v                 |          |                  |
-              +----------------+          |  MongoDB "ships"          |          |                  |
-              |  MongoDB /     | <------> |  collection               |          |                  |
-              |  Cosmos DB     |          |         |                 |          |                  |
-              +----------------+          |         v                 |          |                  |
-                                          |  API Routes               |  ------> |  Ship Picker     |
-                                          |  /api/ships/*             |  (fetch) |  Fleet Builder   |
-                                          |  /api/cron/ship-sync      |          |  Mission Planner |
-                                          +---------------------------+          +------------------+
+BEFORE:                              AFTER:
+mongodb.ts ─── connectToDatabase()   mongodb.ts ─── getDb()
+     │         (returns {client,db})      │         (returns Db instance)
+     │                                    │
+mongodb-client.ts ─── connectToDatabase() │─── getCollection(name)
+     │                 getUserById()       │    (returns Collection)
+     │                 getUserByEmail()    │
+     │                 etc.               │─── ensureConnection()
+                                          │    (health check + reconnect)
+                                          │
+                                     mongodb-client.ts ─── getUserById()
+                                          │                getUserByEmail()
+                                          │                etc.
+                                          │  (imports getDb() from mongodb.ts)
+                                          │  (no longer creates its own client)
 ```
 
-### Component Boundaries
+**Strategy:** Keep `mongodb.ts` as the sole connection manager. Refactor `mongodb-client.ts` to import and use the connection from `mongodb.ts` rather than creating its own. This halves connection pool usage and eliminates the dual-connection ambiguity.
 
-| Component | Responsibility | Location | Communicates With |
-|-----------|---------------|----------|-------------------|
-| **Sync Service** | Fetches all ships from FleetYards API, transforms data, upserts into MongoDB | `src/lib/ship-sync.ts` | FleetYards API (outbound HTTP), Ship Storage (writes) |
-| **Ship Storage** | CRUD operations for the `ships` collection, following existing `*-storage.ts` pattern | `src/lib/ship-storage.ts` | MongoDB (reads/writes), Sync Service (receives writes), API Routes (serves reads) |
-| **Cron Route** | HTTP endpoint that triggers sync, protected by `CRON_SECRET` bearer token | `src/app/api/cron/ship-sync/route.ts` | Sync Service (invokes), external scheduler (triggered by) |
-| **Ship API Routes** | Serve ship data to frontend with filtering, search, pagination | `src/app/api/ships/route.ts`, `src/app/api/ships/[id]/route.ts` | Ship Storage (reads), Frontend components (serves) |
-| **Ship Types** | TypeScript interfaces for stored ship documents and API responses | `src/types/ShipData.ts` (extended) | All other components (imported) |
-| **Migration Script** | One-time script to convert name-based references to FleetYards UUIDs | `src/scripts/migrate-ship-refs.ts` | MongoDB directly (reads/writes all affected collections) |
-| **Image Resolution** | Resolves ship image URLs from FleetYards CDN data stored in ship document | `src/lib/ships/image.ts` (updated) | Ship documents (reads imageUrl fields), UI components (serves URLs) |
-| **Mongo Indexes** | Index definitions for the new `ships` collection | `src/lib/mongo-indexes.ts` (extended) | MongoDB (creates indexes) |
-| **Frontend Components** | Ship pickers, fleet builder, mission planner consume ship API | `src/components/UserFleetBuilder.tsx`, mission planner components | Ship API Routes (fetches), Ship Types (uses interfaces) |
+**Key decisions:**
+- The `clientPromise` pattern in `mongodb.ts` (with dev HMR caching via `globalThis`) is the correct Next.js pattern. Keep it.
+- `mongodb-client.ts` becomes a CRUD helper layer that gets its `Db` instance from `mongodb.ts`, not its own `MongoClient`
+- Storage modules that import both connectors (`escort-request-storage.ts`, `mission-storage.ts`, `storage-utils.ts`) must be updated to use only the unified module
+- Pool settings: reduce `maxPoolSize` from 100 to 50 (single pool now, not doubled)
+
+**Files changed:**
+- `src/lib/mongodb.ts` -- add `getDb()` convenience export, reduce pool size
+- `src/lib/mongodb-client.ts` -- remove `MongoClient` creation, import from `mongodb.ts`
+- `src/lib/escort-request-storage.ts` -- remove dual imports
+- `src/lib/mission-storage.ts` -- remove dual imports
+- `src/lib/storage-utils.ts` -- remove dual imports
+
+#### 1B. Rate Limiting
+
+**Replace in-memory rate limiter with a solution appropriate for deployment scale.**
+
+Two viable approaches depending on infrastructure appetite:
+
+| Approach | Pros | Cons | When to Use |
+|----------|------|------|-------------|
+| **MongoDB-backed rate limiter** | No new infrastructure, uses existing DB | Adds DB load per request, less performant than Redis | Single-instance Azure App Service deployment |
+| **Upstash Redis** | Purpose-built for edge/serverless, sub-ms latency, free tier generous | New dependency, new service to manage | Multi-instance or Vercel deployment |
+
+**Recommendation:** MongoDB-backed rate limiter. AydoCorp runs on a single Azure App Service instance. Adding Redis for a rate limiter is over-engineering for the current scale. A simple MongoDB collection with TTL index handles this cleanly.
+
+```typescript
+// src/lib/rate-limiter.ts (new implementation)
+// Uses MongoDB 'rateLimits' collection with TTL index
+// Schema: { key: string, count: number, windowStart: Date }
+// TTL index on windowStart removes expired entries automatically
+```
+
+**Integration point:** Apply in middleware.ts for API routes, not per-route. This ensures consistent coverage across all 45 API routes.
+
+#### 1C. Input Sanitization Standardization
+
+**Migrate all manual validation to Zod schemas.**
+
+Currently 14 files use Zod, while routes like `missions`, `escort-requests`, and `mission-templates` use hand-rolled validation functions. The hand-rolled validators:
+- Don't sanitize input (no HTML stripping, no length enforcement on string content)
+- Don't provide consistent error shapes
+- Don't validate nested object structures deeply
+
+**Strategy:**
+1. Create a shared validation utilities module: `src/lib/validation.ts`
+2. Move all Zod schemas to colocated `*.schema.ts` files next to their route handlers
+3. Add a `sanitizeString()` helper that strips HTML tags and trims whitespace
+4. Replace all hand-rolled validators with Zod equivalents
+
+**Important:** The `getUserByEmail` function in `mongodb-client.ts` uses `new RegExp('^${email}$', 'i')` for case-insensitive lookup -- this is a **NoSQL injection vector** because `email` is not escaped for regex special characters. A crafted email like `admin@corp.com|.*` would match unintended records. Fix: use `{ emailLower: email.toLowerCase() }` exclusively (the normalized field already exists in the schema).
+
+### Phase 2: Security Headers and Auth
+
+#### 2A. CSP Headers via Middleware
+
+**Implement CSP in `middleware.ts`, not `next.config.js`**, because:
+1. Nonces require dynamic generation per request (middleware runs per request)
+2. The middleware already exists and runs on the correct path matcher
+3. CSP in `next.config.js` headers is static and cannot include nonces
+
+**CSP Policy for this application:**
+
+```
+default-src 'self';
+script-src 'self' 'nonce-{DYNAMIC}';
+style-src 'self' 'unsafe-inline';
+img-src 'self' data: https://cdn.fleetyards.net https://images.aydocorp.space https://aydocorp.space https://cdn.discordapp.com;
+font-src 'self';
+connect-src 'self' https://discord.com https://cdn.fleetyards.net;
+frame-ancestors 'self';
+base-uri 'self';
+form-action 'self';
+```
+
+**Why `'unsafe-inline'` for styles:** framer-motion injects inline styles at runtime for all animations. There is no practical way to nonce every framer-motion style injection. Tailwind also generates inline styles via `style={}` props. This is an accepted trade-off -- the real attack vector (XSS via script injection) is blocked by the strict `script-src` policy.
+
+**Implementation notes:**
+- Generate nonce using `crypto.randomUUID()` (available in Edge runtime)
+- Set nonce on request headers via `x-nonce` for components to read
+- Next.js automatically extracts nonce from CSP header and applies to script tags
+- Development mode must include `'unsafe-eval'` for React DevTools
+
+#### 2B. Auth Middleware Expansion
+
+**Extend middleware to cover API routes with session verification.**
+
+Current state: middleware excludes `/api/*` entirely. Each API route independently calls `getServerSession(authOptions)`. Problems:
+1. Some routes may forget the check
+2. Inconsistent error responses (some return 401, some return different shapes)
+3. No centralized audit trail
+
+**Strategy:** Add API auth to middleware, but with nuanced exclusions:
+
+```typescript
+// Routes that must remain public (no auth)
+const publicApiRoutes = [
+  '/api/auth',           // NextAuth endpoints
+  '/api/contact',        // Public contact form
+  '/api/ships',          // Public ship database (read-only)
+  '/api/cron',           // Cron endpoints (use bearer token auth, not session)
+  '/api/storage-status', // Health check
+  '/api/diagnostic',     // Health check
+];
+```
+
+**Decision:** Keep the per-route `getServerSession` calls as a defense-in-depth measure, but add middleware-level auth as the primary gate. This follows the principle of "fail closed" -- if middleware is bypassed, per-route checks still protect.
+
+### Phase 3: Performance Optimization
+
+#### 3A. framer-motion Bundle Reduction (LazyMotion)
+
+**Migrate from `motion` components to `m` components with `LazyMotion` provider.**
+
+Current bundle impact: 109 files import `{ motion }` from `framer-motion`, each bundling ~34kb of animation features. With `LazyMotion` + `m`, the initial cost drops to ~4.6kb, with features loaded asynchronously.
+
+**Implementation:**
+
+```tsx
+// src/app/layout.tsx (or a dedicated MotionProvider)
+import { LazyMotion, domAnimation } from 'framer-motion';
+
+// Wrap the app:
+<LazyMotion features={domAnimation} strict>
+  {children}
+</LazyMotion>
+```
+
+Then in every component file:
+```tsx
+// BEFORE:
+import { motion } from 'framer-motion';
+<motion.div animate={{...}} />
+
+// AFTER:
+import { m } from 'framer-motion';
+<m.div animate={{...}} />
+```
+
+**Scale of change:** 109 files need their imports updated. This is a mechanical find-and-replace, but must be tested because:
+1. `m` components require a `LazyMotion` ancestor -- if any component renders outside the provider, it will throw
+2. Components using `motion` from `MotionProps` type exports need type import updates
+3. The `MobiGlasButton`, `MobiGlasContainer`, `MobiGlasPanel`, `CornerAccents` components all use `motion` -- these are the foundation; update them first
+
+**Dependency on design system consolidation:** Must be done AFTER design system changes, because if components are being merged/refactored, doing a motion migration first creates wasted work.
+
+**Package version note:** The app uses `framer-motion@^10.16.4`. The library has since been renamed to `motion` (package name). Upgrading to the `motion` package is a separate concern -- `LazyMotion` works with `framer-motion@10.x`. Do NOT conflate the LazyMotion optimization with a package upgrade.
+
+#### 3B. Cache Header Tuning
+
+**Current cache headers are too conservative.**
+
+| Resource | Current | Recommended | Rationale |
+|----------|---------|-------------|-----------|
+| `/_next/static/*` | `max-age=3600` (1 hour) | `max-age=31536000, immutable` | Next.js static assets are content-hashed; they NEVER change for the same URL. 1 hour is absurdly short. |
+| `/images/*` | `max-age=3600` (1 hour) | `max-age=86400, stale-while-revalidate=604800` | Site images change infrequently. 1 day with 7-day stale is reasonable. |
+| `/assets/*` | `max-age=3600` (1 hour) | `max-age=86400, stale-while-revalidate=604800` | Same as images. |
+| `/fonts/*` | `max-age=3600` (1 hour) | `max-age=31536000, immutable` | Fonts never change. |
+| `/_next/image` | `max-age=604800` (7 days) | Keep as-is | Already reasonable for optimized images. |
+
+**The `/_next/static` fix alone is the highest-impact single change.** Next.js generates hashed filenames like `_next/static/chunks/app/page-abc123.js`. The hash changes when content changes. Setting `max-age=3600` means every returning visitor re-validates these files every hour for no reason.
+
+#### 3C. SSR Conversion for Public Pages
+
+**Convert public pages from client-side rendering to server-side rendering.**
+
+Currently, even the home page (`src/app/page.tsx`) is a client component:
+
+```tsx
+"use client";
+import { useSession } from 'next-auth/react';
+export default function Home() {
+  const { data: session, status } = useSession();
+  // ... client-side rendering
+}
+```
+
+This is unnecessary for the initial render. The session check can happen server-side.
+
+**Pages suitable for SSR conversion:**
+
+| Page | Current | SSR Approach |
+|------|---------|--------------|
+| `/` (home) | `"use client"` + `useSession` | Server Component + `getServerSession()` + pass `isLoggedIn` as prop |
+| `/about` | Server Component (already correct) | No change needed |
+| `/services` | Server Component (already correct) | No change needed |
+| `/join` | Server Component (already correct) | No change needed |
+| `/contact` | Server Component (already correct) | No change needed |
+| `/dashboard/*` | `"use client"` (auth required) | Keep client -- auth-gated pages need client interactivity |
+
+**Only the home page is a candidate for SSR conversion.** The dashboard pages legitimately need client-side rendering for interactive features. The public marketing pages (`about`, `services`, `join`, `contact`) are already server components -- they don't have `"use client"`.
+
+**Implementation for home page:**
+
+```tsx
+// src/app/page.tsx (AFTER)
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/auth';
+import HomeContent from '@/components/HomeContent';
+
+export default async function Home() {
+  const session = await getServerSession(authOptions);
+  return (
+    <div className="container mx-auto px-4 py-12">
+      <HomeContent isLoggedIn={!!session} userName={session?.user?.name || ''} />
+    </div>
+  );
+}
+```
+
+This eliminates the loading spinner flash and makes the home page cacheable.
+
+### Phase 4: Design System Consolidation
+
+#### 4A. Button Consolidation
+
+**Eliminate 4 competing button patterns. Canonicalize to `MobiGlasButton` component + CSS utility classes.**
+
+**Target architecture:**
+
+```
+MobiGlasButton (React component)
+  ├── variant="primary"    (replaces .mg-button CSS class)
+  ├── variant="secondary"  (replaces .mg-button-secondary CSS class)
+  ├── variant="ghost"      (new)
+  ├── variant="danger"     (new)
+  ├── variant="outline"    (new)
+  ├── size="sm"            (replaces .mg-button-small CSS class)
+  ├── size="md"            (default)
+  ├── size="lg"            (new)
+  └── size="icon"          (replaces .mg-btn-icon CSS class)
+```
+
+**Migration path:**
+1. Ensure `MobiGlasButton` supports all current use cases via its props
+2. Migrate files using raw `.mg-button` class to `<MobiGlasButton>`
+3. Migrate `.mg-button-small` usages to `<MobiGlasButton size="sm">`
+4. Migrate `.mg-button-secondary` usages to `<MobiGlasButton variant="secondary">`
+5. Migrate `.mg-btn-icon` usages to `<MobiGlasButton size="icon">`
+6. Remove deprecated CSS classes from `globals.css` (keep as deprecated aliases initially)
+
+**Problem with current MobiGlasButton:** It wraps `motion.button`, which means every button in the app loads the full framer-motion bundle. After LazyMotion migration, this becomes `m.button`, which is fine. But some buttons don't need animation at all. Consider adding a `withMotion` prop (default `true`) that conditionally renders `<m.button>` vs `<button>`.
+
+#### 4B. Corner Accent Consolidation
+
+**Consolidate 4+ corner accent patterns into the existing `CornerAccents` component.**
+
+The `CornerAccents` component already has a good API:
+- `size`: xs/sm/md/lg/xl
+- `variant`: simple/detailed/animated
+- `color`: primary/secondary/accent/success/warning
+- `opacity`: low/medium/high
+- `withDots`: boolean
+
+But it's barely used. Instead, every component re-implements corner accents inline:
+
+```tsx
+// This pattern appears in MobiGlasContainer, MobiGlasPanel, MobiGlasInput, layout.tsx, etc.
+<div className="absolute top-0 left-0 w-5 h-5 border-t border-l border-[rgba(var(--mg-primary),0.6)]"></div>
+<div className="absolute top-0 right-0 w-5 h-5 border-t border-r border-[rgba(var(--mg-primary),0.6)]"></div>
+<div className="absolute bottom-0 left-0 w-5 h-5 border-b border-l border-[rgba(var(--mg-primary),0.6)]"></div>
+<div className="absolute bottom-0 right-0 w-5 h-5 border-b border-r border-[rgba(var(--mg-primary),0.6)]"></div>
+```
+
+**Migration strategy:**
+1. Update `CornerAccents` to support all current use cases (check if `xl` size covers the `w-12 h-12` in layout.tsx, add `w-[6px] h-[6px]` size for MobiGlasInput)
+2. Replace inline corner divs in `MobiGlasContainer`, `MobiGlasPanel`, `MobiGlasInput` with `<CornerAccents />`
+3. Replace ad-hoc corner divs in `EventCarousel`, `LocationSection`, `AuthError`, `dashboard/page.tsx`
+4. The `layout.tsx` global corners are fixed/decorative -- these can use `CornerAccents` with appropriate size/opacity
+5. Remove the `animated` variant's dependency on `motion` (use CSS animations instead) to reduce framer-motion coupling
+
+#### 4C. CSS Variable and Class Cleanup
+
+**Audit and deduplicate CSS classes in `globals.css`.**
+
+Current `globals.css` is 1261 lines with several issues:
+- Duplicate `.mg-panel-grid` definitions (lines 1066-1072 and 1178-1184)
+- Duplicate `.mg-flicker` keyframe definitions (lines 646-662 and 1086-1100)
+- Many animation utility classes that could be Tailwind config extensions
+- `!important` on `.mg-button` background (line 126) -- should be removed after consolidation
+
+**Strategy:**
+1. Deduplicate `.mg-panel-grid` -- keep the one with better opacity values
+2. Deduplicate `@keyframes mg-flicker` / `text-flicker` -- keep one
+3. Move animation utilities to `tailwind.config.js` `extend.animation` and `extend.keyframes`
+4. Remove `!important` from `.mg-button` after confirming no specificity conflicts
+5. Consider extracting MobiGlas-specific styles to a `mobiglas.css` module imported in `globals.css`
 
 ---
 
-## Data Flow
+## Data Flow Changes
 
-### 1. Sync Flow (Server-side, periodic)
-
-```
-FleetYards API (/v1/models?page=N&perPage=200)
-       |
-       | HTTP GET (paginated, ~3-5 pages for ~500 ships)
-       v
-  Sync Service (src/lib/ship-sync.ts)
-       |
-       | Transform: FleetYards JSON -> ShipDocument shape
-       | - Extract: id, name, slug, manufacturer, classification, focus
-       | - Extract: metrics (beam, cargo, length, height, mass, size, crew)
-       | - Extract: speeds (scmSpeed)
-       | - Extract: media URLs (storeImage, angledView, sideView, etc.)
-       | - Extract: productionStatus, onSale, pledgePrice
-       | - Normalize: size string to enum ("small" -> "Small")
-       | - Normalize: focus string to role array ("Starter / Touring" -> ["Starter","Touring"])
-       | - Set: syncedAt = now, syncVersion = incrementing counter
-       |
-       v
-  Ship Storage (src/lib/ship-storage.ts)
-       |
-       | bulkWrite with upsert (match on fleetyardsId)
-       | - Existing docs: $set all fields, bump syncVersion
-       | - New docs: insert with all fields
-       | - Stale docs: NOT deleted (marked stale via missing syncVersion)
-       |
-       v
-  MongoDB "ships" collection
-       |
-       | Sync metadata written to "sync-status" collection
-       | - lastSyncAt, shipCount, duration, errors, syncVersion
-       v
-  Done. Next sync in 24 hours.
-```
-
-### 2. Read Flow (Client request)
+### Rate Limiting Flow (New)
 
 ```
-  Browser (React component)
-       |
-       | fetch('/api/ships?manufacturer=Aegis&size=Medium&search=Vanguard')
-       v
-  API Route (src/app/api/ships/route.ts)
-       |
-       | Build MongoDB query from query params
-       | Apply pagination (page, limit, default 50)
-       v
-  Ship Storage (src/lib/ship-storage.ts)
-       |
-       | db.collection('ships').find(query).sort().skip().limit()
-       v
-  MongoDB "ships" collection
-       |
-       | Return documents
-       v
-  API Route
-       |
-       | Transform to ShipResponse (strip internal fields)
-       | Add pagination metadata (total, page, pages, hasMore)
-       v
-  Browser
-       |
-       | Render ship cards with FleetYards CDN image URLs
-       v
-  UI Display
+Request → middleware.ts
+           │
+           ├── Is API route? ──→ Check rate limit (MongoDB lookup)
+           │                      │
+           │                      ├── Under limit → Increment counter → Continue
+           │                      │
+           │                      └── Over limit → Return 429 response
+           │
+           ├── Is protected route? ──→ Check auth (existing flow)
+           │
+           └── Is public route? ──→ Apply CSP headers → Continue
 ```
 
-### 3. Ship Reference Flow (How ships are stored in other entities)
+### CSP Header Flow (New)
 
 ```
-  BEFORE MIGRATION (current):
-  ┌─────────────────────────────────────┐
-  │ User.ships[]: UserShip              │
-  │   { manufacturer: "Aegis Dynamics", │
-  │     name: "Vanguard Sentinel",      │
-  │     image: "https://images..." }    │
-  └─────────────────────────────────────┘
-
-  AFTER MIGRATION (target):
-  ┌──────────────────────────────────────────┐
-  │ User.ships[]: UserShip                   │
-  │   { fleetyardsId: "uuid-here",          │
-  │     name: "Vanguard Sentinel",           │  <-- denormalized for display
-  │     manufacturer: "Aegis Dynamics" }     │  <-- denormalized for display
-  └──────────────────────────────────────────┘
-
-  Image URL resolved at read time from ships collection, NOT stored in reference.
+Request → middleware.ts
+           │
+           ├── Generate nonce (crypto.randomUUID())
+           │
+           ├── Set x-nonce request header
+           │
+           ├── Construct CSP string with nonce
+           │
+           └── Set Content-Security-Policy response header
+                │
+                └── Next.js auto-extracts nonce for script tags
 ```
 
-### 4. Migration Flow (One-time)
+### MongoDB Connection Flow (After Consolidation)
 
 ```
-  Migration Script (src/scripts/migrate-ship-refs.ts)
-       |
-       | 1. Load ALL ships from MongoDB ships collection
-       | 2. Build lookup map: shipName (lowercased) -> fleetyardsId
-       | 3. For EACH collection with ship references:
-       |
-       |--- users collection:
-       |    For each user.ships[] entry:
-       |      Match name -> fleetyardsId via lookup map
-       |      Rewrite { manufacturer, name, image } -> { fleetyardsId, name, manufacturer }
-       |      Log unmatched ships as warnings
-       |
-       |--- planned-missions collection:
-       |    For each mission.ships[] (MissionShip) entry:
-       |      Match shipName -> fleetyardsId via lookup map
-       |      Add fleetyardsId field, keep shipName for display
-       |
-       |--- missions collection:
-       |    For each mission.participants[].shipName:
-       |      Match shipName -> fleetyardsId via lookup map
-       |      Add fleetyardsId field, keep shipName for display
-       |
-       |--- operations collection:
-       |    For each operation.participants[].shipName:
-       |      Match shipName -> fleetyardsId via lookup map
-       |      Add fleetyardsId field
-       |
-       | 4. Write migration report (matched, unmatched, errors)
-       v
-  Done. All references now contain fleetyardsId.
+BEFORE:
+  storage-module-A → mongodb.ts → MongoClient #1 (pool: 100)
+  storage-module-B → mongodb-client.ts → MongoClient #2 (pool: 100)
+  storage-module-C → BOTH! → Both clients
+
+AFTER:
+  mongodb.ts → MongoClient (pool: 50, singleton)
+       │
+       ├── getDb() → returns Db instance
+       │
+       └── getCollection(name) → returns Collection
+            │
+  mongodb-client.ts → imports getDb() from mongodb.ts
+       │                (no longer creates its own MongoClient)
+       │
+       ├── getUserById() → uses getDb()
+       ├── getUserByEmail() → uses getDb()
+       └── etc.
+            │
+  All storage modules → import from either module (both use same client)
 ```
 
 ---
 
-## Database Schema Design
+## Component Boundaries (Final State)
 
-### Ships Collection (`ships`)
-
-```typescript
-interface ShipDocument {
-  // Identity
-  _id: ObjectId;                    // MongoDB auto-generated
-  fleetyardsId: string;            // FleetYards UUID (indexed, unique) -- THE canonical ID
-  slug: string;                     // URL-safe identifier (indexed, unique)
-  name: string;                     // Display name (indexed for text search)
-  scIdentifier: string;             // In-game identifier (e.g., "orig_100i")
-
-  // Classification
-  manufacturer: {
-    name: string;                   // "Origin Jumpworks"
-    code: string;                   // "ORIG"
-    slug: string;                   // "origin-jumpworks"
-  };
-  classification: string;          // "multi", "combat", "transport", etc.
-  focus: string;                   // Raw focus string "Starter / Touring"
-  roles: string[];                 // Parsed roles ["Starter", "Touring"]
-  size: 'Snub' | 'Small' | 'Medium' | 'Large' | 'Capital';
-  productionStatus: string;        // "flight-ready", "in-concept", etc.
-
-  // Metrics
-  crew: { min: number; max: number };
-  cargo: number;                   // SCU
-  length: number;                  // meters
-  beam: number;                    // meters
-  height: number;                  // meters
-  mass: number;                    // kg
-  scmSpeed: number | null;         // m/s
-  hydrogenFuelTankSize: number | null;
-  quantumFuelTankSize: number | null;
-
-  // Pricing (informational)
-  pledgePrice: number | null;      // USD
-  price: number | null;            // aUEC
-
-  // Images (FleetYards CDN URLs)
-  images: {
-    store: string | null;          // Primary display image
-    storeLarge: string | null;     // High-res store image
-    angledView: string | null;     // Angled perspective
-    angledViewMedium: string | null;
-    sideView: string | null;       // Side profile
-    sideViewMedium: string | null;
-    topView: string | null;        // Top-down view
-    topViewMedium: string | null;
-    frontView: string | null;      // Front view
-    fleetchartImage: string | null; // Fleet chart silhouette
-  };
-
-  // Sync Metadata
-  syncedAt: Date;                  // When this record was last synced
-  syncVersion: number;             // Incrementing sync batch number
-  fleetyardsUpdatedAt: string;     // FleetYards' own updatedAt timestamp
-
-  // Application Metadata
-  createdAt: Date;                 // First time synced into our DB
-  updatedAt: Date;                 // Last modified in our DB
-}
-```
-
-### Indexing Strategy
-
-```typescript
-// In src/lib/mongo-indexes.ts -- additions to ensureMongoIndexes()
-const ships = db.collection('ships');
-await Promise.all([
-  // Primary lookup by FleetYards UUID (unique, most common join key)
-  ships.createIndex({ fleetyardsId: 1 }, { unique: true }),
-
-  // Slug lookup for URL-based routes (/ships/avenger-titan)
-  ships.createIndex({ slug: 1 }, { unique: true }),
-
-  // Name search (case-insensitive text search for ship picker)
-  ships.createIndex({ name: 'text', 'manufacturer.name': 'text' }),
-
-  // Filter queries (manufacturer + size combo is the most common filter)
-  ships.createIndex({ 'manufacturer.name': 1, size: 1, name: 1 }),
-
-  // Production status filter (show only flight-ready ships)
-  ships.createIndex({ productionStatus: 1, 'manufacturer.name': 1 }),
-
-  // Sync housekeeping (find stale records from previous sync)
-  ships.createIndex({ syncVersion: 1 }),
-
-  // Size-based queries (mission planner filters by size)
-  ships.createIndex({ size: 1, name: 1 }),
-]);
-```
-
-### Sync Status Collection (`sync-status`)
-
-```typescript
-interface SyncStatusDocument {
-  _id: ObjectId;
-  type: 'ship-sync';              // Allows other sync types later
-  lastSyncAt: Date;
-  lastSyncVersion: number;
-  shipCount: number;               // Total ships after sync
-  newShips: number;                // Ships added this sync
-  updatedShips: number;            // Ships modified this sync
-  durationMs: number;              // How long sync took
-  status: 'success' | 'partial' | 'failed';
-  errors: string[];                // Any errors encountered
-  apiPagesProcessed: number;       // How many API pages fetched
-}
-```
-
-### UserShip Type (Updated)
-
-```typescript
-// In src/types/user.ts
-export interface UserShip {
-  fleetyardsId: string;           // FleetYards UUID -- canonical reference
-  name: string;                    // Denormalized for display without JOIN
-  manufacturer: string;            // Denormalized for display without JOIN
-  // image field REMOVED -- resolved at render time from ships collection
-}
-```
-
-### MissionShip Type (Updated)
-
-```typescript
-// In src/types/PlannedMission.ts
-export interface MissionShip {
-  fleetyardsId: string;           // FleetYards UUID -- canonical reference
-  shipName: string;                // Denormalized display name
-  manufacturer: string;            // Denormalized manufacturer
-  size: string;                    // Denormalized size
-  role?: string[];                 // Denormalized roles
-  // image field REMOVED -- resolved at render time
-  quantity: number;
-  assignedTo?: string;
-  assignedToName?: string;
-  notes?: string;
-}
-```
+| Component | Responsibility | Files Modified | New Files |
+|-----------|---------------|----------------|-----------|
+| **Unified MongoDB connector** | Single connection pool, health checks, reconnect logic | `mongodb.ts` (modified), `mongodb-client.ts` (refactored) | None |
+| **Rate limiter** | MongoDB-backed sliding window rate limiting | `rate-limiter.ts` (rewritten) | `src/lib/rate-limiter.ts` |
+| **Security middleware** | CSP nonce generation, rate limit checks, expanded auth | `middleware.ts` (expanded) | None |
+| **Validation utilities** | Shared sanitization helpers, schema patterns | None | `src/lib/validation.ts` |
+| **MobiGlasButton** | Canonical button component, all variants | `MobiGlasButton.tsx` (enhanced) | None |
+| **CornerAccents** | Canonical corner decoration, all sizes | `CornerAccents.tsx` (enhanced) | None |
+| **LazyMotion provider** | Async feature loading for framer-motion | `layout.tsx` or `providers.tsx` (modified) | None |
+| **Cache headers** | Optimized static asset caching | `next.config.js` (modified) | None |
 
 ---
 
-## API Route Design
+## Integration Points with Existing Architecture
 
-### Ship Data Endpoints
+### Middleware Integration
 
-#### `GET /api/ships`
-Serve paginated, filterable ship list from MongoDB.
+The existing `middleware.ts` is the primary integration surface. Currently it only checks auth for 3 route prefixes. It must be expanded to:
 
-```
-Query Parameters:
-  ?page=1              (default: 1)
-  ?limit=50            (default: 50, max: 200)
-  ?manufacturer=Aegis   (filter by manufacturer name, partial match)
-  ?size=Medium          (filter by size category)
-  ?status=flight-ready  (filter by production status)
-  ?search=vanguard      (text search across name + manufacturer)
-  ?roles=combat         (filter by role, comma-separated)
-  ?sort=name            (sort field: name, manufacturer, size, pledgePrice)
-  ?order=asc            (sort order: asc, desc)
+1. **All routes:** Generate CSP nonce, set CSP headers
+2. **API routes:** Apply rate limiting (if not in public/cron exceptions list)
+3. **Protected routes:** Auth check (existing, expand list)
 
-Response:
-{
-  ships: ShipResponse[],
-  pagination: {
-    page: number,
-    limit: number,
-    total: number,
-    pages: number,
-    hasMore: boolean
-  }
-}
-```
-
-#### `GET /api/ships/[id]`
-Single ship by FleetYards UUID or slug.
-
-```
-Response: ShipResponse (full detail including all image URLs)
-```
-
-#### `GET /api/ships/batch`
-Batch resolve multiple ships by IDs (for rendering mission ship rosters).
-
-```
-Query Parameters:
-  ?ids=uuid1,uuid2,uuid3    (comma-separated FleetYards UUIDs)
-
-Response:
-{
-  ships: ShipResponse[]     (ordered same as input IDs)
-}
-```
-
-#### `GET /api/ships/manufacturers`
-List all manufacturers with ship counts.
-
-```
-Response:
-{
-  manufacturers: { name: string, code: string, count: number }[]
-}
-```
-
-### Sync Endpoint
-
-#### `GET /api/cron/ship-sync`
-Trigger ship sync (protected by CRON_SECRET bearer token).
-
-```
-Headers:
-  Authorization: Bearer <CRON_SECRET>
-
-Response:
-{
-  success: boolean,
-  result: {
-    shipCount: number,
-    newShips: number,
-    updatedShips: number,
-    durationMs: number,
-    errors: string[]
-  }
-}
-```
-
-This follows the exact pattern of the existing `GET /api/cron/discord-sync` route.
-
----
-
-## Sync Service Architecture
-
-### Location & Structure
-
-```
-src/lib/
-  ship-sync.ts           // Core sync logic (fetch, transform, upsert)
-  ship-storage.ts        // MongoDB CRUD for ships collection
-  ship-types.ts          // (optional) FleetYards raw response types
-
-src/app/api/
-  cron/
-    ship-sync/
-      route.ts           // Cron endpoint (mirrors discord-sync pattern)
-  ships/
-    route.ts             // GET ship list with filters
-    [id]/
-      route.ts           // GET single ship by UUID or slug
-    batch/
-      route.ts           // GET multiple ships by IDs
-    manufacturers/
-      route.ts           // GET manufacturer list
-```
-
-### Sync Service Internal Design (`ship-sync.ts`)
+**Risk:** The middleware matcher currently excludes API routes. This must be changed to include API routes while still excluding static assets. New matcher:
 
 ```typescript
-// Pseudocode structure:
-
-export async function syncShipsFromFleetYards(): Promise<SyncResult> {
-  const syncVersion = Date.now();
-  let page = 1;
-  let allShips: ShipDocument[] = [];
-  let hasMore = true;
-
-  // Phase 1: Fetch all pages from FleetYards
-  while (hasMore) {
-    const response = await fetchFleetYardsPage(page, PER_PAGE);
-    const transformed = response.map(transformFleetYardsShip);
-    allShips.push(...transformed);
-    hasMore = response.length === PER_PAGE;
-    page++;
-    // Respect rate limits: small delay between pages
-    await sleep(200);
-  }
-
-  // Phase 2: Bulk upsert into MongoDB
-  const bulkOps = allShips.map(ship => ({
-    updateOne: {
-      filter: { fleetyardsId: ship.fleetyardsId },
-      update: { $set: { ...ship, syncVersion, syncedAt: new Date(), updatedAt: new Date() } },
-      upsert: true
-    }
-  }));
-
-  const result = await shipCollection.bulkWrite(bulkOps, { ordered: false });
-
-  // Phase 3: Record sync status
-  await saveSyncStatus({ ... });
-
-  return {
-    shipCount: allShips.length,
-    newShips: result.upsertedCount,
-    updatedShips: result.modifiedCount,
-    ...
-  };
-}
-```
-
-### Key Design Decisions for Sync Service
-
-1. **Fetch all, then upsert** (not stream): FleetYards has ~500 ships. Fetching all into memory (~2MB) is trivial. Bulk upsert is more efficient than individual operations.
-
-2. **Upsert on fleetyardsId, never delete**: Ships that disappear from the API are NOT deleted from our database. They simply won't get their `syncVersion` updated. A separate cleanup query can identify stale ships if needed. This prevents breaking references.
-
-3. **Transform at sync time, not read time**: The FleetYards response has deeply nested objects and many fields we don't need. We flatten and normalize during sync so that read-time queries are fast and simple.
-
-4. **No JSON fallback for ships collection**: Unlike user-storage.ts which falls back to JSON files, the ships collection is read-only cached data from an external API. If MongoDB is down, the ship data simply isn't available. The UI should handle this gracefully (show loading/error states). Rationale: shipping a 500-ship JSON fallback adds complexity and goes stale immediately.
-
-5. **syncVersion for staleness detection**: Each sync batch writes the same `syncVersion` to all ships it touches. After sync, any ship with `syncVersion < currentSyncVersion` was NOT in the latest FleetYards response. This allows querying for "disappeared" ships without deleting them.
-
----
-
-## Image URL Resolution
-
-### Current Pattern (Being Replaced)
-
-```
-Ship name -> formatShipImageName() -> cdn() -> https://images.aydocorp.space/avenger_titan.png
-```
-
-This relies on:
-- Self-hosted images on R2 CDN
-- Name-to-filename convention (lowercase, underscores, strip special chars)
-- Single image per ship
-
-### New Pattern
-
-```
-Ship document in MongoDB contains all FleetYards CDN URLs:
-  images.store      -> Primary display image
-  images.angledView -> Card/thumbnail image
-  images.sideView   -> Detail/profile image
-  images.topView    -> Fleet chart view
-```
-
-### Image Resolution Helper (Updated `src/lib/ships/image.ts`)
-
-```typescript
-// New approach:
-export function resolveShipImage(
-  ship: ShipResponse | null,
-  view: 'store' | 'angled' | 'side' | 'top' = 'store'
-): string {
-  if (!ship?.images) return getShipPlaceholder();
-
-  const urlMap = {
-    store: ship.images.store || ship.images.storeLarge,
-    angled: ship.images.angledViewMedium || ship.images.angledView,
-    side: ship.images.sideViewMedium || ship.images.sideView,
-    top: ship.images.topViewMedium || ship.images.topView,
-  };
-
-  return urlMap[view] || ship.images.store || getShipPlaceholder();
-}
-```
-
-### Next.js Image Configuration
-
-The `next.config.js` `remotePatterns` must be updated to allow FleetYards CDN domains:
-
-```javascript
-images: {
-  remotePatterns: [
-    // Existing
-    { protocol: 'https', hostname: 'images.aydocorp.space', pathname: '/**' },
-    // New: FleetYards CDN
-    { protocol: 'https', hostname: 'fleetyards.net', pathname: '/uploads/**' },
-    { protocol: 'https', hostname: '*.fleetyards.net', pathname: '/**' },
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|images|assets|fonts|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.gif|.*\\.svg|.*\\.webp|.*\\.ico|.*\\.woff|.*\\.woff2|.*\\.ttf|.*\\.otf).*)',
   ],
+};
+```
+
+This includes API routes while still excluding static files.
+
+### Storage Layer Integration
+
+The DB consolidation touches the foundational storage layer. Every storage module in `src/lib/` is affected:
+- `user-storage.ts` -- already uses `mongodb-client.ts`; will continue to work after refactor
+- `ship-storage.ts` -- imports `connectToDatabase` from `mongodb-client.ts`; must update import
+- `operation-storage.ts` -- imports from `mongodb-client.ts`; will continue to work
+- `mission-storage.ts` -- imports from BOTH; must clean up to use unified module
+- `escort-request-storage.ts` -- imports from BOTH; must clean up
+- `planned-mission-storage.ts` -- imports from `mongodb.ts`; will continue to work
+- `mission-template-storage.ts` -- imports from `mongodb.ts`; will continue to work
+- `finance.ts` -- imports from `mongodb.ts`; will continue to work
+- `storage-utils.ts` -- imports from BOTH; must clean up
+
+### Design System Integration
+
+The MobiGlas components are used across 30+ component files. Changes to `MobiGlasButton`, `CornerAccents`, `MobiGlasPanel`, and `MobiGlasContainer` propagate to every file that imports them. The consolidation must be done component-by-component with testing after each one.
+
+### LazyMotion + Layout Integration
+
+The `LazyMotion` provider must wrap all routes. The existing `src/app/layout.tsx` already has a `<Providers>` wrapper component. The `LazyMotion` provider should be added inside `Providers`:
+
+```tsx
+// src/components/providers.tsx
+import { LazyMotion, domAnimation } from 'framer-motion';
+
+export default function Providers({ children }) {
+  return (
+    <SessionProvider>
+      <LazyMotion features={domAnimation} strict>
+        {children}
+      </LazyMotion>
+    </SessionProvider>
+  );
 }
 ```
 
-### Transition Notes
-
-- The `cdn()` helper in `src/lib/cdn.ts` is NOT used for FleetYards images. FleetYards images are absolute URLs stored directly in the ship document. The `cdn()` helper remains for other app assets.
-- The `formatShipImageName()`, `getShipImagePath()`, and `getDirectImagePath()` functions in `src/types/ShipData.ts` become deprecated after migration.
-- Components switch from `getShipImagePath(ship.name)` to `resolveShipImage(ship, 'angled')`.
-
----
-
-## Migration Patterns
-
-### Strategy: Big-Bang Migration
-
-The project requires a single migration script that runs AFTER the first successful FleetYards sync populates the `ships` collection, but BEFORE any code is deployed that expects `fleetyardsId` on ship references.
-
-### Migration Script Design (`src/scripts/migrate-ship-refs.ts`)
-
-```
-Phase 1: Build Lookup Map
-  - Load all ships from "ships" collection
-  - Build Map<string, string>:  lowercased ship name -> fleetyardsId
-  - Also build alternate name map for known mismatches
-
-Phase 2: Migrate Users
-  - Load all users from "users" collection
-  - For each user.ships[] entry:
-    - Look up fleetyardsId by name (case-insensitive)
-    - Rewrite entry: add fleetyardsId, remove image field
-    - If no match: log warning, keep entry with fleetyardsId = null
-
-Phase 3: Migrate Planned Missions
-  - Load all planned missions from "planned-missions" collection
-  - For each mission.ships[] entry:
-    - Look up fleetyardsId by shipName
-    - Add fleetyardsId field
-  - For each mission.participants[] if present:
-    - Look up fleetyardsId by shipName if present
-
-Phase 4: Migrate Missions (legacy)
-  - Load all missions from "missions" collection
-  - For each mission.participants[].shipName:
-    - Look up fleetyardsId
-    - Add fleetyardsId to participant object
-
-Phase 5: Migrate Operations
-  - Load all operations from operations collection
-  - For each operation.participants[].shipName:
-    - Look up fleetyardsId
-    - Add fleetyardsId to participant object
-
-Phase 6: Migrate Resources
-  - Load resources with type "Ship" or "Vehicle"
-  - Match name/model to fleetyardsId
-  - Add fleetyardsId field
-
-Phase 7: Report
-  - Print total entities processed
-  - Print match rate per collection
-  - List all unmatched ship names (for manual review)
-  - Write report to data/migration-report.json
-```
-
-### Name Matching Strategy
-
-Ship names between the current database and FleetYards API may not match exactly. The migration must handle:
-
-| Current Name | FleetYards Name | Strategy |
-|-------------|----------------|----------|
-| `Vanguard Sentinel` | `Vanguard Sentinel` | Exact match |
-| `F7C Hornet Mk I` | `F7C Hornet` | Fuzzy match (contains) |
-| `San'tok.yai` | `San'tok.yai` | Special character normalization |
-| `600i Explorer` | `600i Explorer` | Exact match |
-| `Caterpillar Best In Show Edition` | `Caterpillar Best In Show Edition` | Exact match or variant lookup |
-
-Matching priority:
-1. Exact name match (case-insensitive)
-2. FleetYards `rsiName` match (the RSI marketing name)
-3. Slug-based match (normalize both names to slugs and compare)
-4. Contains match (one name contains the other -- use cautiously)
-5. Manual override map for known mismatches
-
-### Rollback Strategy
-
-The migration script should:
-1. Run in `--dry-run` mode first (report what WOULD change without writing)
-2. Write a rollback file with original values before modifying each document
-3. Be idempotent (safe to run multiple times)
-
----
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Live API Calls on Every Page Load
-**What:** Calling FleetYards API directly from API routes or components when a user requests ship data.
-**Why bad:** FleetYards has no SLA. Adds 200-500ms latency per request. Rate limiting could break the UI.
-**Instead:** Sync to MongoDB periodically. Serve from local database. Always.
-
-### Anti-Pattern 2: Storing Full Image URLs in Ship References
-**What:** Saving `image: "https://fleetyards.net/uploads/..."` in UserShip or MissionShip objects.
-**Why bad:** FleetYards may change CDN URLs. You'd need to migrate every reference. Data duplication.
-**Instead:** Store only `fleetyardsId`. Resolve image URL at render time from the ships collection.
-
-### Anti-Pattern 3: Dual-Format Transition Period
-**What:** Supporting BOTH name-based references AND fleetyardsId-based references simultaneously.
-**Why bad:** Every query needs to handle both formats. Every component needs conditional logic. Bugs multiply.
-**Instead:** Big-bang migration. One cutover. Code only needs to understand one format.
-
-### Anti-Pattern 4: Deleting Ships That Disappear from API
-**What:** Removing ships from MongoDB if they don't appear in the latest FleetYards sync.
-**Why bad:** Ships temporarily removed from FleetYards (e.g., during rework) would break all references in user fleets and missions.
-**Instead:** Use `syncVersion` to mark stale ships but never delete. UI can filter to `productionStatus: 'flight-ready'` for active lists.
-
-### Anti-Pattern 5: Syncing in API Route Request Path
-**What:** Checking "is data stale?" on every API request and triggering sync inline.
-**Why bad:** First request after sync window triggers slow sync. Race conditions if multiple requests arrive.
-**Instead:** Dedicated cron endpoint. Sync runs on schedule, completely independent of read path.
+The `strict` prop ensures any `motion` usage (vs `m`) throws in development, catching missed migrations.
 
 ---
 
 ## Patterns to Follow
 
-### Pattern 1: Storage Module per Entity (Existing)
-**What:** Each entity type has `src/lib/{entity}-storage.ts` with standard CRUD interface.
-**When:** Always for new data entities.
-**Example:** `ship-storage.ts` follows same structure as `user-storage.ts`, `planned-mission-storage.ts`.
+### Pattern 1: Unified Error Responses
 
-### Pattern 2: Cron Route with Bearer Auth (Existing)
-**What:** Cron endpoints at `/api/cron/{job}/route.ts` protected by `CRON_SECRET` env var.
-**When:** Any scheduled background job.
-**Example:** New `ship-sync` route mirrors existing `discord-sync` route exactly.
+**What:** All API routes return errors in the same shape.
+**When:** Every error response from any API route.
+**Example:**
+```typescript
+// src/lib/api-utils.ts
+export function errorResponse(message: string, status: number, details?: unknown) {
+  return NextResponse.json(
+    { error: message, ...(details ? { details } : {}) },
+    { status }
+  );
+}
+```
 
-### Pattern 3: Denormalize for Display, Reference by ID
-**What:** Ship references store `fleetyardsId` (canonical) plus `name` and `manufacturer` (denormalized for display without JOIN).
-**When:** Any embedded reference to a ship in another document.
-**Why:** MongoDB doesn't support JOINs efficiently. Denormalized fields prevent N+1 queries for lists. The `fleetyardsId` is the source of truth if denormalized fields go stale.
+### Pattern 2: Schema-First API Routes
 
-### Pattern 4: Bulk Image Resolution
-**What:** When displaying a list of ships (mission roster, user fleet), batch-fetch ship documents by IDs and resolve images in one query.
-**When:** Any UI that shows multiple ships.
-**Example:** `/api/ships/batch?ids=uuid1,uuid2` avoids N individual queries.
+**What:** Every API route that accepts input defines a Zod schema before processing.
+**When:** All POST/PUT/PATCH/DELETE handlers.
+**Example:**
+```typescript
+const schema = z.object({ /* ... */ });
+const result = schema.safeParse(await request.json());
+if (!result.success) return errorResponse('Validation failed', 400, result.error.flatten());
+```
 
-### Pattern 5: Index-First Schema Design
-**What:** Design indexes before writing queries. Every query pattern must have a supporting index.
-**When:** Any new collection.
-**Example:** Ships collection has 7 indexes covering all planned query patterns (UUID lookup, slug lookup, text search, manufacturer+size filter, status filter, sync housekeeping, size filter).
+### Pattern 3: Component Composition over Props
+
+**What:** Use composition patterns instead of adding more boolean props.
+**When:** Building UI with MobiGlas components.
+**Example:**
+```tsx
+// BEFORE: prop explosion
+<MobiGlasPanel withScanline withHologram withCircuitBg cornerAccents cornerSize="lg" />
+
+// AFTER: composition
+<MobiGlasPanel>
+  <ScanlineEffect />
+  <CornerAccents size="lg" />
+  {children}
+</MobiGlasPanel>
+```
 
 ---
 
-## Suggested Build Order
+## Anti-Patterns to Avoid
 
-Dependencies between components dictate the build order. Each phase depends on the previous one being complete.
+### Anti-Pattern 1: Inline Corner Accent Divs
 
-### Phase 1: Foundation (No existing code changes)
-**Build:**
-1. `ShipDocument` TypeScript interface and `ShipResponse` API type
-2. `ship-storage.ts` -- MongoDB CRUD for ships collection
-3. Index definitions in `mongo-indexes.ts`
-4. `ship-sync.ts` -- Sync service (fetch + transform + upsert)
-5. `/api/cron/ship-sync/route.ts` -- Cron endpoint
+**What:** Copy-pasting 4 corner `<div>` elements instead of using `<CornerAccents />`
+**Why bad:** 8 files already have divergent corner implementations with different sizes, opacities, and colors
+**Instead:** Use `<CornerAccents size="md" color="primary" opacity="medium" />`
 
-**Why first:** This is isolated infrastructure. No existing code is modified. Can be tested independently by running sync and verifying MongoDB data.
+### Anti-Pattern 2: Direct `motion` Import After LazyMotion
 
-**Dependency:** None. Purely additive.
+**What:** Using `import { motion } from 'framer-motion'` instead of `import { m } from 'framer-motion'`
+**Why bad:** Defeats the purpose of LazyMotion; bundles full 34kb feature set
+**Instead:** Use `m` components exclusively; the `strict` prop on `LazyMotion` catches this in dev
 
-### Phase 2: Ship API Routes (No existing code changes)
-**Build:**
-1. `/api/ships/route.ts` -- List with filters/search/pagination
-2. `/api/ships/[id]/route.ts` -- Single ship by UUID or slug
-3. `/api/ships/batch/route.ts` -- Batch resolve by IDs
-4. `/api/ships/manufacturers/route.ts` -- Manufacturer list
+### Anti-Pattern 3: Per-Route Rate Limiting
 
-**Why second:** API routes depend on ship-storage.ts from Phase 1. Still no modifications to existing code. Can be tested with API client.
+**What:** Implementing rate limiting in individual API route handlers
+**Why bad:** Inconsistent coverage, code duplication, missed routes
+**Instead:** Centralize in middleware.ts with route-specific limits configured in a lookup table
 
-**Dependency:** Phase 1 (ship-storage, ships collection must exist).
+### Anti-Pattern 4: Using Both MongoDB Modules
 
-### Phase 3: Migration Script (Modifies data, not code)
-**Build:**
-1. `src/scripts/migrate-ship-refs.ts` -- Full migration script
-2. Name matching logic with fuzzy matching
-3. Dry-run mode and rollback file generation
-4. Migration report output
+**What:** Importing from both `mongodb.ts` and `mongodb-client.ts` in the same file
+**Why bad:** Creates ambiguity about which connection is used, potential for connection pool exhaustion
+**Instead:** After consolidation, both modules share one client. Import from whichever has the API you need.
 
-**Why third:** Migration requires Phase 1 (ships collection populated) to build the lookup map. Must run BEFORE Phase 4 deploys code that expects `fleetyardsId`.
+---
 
-**Dependency:** Phase 1 (ships collection must be populated via sync).
-
-### Phase 4: Type Updates and Image Resolution (Modifies existing code)
-**Build:**
-1. Update `UserShip` type -- add `fleetyardsId`, remove `image`
-2. Update `MissionShip` type -- add `fleetyardsId`
-3. Update `MissionParticipant` type -- add `fleetyardsId`
-4. Update `OperationParticipant` type -- add `fleetyardsId`
-5. Update `src/lib/ships/image.ts` -- new `resolveShipImage()` taking ship document
-6. Update `next.config.js` -- add FleetYards CDN to `remotePatterns`
-7. Update API validation schemas (profile route Zod schema for UserShip)
-
-**Why fourth:** Type changes are the pivot point. After this, all code expects the new shape. Migration (Phase 3) must have already converted the data.
-
-**Dependency:** Phase 3 (data must be migrated before code expects new shape).
-
-### Phase 5: Frontend Component Updates (Modifies existing UI)
-**Build:**
-1. Update `UserFleetBuilder.tsx` -- use `/api/ships` instead of static `getShipsByManufacturer()`
-2. Update mission planner ship picker -- use `/api/ships` with search
-3. Update `MissionDetail.tsx` -- resolve images from ship documents
-4. Update `OperationDetailView.tsx` -- resolve images from ship documents
-5. Update `UserProfileContent.tsx` -- display ships with FleetYards images
-6. Remove deprecated `loadShipDatabase()` and `shipManufacturers` usage
-
-**Why fifth:** Frontend depends on both API routes (Phase 2) and correct types (Phase 4).
-
-**Dependency:** Phase 2 (API routes), Phase 4 (updated types).
-
-### Phase 6: Cleanup and Decommission
-**Build:**
-1. Remove `public/data/ships.json`
-2. Remove or deprecate `src/lib/ship-data.ts` (the old loader)
-3. Remove `shipManufacturers` array from `src/types/ShipData.ts`
-4. Remove `formatShipImageName()`, `getShipImagePath()`, `getDirectImagePath()` functions
-5. Update CLAUDE.md documentation
-
-**Why last:** Only after all consumers have been migrated can the old code be safely removed.
-
-**Dependency:** Phase 5 (all consumers migrated).
-
-### Build Order Summary
+## Build Order (Dependencies Considered)
 
 ```
-Phase 1: Foundation         [New code only, no changes]
-    |
-    v
-Phase 2: Ship API Routes   [New code only, no changes]
-    |
-    v
-Phase 3: Migration Script  [Modifies DATA in MongoDB, not code]
-    |
-    v
-Phase 4: Type Updates       [Modifies existing types and helpers]
-    |
-    v
-Phase 5: Frontend Updates   [Modifies existing components]
-    |
-    v
-Phase 6: Cleanup           [Removes old code and data]
+Phase 1: Foundation (no dependencies between items, can parallelize)
+  ├── 1A: MongoDB connection consolidation
+  ├── 1B: Rate limiter rewrite (MongoDB-backed)
+  └── 1C: Input sanitization standardization (Zod everywhere)
+
+Phase 2: Security Headers & Auth (depends on 1A for rate limiter DB access, 1B for rate limit integration)
+  ├── 2A: CSP headers in middleware
+  └── 2B: Auth middleware expansion
+
+Phase 3: Design System (independent of Phases 1-2, can start in parallel)
+  ├── 3A: Button consolidation (MobiGlasButton canonical)
+  ├── 3B: Corner accent consolidation (CornerAccents canonical)
+  └── 3C: CSS variable and class cleanup
+
+Phase 4: Performance (depends on Phase 3 for LazyMotion migration)
+  ├── 4A: LazyMotion migration (109 files, mechanical)
+  ├── 4B: Cache header tuning (independent, can do anytime)
+  └── 4C: SSR conversion for home page (depends on 4A)
 ```
+
+**Parallelization opportunities:**
+- Phases 1 and 3 can run in parallel (no dependencies between them)
+- Within Phase 1, items 1A and 1C can run in parallel; 1B depends on 1A completion
+- Within Phase 3, items 3A, 3B, 3C can be done sequentially (same developer) or in parallel (different developers)
+- Phase 4B (cache headers) is independent and can be done at any time
+
+**Strict ordering constraints:**
+- Phase 2 MUST follow Phase 1 (rate limiter needs consolidated DB)
+- Phase 4A MUST follow Phase 3 (don't migrate motion to m while components are being restructured)
+- Phase 4C MUST follow Phase 4A (SSR pages need m components, not motion)
 
 ---
 
 ## Scalability Considerations
 
-| Concern | Current (~20 users) | At 100 Users | At 1000 Users |
-|---------|--------------------:|-------------:|--------------:|
-| Ships collection size | ~500 docs (~1MB) | Same | Same |
-| Sync frequency | Daily | Daily | Daily |
-| Ship API requests/sec | <1 | ~5 | ~50 |
-| Index memory | <5MB | <5MB | <5MB |
-| Batch resolve payload | 5-10 ships | 5-10 ships | 5-10 ships |
-
-Ship data is essentially static reference data. The collection size is bounded by the number of ships in Star Citizen (~500), not by user count. No scalability concerns for the foreseeable future.
+| Concern | Current (Single Instance) | At 3+ Instances | At Edge/CDN |
+|---------|--------------------------|-----------------|-------------|
+| Rate limiting | MongoDB-backed is fine | Must switch to Redis (Upstash) | Upstash Edge required |
+| Sessions | JWT (stateless, works anywhere) | No change needed | No change needed |
+| DB connections | 1 pool, 50 connections | 3 pools, 150 total -- may need to reduce per-instance pool | Consider connection pooling proxy |
+| CSP nonces | Generated per-request in middleware | Works identically across instances | Works at edge |
+| Static assets | Cache headers apply to reverse proxy | Same headers, CDN handles caching | Same headers |
 
 ---
 
 ## Sources
 
-- **Codebase analysis:** Direct inspection of all relevant source files (HIGH confidence)
-- **FleetYards API:** Live inspection of `https://api.fleetyards.net/v1/models` response (HIGH confidence)
-- **FleetYards pagination:** Inferred from API behavior (page/perPage params, response size) (MEDIUM confidence -- no official docs found, but behavior is consistent)
-- **MongoDB indexing:** Based on MongoDB 6.x documentation and existing `mongo-indexes.ts` patterns (HIGH confidence)
-- **Existing architecture:** Based on `.planning/codebase/ARCHITECTURE.md` and direct source inspection (HIGH confidence)
-
----
-
-*Architecture analysis: 2026-02-03*
+- [Next.js CSP Guide](https://nextjs.org/docs/app/guides/content-security-policy) -- Official CSP implementation guide
+- [Motion LazyMotion Docs](https://motion.dev/docs/react-lazy-motion) -- LazyMotion API and bundle reduction
+- [Motion Bundle Size Reduction](https://motion.dev/docs/react-reduce-bundle-size) -- m vs motion component comparison
+- [Upstash Rate Limiting](https://upstash.com/blog/nextjs-ratelimiting) -- Redis-based rate limiting for Next.js
+- [Next.js Cache Headers](https://nextjs.org/docs/pages/api-reference/config/next-config-js/headers) -- Header configuration reference
+- [Next.js 15 CSP Production Issue](https://github.com/vercel/next.js/discussions/80997) -- Known issue with CSP in production builds

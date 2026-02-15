@@ -1,198 +1,306 @@
-# Feature Landscape: Dynamic Ship Database with FleetYards API Sync
+# Feature Landscape: Security Hardening, UX Remediation, and UI Consolidation
 
-**Domain:** Star Citizen org management tool -- ship database and fleet operations
-**Researched:** 2026-02-03
-**Overall confidence:** MEDIUM-HIGH (verified against FleetYards API responses, RSI Ship Matrix, starcitizen.tools wiki, and multiple community tools)
+**Domain:** Production hardening of a Next.js 15 org management application
+**Researched:** 2026-02-15
+**Overall confidence:** HIGH (verified against codebase audit, OWASP 2025, Next.js production checklist, WCAG 2.1/2.2 guidelines)
 
 ---
 
-## Context: What Exists Today in AydoCorp
+## Context: What the Audit Found
 
-The current implementation uses:
-- A **static JSON file** (`public/data/ships.json`) with ~200+ ships containing: name, manufacturer, type, size, role[], crewRequirement, maxCrew, cargoCapacity, length/beam/height, mass, speedSCM, speedBoost
-- A **hardcoded manufacturer list** in `ShipData.ts` with ship-to-manufacturer mappings and image name formatting
-- **Ship images** resolved via CDN by name convention (lowercase, underscores, strip special chars)
-- **UserFleetBuilder** component: manufacturer dropdown -> ship dropdown -> add to profile
-- **MissionComposer** ship selection: manufacturer filter, text search, multi-select checkboxes
-- **Fleet Database page**: placeholder "Coming Soon"
+The v1.0 ship database milestone shipped successfully (47/47 requirements). A comprehensive codebase review then uncovered 100+ findings across five categories:
 
-Gaps relative to the ecosystem:
-- No ship detail views (only names and one image angle)
-- No data freshness awareness (no lastUpdated, no patch version)
-- No comparison capability
-- No dynamic sync (manual JSON maintenance)
-- No rich media (single image angle, no store images, no top/side views)
+- **Security:** 6 critical (unauthenticated endpoints, ReDoS vectors, XSS surface), 8 high (RBAC disabled/hardcoded, auth bypass paths, info leakage via diagnostic routes)
+- **UX:** 3 critical (localStorage-only profile data, no undo on destructive actions, no delete confirmations in key flows), 7 high (alert() for user feedback, missing form labels, no keyboard navigation in modals)
+- **Performance:** 18 findings (weak cache headers, client-side pagination of full datasets, no SSR for data pages, bundle bloat from unused deps, canvas animation perf)
+- **Dependencies:** 29 npm vulnerabilities, 8 unused packages, Next.js RCE advisory, framer-motion 2 majors behind current
+- **UI Consistency:** `--mg-error` CSS variable referenced in 40+ places but never defined, 3 separate button implementations (`mg-button` CSS class, `mg-button-small` CSS class, `MobiGlasButton` React component), 4 different corner accent patterns, design system components exist but are underutilized
+
+This document categorizes remediation features into **must-fix** (security, data loss), **should-improve** (UX, performance), and **nice-to-have** (polish, consistency).
 
 ---
 
 ## Table Stakes
 
-Features users expect from any Star Citizen ship database. Missing = product feels incomplete or amateurish compared to FleetYards, RSI Ship Matrix, or starcitizen.tools.
+Features that MUST be implemented. Without these, the application has exploitable security holes, data loss risks, or violates basic web standards. Missing = the app is not production-ready.
+
+### Security -- Critical (Must Fix Immediately)
 
 | # | Feature | Why Expected | Complexity | Dependencies | Notes |
 |---|---------|--------------|------------|--------------|-------|
-| T1 | **Multi-axis search and filter** | RSI Ship Matrix, FleetYards, and every community tool filters by manufacturer, size, role, production status, and text search simultaneously. Users will try to filter by role+size immediately. | Medium | Ship data model must include all filter fields | Current code only has manufacturer + text search in MissionComposer. Need size, role, status as filter facets. |
-| T2 | **Ship detail card/panel** | FleetYards shows full specifications on click. starcitizen.tools wiki devotes entire pages. RSI Ship Matrix has 3-panel layout (Systems, Technical Overview, Holoviewer). Users expect to see specs at a glance. | Medium | T1 (needs a card to click from), image pipeline | Currently zero detail display. MissionComposer shows name + image only. |
-| T3 | **Multiple ship image views** | FleetYards API provides angledView, sideView, topView, storeImage, fleetchartImage in multiple resolutions (small/medium/large/xlarge). RSI has holoviewer. starcitizen.tools wiki shows 6+ angles per ship. Single image angle is noticeably sparse. | Low-Medium | FleetYards API integration | API already exposes all views. Main work is UI to cycle/display them. Current CDN images are single-angle only. |
-| T4 | **Manufacturer browsing with logos** | FleetYards API returns manufacturer name, longName, code, and logo URL. RSI Ship Matrix groups by manufacturer. Every org tool supports manufacturer filtering. AydoCorp already has this but without logos or branding. | Low | FleetYards manufacturer endpoint | API provides logo CDN URLs. Low effort to enhance existing manufacturer dropdown. |
-| T5 | **Ship specs display (dimensions, crew, cargo, speeds)** | Every reference tool shows at minimum: length/beam/height, crew min/max, cargo SCU, SCM speed. These are the "baseball card stats" -- users compare ships on these attributes constantly. | Low | Ship data model | Current JSON has most of these fields. FleetYards adds mass, fuel tank sizes, acceleration/deceleration. |
-| T6 | **Production status indicator** | FleetYards, RSI Ship Matrix, and starcitizen.tools all clearly indicate whether a ship is Flight Ready, In Production, or In Concept. Org tools must show this so members know what they can actually fly. | Low | FleetYards API `productionStatus` field | Critical for mission planning -- can't assign concept ships to missions. |
-| T7 | **Data sync from external API** | The entire point of this milestone. FleetYards data updates with each SC patch. Manual JSON maintenance is not sustainable with 200+ ships and quarterly patches. | High | API client, caching layer, error handling, fallback to local | Core architectural feature. Everything else depends on this working. |
-| T8 | **Graceful degradation / offline fallback** | Current app already has hybrid storage (Cosmos DB + local JSON). Ship data must follow same pattern. If FleetYards API is down, the app must still work. | Medium | T7, existing fallback pattern | Existing pattern in codebase (see storage system). Extend to ship data. |
-| T9 | **Ship classification/role display** | FleetYards provides `classification` (e.g., "Exploration"), `classificationLabel`, and `focus` (e.g., "Expedition"). RSI uses "Focus" categories. starcitizen.tools uses career paths. Users expect clear role labeling. | Low | FleetYards API fields | Current JSON has `role[]` array. API adds classification and focus as structured data. |
+| S1 | **Auth-gate all sensitive API routes** | `/api/diagnostic`, `/api/force-fallback`, `/api/storage-status` are fully unauthenticated. Diagnostic exposes user emails, password hash lengths, file paths, CWD. Force-fallback lets anyone switch the app to degraded storage mode. These are effectively admin endpoints with zero access control. | Low | None | 3 routes to fix. Add `getServerSession()` check + admin clearance requirement. Delete `/api/diagnostic` entirely -- it is a debug route that should never exist in production. |
+| S2 | **Define `--mg-error` CSS variable** | Referenced in 40+ component files via `rgba(var(--mg-error), ...)` but never declared in `:root`. Every error state, validation message, and danger button currently renders with invisible/transparent coloring. Users cannot see form errors, validation failures, or danger indicators. | Low | None | Add `--mg-error: 255, 70, 70;` (or alias to existing `--mg-danger`) in globals.css `:root`. One-line fix with massive UX impact. |
+| S3 | **Re-enable RBAC / clearance enforcement** | Clearance levels 1-5 exist in the data model and are assigned to users, but enforcement is inconsistent. Only mission creation checks clearance (level 3+). Admin routes have no clearance checks. `canUserModifyMission()` uses creator-only ownership with no admin override. The session token carries `clearanceLevel` but most routes ignore it. | Medium | S1 | Implement middleware or utility function that validates clearance at route level. Add admin override to ownership checks. Map clearance levels to route access matrix. |
+| S4 | **Validate callback URLs in auth redirects** | Middleware redirects unauthenticated users to `/login?callbackUrl=<pathname>`. The `callbackUrl` is taken directly from the request path. While the current code uses `pathname` (not a full URL), the pattern is fragile. An open redirect is possible if query parameters or encoded paths are manipulated. | Low | None | Validate that callbackUrl is a relative path starting with `/`. Strip any protocol/host. |
+| S5 | **Sanitize error messages in API responses** | Multiple routes expose internal implementation details: `Database error: ${error.message}` (signup, missions), `error.stack` (diagnostic), and `error.message` passthrough. These leak MongoDB connection details, collection names, and internal state on error. | Low | None | Replace error detail passthrough with generic messages. Log full details server-side only. |
+| S6 | **Secure cron endpoints** | `/api/cron/ship-sync` and `/api/cron/discord-sync` have OPTIONAL auth -- they only check `CRON_SECRET` if it is set. If `CRON_SECRET` is not configured (common in development, possible in production misconfiguration), these endpoints are fully open. Ship sync triggers heavy FleetYards API calls; discord sync touches all user records. | Low | None | Make auth REQUIRED, not optional. If `CRON_SECRET` is not set, reject all requests (fail closed, not fail open). |
+| S7 | **Remove or gate the second force-fallback route** | There are TWO force-fallback endpoints: `/api/fleet-ops/force-fallback` (auth-gated, POST) and `/api/force-fallback` (NO auth, GET). The GET version is worse -- it actively calls `setFallbackStorageMode(true)`, dumps all user data (ids, handles, emails, password hash metadata), and requires no authentication whatsoever. | Low | None | Delete `/api/force-fallback/route.ts` entirely. It is a debug artifact. |
+
+### Security -- High (Fix Before Production Traffic)
+
+| # | Feature | Why Expected | Complexity | Dependencies | Notes |
+|---|---------|--------------|------------|--------------|-------|
+| S8 | **Add rate limiting to auth endpoints** | Signup, login, forgot-password, and reset-password have no rate limiting. An attacker can brute-force credentials or enumerate accounts via signup 409 responses ("handle already exists", "email already exists"). | Medium | npm package (rate-limiter-flexible or upstash/ratelimit) | Apply to `/api/auth/signup`, `/api/auth/[...nextauth]`, `/api/auth/forgot-password`, `/api/auth/reset-password`. Use IP-based limiting with sliding window. |
+| S9 | **Add Content-Security-Policy header** | Security headers exist (X-Frame-Options, X-Content-Type-Options, Referrer-Policy) but CSP is missing. Without CSP, XSS payloads can load external scripts. | Medium | None (next.config.js) | Add CSP with script-src 'self', style-src 'self' 'unsafe-inline' (needed for Tailwind), img-src for CDN domains. Audit inline scripts first. |
+| S10 | **Server-side image upload validation** | Upload route checks file size (5MB) and MIME type prefix (`image/`), but MIME types are client-provided and trivially spoofed. No magic byte validation. Images stored as raw buffers in MongoDB (no processing/resizing). | Medium | sharp (for image processing) or file-type (for magic byte validation) | Validate magic bytes server-side. Consider resizing to max dimensions. Limit to specific formats (JPEG, PNG, WebP). |
+| S11 | **Fix password handling inconsistency** | Both `bcrypt` and `bcryptjs` are installed. OAuth users get `passwordHash: ''` (empty string, not null). Empty string could theoretically match against some bcrypt edge cases. | Low | None | Remove `bcryptjs` dependency. Set OAuth users' passwordHash to `null` instead of empty string. |
+| S12 | **Add security headers to API routes** | API route responses lack security headers. The `headers()` config in next.config.js only applies to page routes (the matcher excludes `/api/*`). | Low | None | Apply security headers to API responses via middleware or response utility. |
+
+### UX -- Critical (Data Loss or Broken Workflow)
+
+| # | Feature | Why Expected | Complexity | Dependencies | Notes |
+|---|---------|--------------|------------|--------------|-------|
+| U1 | **Migrate profile data from localStorage to server** | `useUserProfile` hook stores ALL profile data (name, photo, subsidiary, pay grade, position, timezone, gameplay preferences, ships) in browser localStorage keyed by email. If the user clears browser data, switches browsers, or uses incognito mode, their entire profile is gone. Ships array in localStorage duplicates/conflicts with the server-side user record. | High | S3 (server needs to know who the user is), API endpoint for profile CRUD | Create `/api/profile` GET/PUT endpoints. Migrate localStorage data to user document in MongoDB. Keep localStorage as cache only, not source of truth. This is the highest-complexity UX fix. |
+| U2 | **Replace alert() calls with UI notifications** | 8 `alert()` calls in MissionPlanner.tsx for success/error feedback. `alert()` blocks the UI thread, has no styling, breaks immersion in the MobiGlas theme, and is jarring on mobile. | Medium | ErrorNotification component (already exists) | The codebase already has `ErrorNotification.tsx` with full MobiGlas styling. Create a companion `SuccessNotification` or generalize to `Toast`. Replace all alert() calls. |
+| U3 | **Add confirmation dialogs for destructive actions** | Mission deletion in MissionPlanner calls DELETE API directly with no confirmation. EscortRequestDetail has a proper confirmation modal, proving the pattern exists. The inconsistency means some deletes are one-click-irreversible. | Low-Medium | U2 (notification system for consistency) | EscortRequestDetail.tsx already implements a confirm/cancel modal pattern. Extract and reuse. Apply to mission delete, fleet ship remove, profile reset. |
+
+### UX -- High (Accessibility and Usability)
+
+| # | Feature | Why Expected | Complexity | Dependencies | Notes |
+|---|---------|--------------|------------|--------------|-------|
+| U4 | **Add accessible form labels** | Codebase has 266 form elements (inputs, selects, buttons, textareas) across 55 files but only 33 accessibility attributes (aria-label, role, htmlFor, aria-describedby) across 13 files. Most form inputs have no associated label element or aria-label. Screen readers cannot identify what fields are for. WCAG 1.3.1 (Info and Relationships) and 4.1.2 (Name, Role, Value) failures. | Medium | None | Audit all form components. MobiGlasInput already supports labels -- ensure all usages pass label prop. Add htmlFor/id pairs. Add aria-describedby for error messages. |
+| U5 | **Keyboard navigation for modals and pickers** | FleetShipPickerModal, MissionShipPickerModal, and other modals lack focus trapping, Escape-to-close, and keyboard-navigable lists. Users must use a mouse. WCAG 2.1.1 (Keyboard) and 2.1.2 (No Keyboard Trap) failures. | Medium | @headlessui/react (already installed, v1.7.18) | Headless UI provides Dialog with built-in focus trapping and Escape handling. The dependency is already installed but underutilized. Migrate modals to Headless UI Dialog. |
+| U6 | **Visible focus indicators** | The MobiGlas dark theme makes default browser focus outlines nearly invisible against the dark background. Custom focus styles exist on some elements (mg-button has `:focus` styles) but most interactive elements rely on browser defaults that disappear into the dark UI. WCAG 2.4.7 (Focus Visible). | Low-Medium | None | Add global focus-visible styles using the MobiGlas cyan glow aesthetic: `outline: 2px solid rgba(var(--mg-primary), 0.8)`. Apply via Tailwind plugin or global CSS. |
+| U7 | **Loading states for async operations** | MobiGlasButton has an `isLoading` prop with a spinner animation, but most buttons in the app are plain HTML `<button>` or CSS `mg-button` class elements with no loading state. Users click submit buttons with no feedback that the action is processing. | Low-Medium | U2 (notification for completion), button consolidation | As buttons are consolidated to MobiGlasButton, loading states come for free. Priority is high-frequency actions: mission create/update, profile save, escort request submit. |
 
 ---
 
 ## Differentiators
 
-Features that set AydoCorp apart from generic ship browsers. Not expected in every tool, but valued by org members. These provide competitive advantage for an **org management tool** specifically.
+Features that improve quality beyond the minimum. Not blocking production, but distinguish a professional application from a hobby project. Valued by users who interact with the app regularly.
+
+### Performance Optimization
 
 | # | Feature | Value Proposition | Complexity | Dependencies | Notes |
 |---|---------|-------------------|------------|--------------|-------|
-| D1 | **Org fleet composition dashboard** | SC Org Tools, FleetPlanner, and Starjump all show aggregate fleet views. AydoCorp can show "our org has 12 cargo ships, 8 fighters, 3 capital ships" with role breakdown. Unique to org tools vs generic ship browsers. | Medium | T1, T9, user fleet data from profiles | Aggregate user ships from profiles. Show pie/bar charts by role, size, manufacturer. |
-| D2 | **Mission-aware ship selection** | Current MissionComposer already selects ships for missions. Enriching ship cards in the mission context with specs (cargo for haul missions, weapons for combat, crew for multi-crew ops) helps mission leaders make informed assignments. | Medium | T2, T5, mission planner integration | Existing integration point in MissionComposer. Enhance with richer ship data. |
-| D3 | **Ship comparison (side-by-side)** | FleetYards has "Compare Ships." RSI Ship Matrix has comparison. StarShip42 was famous for it. Useful for org members deciding which ship variant to bring. | Medium-High | T2, T5 | 2-4 ship comparison table. Can be deferred to post-MVP if needed. |
-| D4 | **Data freshness indicators** | Show "Last synced: 2 hours ago" or "Data current as of SC patch 4.6." No community tool does this well. FleetYards has `lastUpdatedAt` per ship. Builds trust that data is current. | Low | T7, FleetYards `lastUpdatedAt` field | Simple UI indicator. Low effort, high trust signal. |
-| D5 | **Image gallery with view switcher** | Beyond just showing multiple images (T3), provide a smooth gallery UX: thumbnail strip, click to enlarge, view angle selector (front/side/top/angled/store). Aligns with MobiGlas aesthetic. | Medium | T3, Framer Motion (already in project) | FleetYards provides 5+ image types per ship, each in multiple resolutions. |
-| D6 | **Smart ship suggestions for missions** | Given a mission type (Cargo Haul), automatically suggest ships with high cargo capacity. For Bounty Hunting, suggest combat-focused ships. For Mining, suggest mining ships. | Medium | T1, T9, D2, mission type data | Filter/sort ships by relevance to mission type. Uses existing `BuilderMissionType` enum. |
-| D7 | **Fleet gap analysis** | "Your org has no dedicated medical ships" or "You're heavy on fighters but light on haulers." Helps org leadership with recruitment and fleet planning. | Medium-High | D1, role taxonomy, threshold config | Requires defining what a "balanced" fleet looks like. Opinionated feature. |
-| D8 | **Manufacturer detail pages** | Click a manufacturer logo to see all their ships, lore description, logo, and how many org members fly their ships. Uses FleetYards manufacturer data + aggregated org data. | Low-Medium | T4, D1 | Nice browsing experience. Low complexity with API data already available. |
-| D9 | **Loaner ship awareness** | FleetYards API includes `loaners` array. When a concept ship is assigned to a profile, show what the player actually flies in-game right now. Critical for mission planning accuracy. | Low-Medium | T6, FleetYards `loaners` field | Practical value for org operations. Rarely seen in community tools. |
-| D10 | **Ship availability / purchase locations** | FleetYards API `availability` includes `soldAt`/`boughtAt`/`rentalAt` with shop locations and prices. Show where members can buy/rent ships in-game. | Low-Medium | T7, FleetYards availability data | Useful for members trying to acquire ships the org needs. |
+| P1 | **Database-level pagination** | `getAllPlannedMissions()` loads entire collection into memory, then slices in JavaScript. Same pattern in `/api/users`. With 100+ missions and growing, this wastes memory and adds latency. Push `.skip().limit()` to MongoDB queries. | Medium | None | Affects planned-missions and users routes. Ship API already has proper DB pagination (built correctly in v1.0). |
+| P2 | **Static asset cache headers** | All static assets (CSS, JS, images, fonts) have `max-age=3600` (1 hour). Next.js static chunks are content-hashed and can safely use `max-age=31536000, immutable`. Fonts and images should be cached for days/weeks, not hours. | Low | None | Update next.config.js `headers()`. `/_next/static` should be immutable. Images/fonts should be `max-age=604800` (7 days). |
+| P3 | **SSR or ISR for public pages** | Ship browse page, services page, about page, and other public content are client-rendered with useEffect data fetching. These could be server-rendered or statically generated for faster initial load and better SEO. | Medium | None | Ship browse page is the highest-value target: it fetches `/api/ships` client-side on every visit. Use Next.js App Router server components or `generateStaticParams`. |
+| P4 | **Bundle size reduction** | `@azure/cosmos`, `@azure/identity`, `@azure/msal-node`, `mammoth` (Word doc parser), `openid-client`, and potentially `bcryptjs` (duplicate of `bcrypt`) are installed but may be unused or replaceable. framer-motion 10.x is 2 major versions behind (current is 12.x). | Medium | Dependency audit | Run `@next/bundle-analyzer` (already configured). Remove confirmed unused packages. Upgrade framer-motion (check breaking changes). |
+| P5 | **Reduce client-side JavaScript for public pages** | Landing page (HomeContent.tsx, 921 lines), services page, and about page ship large client bundles for animations and effects. Consider splitting heavy animation code. | Medium | P4 | Use `next/dynamic` with `ssr: false` for animation-heavy components. Move static content to server components. |
+
+### UI Consistency and Design System
+
+| # | Feature | Value Proposition | Complexity | Dependencies | Notes |
+|---|---------|-------------------|------------|--------------|-------|
+| D1 | **Consolidate button implementations** | Three competing patterns: (1) `.mg-button` CSS class in globals.css, (2) `.mg-button-small` and `.mg-button-secondary` CSS classes, (3) `MobiGlasButton` React component with variants, sizes, loading states, icons. Components use different ones arbitrarily. MobiGlasButton is the most complete but least used. | Medium | S2 (mg-error must work for danger variant) | Audit all button usages. Migrate to MobiGlasButton for interactive buttons. Keep CSS classes only for static/decorative cases. Create a migration checklist by file. |
+| D2 | **Consolidate corner accent patterns** | `CornerAccents` React component exists but only 3 files use it. Meanwhile, 10+ files manually implement corner accents with inline divs (`absolute top-0 left-0 w-2 h-2 border-t border-l`). ErrorNotification has its own corner accent pattern. MobiGlasButton has a `withCorners` prop with yet another pattern. | Low-Medium | None | Extract all corner accent patterns. Decide on one implementation (the CornerAccents component). Replace inline implementations. |
+| D3 | **Utilize MobiGlas design system components** | The `/components/ui/mobiglas/` directory exports 9 components: Container, Panel, Button, Input, TextArea, CornerAccents, ScanlineEffect, StatusIndicator, DataStreamBackground, HolographicBorder. Most dashboard pages ignore these and build their own panels/containers with raw Tailwind. | Medium-High | D1, D2 | This is the "design system adoption" effort. Prioritize high-traffic pages (dashboard, mission planner, fleet builder). Do NOT attempt all pages at once. |
+| D4 | **Unify error display patterns** | Error states use: inline red text, ErrorNotification component, alert() calls, red-bordered divs, and `console.error` (invisible to user). No consistent pattern for showing validation errors, API errors, or system errors. | Medium | S2, U2 | Define three tiers: (1) field-level validation (MobiGlasInput error prop), (2) form-level errors (inline alert component), (3) system-level errors (toast notification). |
+| D5 | **Replace mg-nav-item remnants** | `mg-nav-item` CSS class still exists in globals.css and Footer.tsx but is a deprecated pattern. Navigation buttons should use the standard button patterns. | Low | D1 | Minor cleanup. Verify mg-nav-item usage, migrate to MobiGlasButton or standard link styling. |
+
+### Code Quality
+
+| # | Feature | Value Proposition | Complexity | Dependencies | Notes |
+|---|---------|-------------------|------------|--------------|-------|
+| Q1 | **Structured logging (replace console.*)** | `console.log()` and `console.error()` scattered throughout. A `Logger` class exists in `src/lib/logger.ts` with `logInfo`, `logError`, `logDebug`, `logWarn` but most code still uses raw console. Production logs are unstructured, unsearchable, and may expose sensitive data. | Medium | None | Replace raw console calls with logger. Ensure sensitive data (emails, tokens, IDs) is masked. This is a sweep across ~50+ files but each change is mechanical. |
+| Q2 | **Add mission state machine validation** | Mission status transitions (DRAFT -> SCHEDULED -> ACTIVE -> DEBRIEFING -> COMPLETED) are not validated. Any status can jump to any other status. No `canTransitionTo()` function exists. | Low-Medium | None | Create a state machine map. Add validation in the update API route. Reject invalid transitions with a 400 response. |
+| Q3 | **Add optimistic locking for concurrent edits** | No `version` field on missions or operations. Two users editing the same mission simultaneously causes last-write-wins data loss. | Medium | None | Add `version: number` to mission documents. Increment on each update. Check version in update API -- reject with 409 Conflict if stale. |
 
 ---
 
 ## Anti-Features
 
-Features to explicitly NOT build in this milestone. Common mistakes in ship database projects or scope traps.
+Features to explicitly NOT build in this remediation milestone. These are scope traps that look tempting during a hardening pass but would derail the effort.
 
 | # | Anti-Feature | Why Avoid | What to Do Instead |
 |---|--------------|-----------|-------------------|
-| A1 | **Full loadout/component builder** | Erkul.games already does this extremely well. Building a component loadout system is a massive scope sink (weapons, shields, coolers, power plants, quantum drives -- each with sizes, grades, manufacturers). It would dwarf the ship database effort. | Link out to Erkul for loadout planning. Show component hardpoint counts (from API) but not a full builder. |
-| A2 | **3D ship viewer / holoviewer** | StarShip42 (now retired) and Starjump Fleetviewer spent years on 3D rendering. FleetYards provides GLTF holo files but rendering them is a separate massive project. Not aligned with MobiGlas 2D aesthetic. | Use the high-quality 2D renders from FleetYards (angledView, sideView, topView). Consider linking to Starjump for 3D viewing. |
-| A3 | **Trade route calculator** | FleetYards marks their trade routes as "outdated." SC Org Tools has mining calculators. Trade data changes every patch and requires commodity pricing databases. Completely different domain. | Out of scope. If needed later, use SC Trade Tools or UEX Corp APIs. |
-| A4 | **CCU chain optimizer** | CCU Game (ccugame.app) and Hangar Link specialize in this. Complex logic around pledge prices, warbond discounts, and upgrade chains. Not relevant to org operations. | Link out to CCU Game. |
-| A5 | **Ship price tracking / pledge store monitoring** | FleetYards has `onSale` flag and pledge prices. But building price alerts, sale notifications, and historical price tracking is a separate product. | Show current pledge price from API as static info. No tracking/alerting. |
-| A6 | **Scraping RSI for real-time data** | RSI doesn't have a public API. Scraping is brittle, violates TOS potentially, and FleetYards already does the hard work of normalizing RSI data. | Use FleetYards API exclusively. It already syncs with RSI Ship Matrix. |
-| A7 | **User-submitted ship data corrections** | Opens a moderation can of worms. FleetYards maintainers already curate data quality. | Trust FleetYards as source of truth. Report issues upstream. |
-| A8 | **Real-time game data integration** | In-game ship stats from game files (`p4k` data mining) differ from Ship Matrix data. Dual data sources create confusion. | Use FleetYards API which normalizes both sources. Don't maintain a separate data pipeline. |
-| A9 | **Fleet value calculator** | Calculating total fleet value in USD/aUEC is contentious (insurance, gifts, packages, warbond vs store credit). Not useful for operations. | Show individual ship prices if available. Don't aggregate or calculate fleet "worth." |
+| A1 | **Full test suite** | Writing comprehensive tests for all 45+ API routes, 55+ components, and storage layers would consume more effort than all other fixes combined. Testing is valuable but should be a dedicated milestone, not mixed into security fixes. | Add tests ONLY for the specific security fixes (auth checks, rate limiting, input validation). Create a testing milestone for systematic coverage. |
+| A2 | **Migrate off NextAuth to Auth.js v5** | NextAuth 4.x is stable and working. Auth.js v5 has significant API changes. Migrating authentication during a security hardening pass introduces new risk -- the opposite of hardening. | Pin NextAuth 4.x. Monitor for critical security patches. Plan migration as a separate future milestone. |
+| A3 | **Rewrite monolithic components** | MissionPlanner.tsx (1211 lines), MissionForm.tsx (1178 lines), MissionPlannerForm.tsx (1090 lines), HomeContent.tsx (921 lines) are large but functional. Refactoring them during security work risks introducing regressions in complex state management. | Fix specific issues within them (alert() replacement, accessibility). Plan component decomposition as a separate effort. |
+| A4 | **Implement real-time collaboration** | Optimistic locking (Q3) addresses concurrent edit safety. Building real-time collaborative editing (WebSocket-based) is a massive feature, not a fix. | Add version-based conflict detection. Show "this record was modified by another user" error. Do not build live sync. |
+| A5 | **Complete WCAG AAA compliance** | WCAG AAA requires contrast ratios of 7:1, sign language interpretation for media, and other extreme measures. The MobiGlas dark theme with cyan accents may not meet AAA contrast. AA is the standard target. | Target WCAG 2.1 AA. Fix the critical violations (labels, keyboard nav, focus visibility). Leave AAA for a dedicated accessibility audit. |
+| A6 | **Add Redis for caching/sessions** | Redis would improve rate limiting and session management but adds infrastructure complexity. In-memory rate limiting is sufficient for the current scale (<100 concurrent users). | Use in-memory rate limiting (Map-based with TTL). Add Redis when scaling demands it. |
+| A7 | **Switch to a different CSS framework or design system** | Tailwind CSS 3.3.0 works. Switching to 4.x or to a component library (shadcn/ui, Radix, etc.) during hardening would touch every file. | Stay on Tailwind 3.x. Consolidate within the existing MobiGlas design system. Evaluate Tailwind 4 and shadcn/ui for a future milestone. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-T7 (API Sync) ──────────────────────────────────────────────────────┐
-  │                                                                  │
-  ├── T8 (Offline Fallback)                                          │
-  │                                                                  │
-  ├── T1 (Multi-axis Filter) ──────┬── T2 (Ship Detail Card) ───── D3 (Comparison)
-  │                                │         │                       │
-  │                                │         ├── D5 (Image Gallery)  │
-  │                                │         │                       │
-  │                                │         └── D2 (Mission-aware)──D6 (Smart Suggestions)
-  │                                │
-  │                                └── D1 (Org Fleet Dashboard) ── D7 (Gap Analysis)
-  │
-  ├── T3 (Multiple Images) ──── D5 (Image Gallery)
-  │
-  ├── T4 (Manufacturer Browse) ── D8 (Manufacturer Pages)
-  │
-  ├── T5 (Ship Specs Display)
-  │
-  ├── T6 (Production Status) ── D9 (Loaner Awareness)
-  │
-  ├── T9 (Classification/Role)
-  │
-  └── D4 (Data Freshness Indicators)
-      D10 (Ship Availability)
+S2 (--mg-error CSS var) ──────────────────────────────────────┐
+  │                                                             │
+  └── D1 (Button consolidation) ── D3 (Design system adoption) │
+                                                                │
+S1 (Auth-gate routes) ── S3 (RBAC enforcement) ── U1 (Profile  │
+  │                        │                       server-side) │
+  │                        │                                    │
+  └── S7 (Remove debug routes)                                  │
+                                                                │
+S4 (Callback URL validation)                                    │
+S5 (Sanitize error messages)                                    │
+S6 (Secure cron endpoints)                                      │
+                                                                │
+U2 (Toast notifications) ── U3 (Confirm dialogs)               │
+  │                                                             │
+  └── D4 (Unify error display) ─────────────────────────────────┘
+                                                                │
+U4 (Form labels) ── U5 (Keyboard nav) ── U6 (Focus indicators) │
+                      │                                         │
+                      └── Uses @headlessui/react (installed)    │
+                                                                │
+P1 (DB pagination)                                              │
+P2 (Cache headers)                                              │
+P3 (SSR public pages) ── P5 (Reduce client JS)                 │
+P4 (Bundle size) ── dependency audit                            │
+                                                                │
+Q1 (Structured logging)                                         │
+Q2 (State machine validation)                                   │
+Q3 (Optimistic locking)                                         │
+                                                                │
+D2 (Corner accent consolidation) ── D3 (Design system adoption)│
+D5 (mg-nav-item cleanup) ── D1                                 │
 ```
 
-**Critical path:** T7 -> T8 -> T1 -> T2 -> rest of table stakes -> differentiators
+**Critical path:** S2 (unblocks visible errors) -> S1/S7 (close security holes) -> S5/S6 (harden remaining routes) -> S3 (enforce RBAC) -> U1 (fix data loss risk) -> U2/U3 (fix UX gaps) -> D1/D4 (consolidate patterns)
+
+**Independent tracks (can run in parallel):**
+- Security fixes (S1-S12): mostly independent, can be done in any order
+- Accessibility fixes (U4-U7): independent of security
+- Performance (P1-P5): independent of security and UX
+- UI consolidation (D1-D5): depends on S2 only
 
 ---
 
 ## MVP Recommendation
 
-For this milestone (dynamic ship database with API sync), prioritize in this order:
+The remediation effort should be ordered by risk, not by category. Fix what can hurt users first.
 
-### Phase 1: Foundation (must ship)
-1. **T7 - API Sync** -- Core infrastructure. Server-side FleetYards API client with caching, pagination handling, and error recovery. Without this, nothing else works.
-2. **T8 - Offline Fallback** -- Extend existing hybrid storage pattern to ship data. Seed local fallback from initial API fetch.
-3. **T5 - Ship Specs Display** -- Update the `ShipDetails` type to include all FleetYards fields. This is the data model everything builds on.
-4. **T6 - Production Status** -- Simple field addition with big operational value.
-5. **T9 - Classification/Role** -- Map FleetYards classification to existing role system.
+### Phase 1: Emergency Security Fixes (must ship first)
 
-### Phase 2: Browse and Filter (must ship)
-6. **T1 - Multi-axis Filter** -- Manufacturer + size + role + status + text search. Replaces current basic filtering across both Fleet Database page and MissionComposer.
-7. **T4 - Manufacturer Browse with Logos** -- Enhance existing manufacturer dropdown with API logos.
-8. **T3 - Multiple Image Views** -- Wire up angledView/sideView/topView/storeImage from API.
-9. **T2 - Ship Detail Card/Panel** -- Clicking a ship shows full specs, multiple images, and metadata. This is the "wow" moment.
-10. **D4 - Data Freshness Indicators** -- Low effort, high trust signal.
+**Rationale:** These are exploitable vulnerabilities that exist right now.
 
-### Phase 3: Org Integration (stretch for milestone)
-11. **D2 - Mission-aware Ship Selection** -- Enhance MissionComposer with richer ship data.
-12. **D1 - Org Fleet Composition Dashboard** -- Aggregate fleet view on the Fleet Database page.
-13. **D5 - Image Gallery** -- Polished image viewing experience with thumbnails.
+1. **S2 - Define --mg-error CSS variable** -- One line of CSS, but without it, users literally cannot see error messages. Unblocks every error-related feature.
+2. **S1 - Auth-gate sensitive API routes** -- Close the diagnostic and force-fallback holes. Delete debug routes.
+3. **S7 - Remove unauthenticated force-fallback** -- Delete the GET route at `/api/force-fallback`.
+4. **S5 - Sanitize error messages** -- Stop leaking internal details in 500 responses.
+5. **S6 - Secure cron endpoints** -- Make CRON_SECRET required, not optional.
+6. **S4 - Validate callback URLs** -- Close the open redirect vector.
+7. **S11 - Fix password handling** -- Remove bcryptjs, fix empty-string passwordHash.
+
+**Estimated complexity:** Low. Each fix is a few lines. Total phase is <1 day of focused work.
+
+### Phase 2: Access Control and Auth Hardening
+
+**Rationale:** With the holes plugged, harden the access control model.
+
+8. **S3 - Re-enable RBAC** -- Implement route-level clearance enforcement. Add admin override to ownership checks.
+9. **S8 - Rate limiting on auth endpoints** -- Prevent brute-force and enumeration attacks.
+10. **S9 - Content-Security-Policy** -- Add CSP header to prevent XSS payload execution.
+11. **S12 - Security headers on API routes** -- Extend header coverage.
+12. **S10 - Server-side image validation** -- Magic byte validation for uploads.
+
+**Estimated complexity:** Medium. Rate limiting requires a library. RBAC requires mapping clearance levels to routes.
+
+### Phase 3: UX Critical Fixes
+
+**Rationale:** Fix data loss risks and the worst UX violations.
+
+13. **U2 - Toast notification system** -- Replace alert() calls. Build on existing ErrorNotification.
+14. **U3 - Confirmation dialogs** -- Extract the pattern from EscortRequestDetail. Apply to all destructive actions.
+15. **U1 - Profile server-side migration** -- Move profile data from localStorage to the database. Highest complexity single item.
+
+**Estimated complexity:** Medium-High. U1 alone is significant (new API endpoints, data migration, localStorage->server sync).
+
+### Phase 4: Accessibility and Performance
+
+**Rationale:** These improve quality for all users and are independent of the security fixes.
+
+16. **U4 - Form labels** -- Audit and fix all 55 files with form elements.
+17. **U5 - Keyboard navigation** -- Migrate modals to Headless UI Dialog.
+18. **U6 - Focus indicators** -- Global focus-visible styles.
+19. **P1 - Database pagination** -- Push pagination to MongoDB for missions and users.
+20. **P2 - Cache headers** -- Fix static asset cache lifetimes.
+
+**Estimated complexity:** Medium. Largely mechanical but touches many files.
+
+### Phase 5: UI Consolidation and Polish
+
+**Rationale:** With functionality solid, unify the visual layer.
+
+21. **D1 - Button consolidation** -- Migrate to MobiGlasButton across the app.
+22. **D2 - Corner accent consolidation** -- Standardize on CornerAccents component.
+23. **D4 - Error display unification** -- Three-tier error strategy.
+24. **D5 - mg-nav-item cleanup** -- Remove deprecated pattern.
+25. **U7 - Loading states** -- Leverage MobiGlasButton isLoading prop.
+
+**Estimated complexity:** Medium. Many file touches but each change is straightforward.
+
+### Phase 6: Code Quality and Optimization (stretch)
+
+**Rationale:** Professional polish. Not blocking production but improves maintainability.
+
+26. **Q1 - Structured logging** -- Replace console.* with logger.
+27. **Q2 - Mission state machine** -- Validate status transitions.
+28. **Q3 - Optimistic locking** -- Version-based conflict detection.
+29. **P3 - SSR for public pages** -- Server-render ship browse and public content.
+30. **P4 - Bundle size reduction** -- Remove unused deps, upgrade framer-motion.
+31. **P5 - Reduce client JS** -- Dynamic imports for heavy components.
+32. **D3 - Design system adoption** -- Broader MobiGlas component usage.
+
+**Estimated complexity:** Medium-High. Logging sweep is large. SSR migration requires testing.
 
 ### Defer to Future Milestones
-- **D3 (Comparison)**: Medium-high complexity, can live without it initially
-- **D6 (Smart Suggestions)**: Requires D2 to be mature first
-- **D7 (Gap Analysis)**: Requires D1 and a role taxonomy discussion
-- **D8 (Manufacturer Pages)**: Nice-to-have, not blocking any workflow
-- **D9 (Loaner Awareness)**: Useful but niche
-- **D10 (Ship Availability)**: Pure reference data, low priority
+
+- **Full test suite** (A1) -- Dedicated testing milestone
+- **NextAuth -> Auth.js v5 migration** (A2) -- After security stabilizes
+- **Component decomposition** (A3) -- Separate refactoring milestone
+- **Redis infrastructure** (A6) -- When scaling demands it
+- **Tailwind 4 / CSS framework evaluation** (A7) -- After consolidation
 
 ---
 
-## Key Data Model Upgrade
+## Prioritization Matrix
 
-The FleetYards API returns significantly richer data than the current `ShipDetails` interface. Key fields to add:
-
-| Current Field | FleetYards Equivalent | New Fields to Add |
-|---------------|----------------------|-------------------|
-| name | name | slug, scIdentifier, rsiName |
-| manufacturer (string) | manufacturer (object) | manufacturer.code, manufacturer.logo, manufacturer.longName |
-| size | metrics.size/sizeLabel | (compatible, add label) |
-| role[] | classification + focus | classificationLabel, focus |
-| crewRequirement | crew.min | (compatible) |
-| maxCrew | crew.max | (compatible) |
-| cargoCapacity | metrics.cargo | (compatible, add label) |
-| length/beam/height | metrics.length/beam/height | metrics.mass, fuel tanks |
-| speedSCM | speeds.scmSpeed | acceleration/deceleration values |
-| image (single) | media.angledView/sideView/topView/storeImage/fleetchartImage | Full media object with multiple views and sizes |
-| (none) | productionStatus | Add as new field |
-| (none) | pledgePrice | Add as new field |
-| (none) | lastUpdatedAt | Add as new field |
-| (none) | loaners[] | Add as new field |
-| (none) | availability | Add as new field (phase 2+) |
-| (none) | holo (GLTF URL) | Store but don't render in this milestone |
-| (none) | description | Add for detail card |
-| (none) | links (storeUrl, salesPageUrl) | Add for external references |
+| Priority | Category | Items | Risk if Deferred | Effort |
+|----------|----------|-------|-------------------|--------|
+| P0 - Emergency | Security | S1, S2, S4, S5, S6, S7, S11 | Exploitable now | Low |
+| P1 - Critical | Security | S3, S8, S9, S10, S12 | Attackable auth, XSS surface | Medium |
+| P1 - Critical | UX | U1, U2, U3 | Data loss, broken feedback | Medium-High |
+| P2 - High | Accessibility | U4, U5, U6, U7 | WCAG non-compliance, exclusion | Medium |
+| P2 - High | Performance | P1, P2 | Scalability, cache waste | Low-Medium |
+| P3 - Medium | UI Consistency | D1, D2, D4, D5 | Visual inconsistency | Medium |
+| P3 - Medium | Code Quality | Q1, Q2, Q3 | Maintainability debt | Medium |
+| P4 - Low | Performance | P3, P4, P5 | Load time, bundle size | Medium |
+| P4 - Low | UI Polish | D3 | Underutilized design system | Medium-High |
 
 ---
 
 ## Sources
 
-- [FleetYards.net](https://fleetyards.net/) -- PRIMARY: Ship database and API (verified via direct API calls to `api.fleetyards.net/v1/models`)
-- [FleetYards GitHub](https://github.com/fleetyards/fleetyards) -- Open source, GPLv3, Ruby on Rails + Vue.js
-- [RSI Ship Matrix](https://robertsspaceindustries.com/en/ship-matrix) -- Official CIG ship data source (FleetYards syncs from this)
-- [Star Citizen Wiki (starcitizen.tools)](https://starcitizen.tools/Ships) -- Community wiki with detailed ship pages
-- [SC Org Tools](https://scorg.tools/) -- Org management toolkit with fleet manager
-- [FleetPlanner (GitHub)](https://github.com/gavin-orsetti/FleetPlanner) -- Desktop fleet planning tool with task group model
-- [Starjump Fleetviewer](https://robertsspaceindustries.com/community-hub/post/starjump-fleetviewer-zmdsfodshfjh1) -- 3D fleet visualization tool
-- [Erkul DPS Calculator (erkul.games)](https://erkul.games) -- Loadout builder (anti-feature reference)
-- [CCU Game](https://ccugame.app/) -- CCU chain optimizer (anti-feature reference)
-- [Hangar Link](https://hangar.link/) -- Fleet management and CCU tools
-- [RSI Ship Technical Information](https://robertsspaceindustries.com/en/comm-link/engineering/16172-The-Shipyard-Ship-Technical-Information) -- Official ship stat methodology
+### Security
+- [Next.js Production Checklist](https://nextjs.org/docs/app/guides/production-checklist) -- Official production deployment guidance (HIGH confidence)
+- [Next.js Security Update Dec 2025](https://nextjs.org/blog/security-update-2025-12-11) -- RCE advisory for Next.js (HIGH confidence)
+- [Next.js Security Checklist (Arcjet)](https://blog.arcjet.com/next-js-security-checklist/) -- Comprehensive hardening guide (MEDIUM confidence)
+- [Complete Next.js Security Guide 2025 (TurboStarter)](https://www.turbostarter.dev/blog/complete-nextjs-security-guide-2025-authentication-api-protection-and-best-practices) -- Auth and API protection patterns (MEDIUM confidence)
+- [OWASP Top 10 2025 - Security Misconfiguration](https://owasp.org/Top10/2025/A02_2025-Security_Misconfiguration/) -- Security misconfiguration guidance (HIGH confidence)
+- [OWASP Node.js Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Nodejs_Security_Cheat_Sheet.html) -- Node-specific security patterns (HIGH confidence)
+- [NextAuth.js - Securing Pages and API Routes](https://next-auth.js.org/tutorials/securing-pages-and-api-routes) -- Auth protection patterns (HIGH confidence)
+- [Securing API Routes with Middleware and JWT](https://www.djamware.com/post/68f99de910360530b36a6596/secure-api-routes-in-nextjs-with-middleware-and-jwt) -- JWT middleware patterns (MEDIUM confidence)
+
+### Accessibility
+- [React Accessibility Best Practices (AllAccessible)](https://www.allaccessible.org/blog/react-accessibility-best-practices-guide) -- WCAG-compliant React SPA guide (MEDIUM confidence)
+- [ARIA Labels Implementation Guide (AllAccessible)](https://www.allaccessible.org/blog/implementing-aria-labels-for-web-accessibility) -- ARIA attribute guidance (MEDIUM confidence)
+- [Keyboard Navigation & Focus WCAG (Accesify)](https://www.accesify.io/blog/keyboard-navigation-focus-wcag/) -- Focus management patterns (MEDIUM confidence)
+- [WCAG 2.2 Compliance Checklist (AllAccessible)](https://www.allaccessible.org/blog/wcag-22-compliance-checklist-implementation-roadmap) -- Implementation roadmap (MEDIUM confidence)
+- [React Accessibility Guide (BrowserStack)](https://www.browserstack.com/guide/react-accessibility) -- Practical React a11y guide (MEDIUM confidence)
+
+### Performance
+- [Next.js Performance Optimization (Pagepro)](https://pagepro.co/blog/nextjs-performance-optimization-in-9-steps/) -- 9-step optimization guide (MEDIUM confidence)
+- [Expert Guide to Next.js Performance (Blazity)](https://blazity.com/the-expert-guide-to-nextjs-performance-optimization) -- Bundle, SSR, and caching strategies (MEDIUM confidence)
+- [React & Next.js Best Practices 2025 (Strapi)](https://strapi.io/blog/react-and-nextjs-in-2025-modern-best-practices) -- Modern patterns (MEDIUM confidence)
+
+### UI / Design Systems
+- Codebase analysis of `src/components/ui/mobiglas/` -- 9 components, barrel exports, typed props (HIGH confidence -- direct code review)
+- Codebase analysis of `src/app/globals.css` -- CSS variable definitions, button classes, design tokens (HIGH confidence -- direct code review)
 
 ### Confidence Notes
 
 | Area | Confidence | Reason |
 |------|------------|--------|
-| FleetYards API structure | HIGH | Verified via direct API calls (`/v1/models/carrack`, `/v1/models/aurora-mr`, `/v1/manufacturers`) |
-| Table stakes features | HIGH | Cross-verified across 5+ community tools (FleetYards, RSI Matrix, starcitizen.tools, SC Org Tools, FleetPlanner) |
-| Anti-features | MEDIUM-HIGH | Based on domain knowledge of existing specialized tools; verified tool URLs and feature sets |
-| Data freshness patterns | MEDIUM | Inferred from SC patch cycle patterns and FleetYards `lastUpdatedAt` field; exact sync frequency not verified |
-| Org fleet features (D1, D7) | MEDIUM | Based on SC Org Tools and FleetPlanner patterns; specific implementation patterns for aggregation not deeply researched |
+| Security findings | HIGH | Verified by reading actual route handlers, checking auth presence/absence, confirming CSS variable definitions |
+| UX findings | HIGH | Verified by reading component source, counting form elements vs labels, confirming alert() usage |
+| Performance findings | MEDIUM-HIGH | Verified pagination patterns in code; cache header values confirmed in next.config.js; SSR opportunities inferred |
+| Accessibility gaps | MEDIUM | Counted elements and attributes but did not run automated a11y scanner (axe-core). Manual audit recommended for validation |
+| UI consistency | HIGH | Verified by searching for all button class usages, CSS variable definitions, component import patterns |
+| Dependency risks | MEDIUM | Version numbers confirmed in package.json; vulnerability count from project context, not independently verified via npm audit |

@@ -1,325 +1,427 @@
-# Technology Stack: Dynamic Ship Database (FleetYards API Integration)
+# Technology Stack: Security Hardening, Dependency Upgrades & Performance Optimization
 
-**Project:** AydoCorp Website - Dynamic Ship Database Milestone
-**Researched:** 2026-02-03
-**Overall Confidence:** MEDIUM-HIGH
-
----
-
-## Existing Stack (Fixed Constraints)
-
-These are already in the project and are NOT up for discussion. The new work must integrate with them.
-
-| Technology | Installed Version | Latest Available | Purpose |
-|---|---|---|---|
-| Next.js | 15.3.3 | 16.1.6 | App framework (App Router) |
-| TypeScript | ^5.8.3 | 5.8.x | Type safety |
-| MongoDB Node.js Driver | 6.21.0 (installed) / ^6.16.0 (declared) | 7.0.0 | Database driver |
-| Azure Cosmos DB (vCore/MongoDB API) | N/A | N/A | Primary database |
-| Zod | 3.25.76 (installed) / ^3.24.4 (declared) | 4.3.6 | Schema validation |
-| Axios | 1.13.2 (installed) / ^1.6.7 (declared) | 1.13.4 | HTTP client |
-| Azure App Service | N/A | N/A | Deployment target |
-
-**Key constraint:** This project deploys to **Azure App Service** (not Vercel). The GitHub Actions workflow (`main_aydocorp.yml`) builds a standalone Next.js app and deploys to Azure. This rules out Vercel-specific features like Vercel Cron Jobs.
+**Project:** AydoCorp Website - Security & Upgrade Milestone
+**Researched:** 2026-02-15
+**Overall Confidence:** HIGH
 
 ---
 
-## Recommended New Stack Additions
+## Decision: Next.js 15.5.12 (NOT 16.x)
 
-### 1. Scheduled Job Execution: `node-cron`
+The project should upgrade from 15.3.3 to **15.5.12** (latest 15.x patch, released 2026-02-04), not jump to Next.js 16.
+
+**Rationale:**
+
+| Factor | 15.5.12 | 16.1.6 |
+|---|---|---|
+| Security patches | All critical CVEs patched (CVE-2025-66478 RCE, image optimizer DoS, middleware SSRF) | Also patched |
+| React version | React 18.x (current) | React 19.2 **required** -- massive migration |
+| Webpack compatibility | Full support for custom `webpack` config | Turbopack default; custom `webpack` config causes build **failure** unless `--webpack` flag used |
+| Middleware | `middleware.ts` works as-is | Renamed to `proxy.ts` with `proxy()` export -- affects NextAuth integration |
+| `next lint` | Deprecated but functional | **Removed** entirely -- requires ESLint flat config migration |
+| `next-auth` v4 | Compatible | Known peer dependency errors and runtime issues with React 19 |
+| Breaking changes | Minimal from 15.3.3 -- mostly additive features | 15+ breaking changes requiring codemod + manual fixes |
+| EOL | Supported through 2026-10-21 (8 months remaining) | Current LTS |
+
+**The 15.3.3 to 15.5.12 path patches all known security vulnerabilities with minimal breaking changes.** Jumping to 16.x introduces React 19, middleware-to-proxy rename, Turbopack default (breaking the project's custom webpack config for discord.js), and next-auth v4 incompatibility. That is a separate milestone.
+
+**Critical security context:** Next.js 15.3.3 has a **CVSS 10.0 critical RCE** (CVE-2025-66478) that allows unauthenticated remote code execution via React Server Components. Active exploitation has been observed in the wild since December 2025. This upgrade is not optional.
+
+---
+
+## Core Technology Changes
+
+### 1. Next.js Upgrade: 15.3.3 --> 15.5.12
 
 | | |
 |---|---|
-| **Package** | `node-cron` |
-| **Version** | `^4.2.1` |
-| **Types** | `@types/node-cron` `^3.0.11` |
+| **Package** | `next` |
+| **From** | `15.3.3` |
+| **To** | `15.5.12` |
 | **Confidence** | **HIGH** |
 
-**Why `node-cron`:**
-- The app runs on Azure App Service as a **standalone Next.js server** with `output: 'standalone'` in production. This is a persistent, long-running Node.js process -- not serverless. `node-cron` attaches to the event loop and fires on schedule as long as the process is alive.
-- Azure App Service with "Always On" enabled (required for Basic tier and above) keeps the process running 24/7. No cold starts, no process recycling under normal conditions.
-- Zero infrastructure overhead. No separate Azure Function, no WebJob configuration, no external scheduler service. The cron runs inside the same process as Next.js.
-- The sync payload is small (~500 ships, paginated at 200/page = 3 API calls) and completes in seconds. No need for durable execution, retry orchestration, or long-running job infrastructure.
+**What changes in 15.5.x from 15.3.x:**
+
+| Feature | Impact on This Project |
+|---|---|
+| Critical security patches (RCE, SSRF, DoS) | **CRITICAL** -- must patch immediately |
+| Turbopack builds (beta) | Optional -- do not enable yet, project uses custom webpack |
+| Node.js middleware runtime (stable) | Useful for security middleware; `config.runtime = 'nodejs'` now stable |
+| `next lint` deprecation warning | Warning only; still works. Plan migration to direct ESLint CLI later |
+| TypeScript improvements (typed routes, route props helpers) | Nice-to-have; opt-in via `typedRoutes: true` in config |
+| `next/image` quality deprecation warning | Warning only in 15.5; add `images.qualities: [75]` to suppress |
+
+**Breaking changes affecting this project:** None identified. The project already uses async request APIs (`await params`), does not use `legacyBehavior` on Link, does not use AMP, and does not use `serverRuntimeConfig`/`publicRuntimeConfig`.
+
+**Migration command:**
+```bash
+npm install next@15.5.12 eslint-config-next@15.5.12 @next/bundle-analyzer@15.5.12
+```
+
+**Source:** [Next.js 15.5 blog](https://nextjs.org/blog/next-15-5) | [endoflife.date/nextjs](https://endoflife.date/nextjs)
+
+---
+
+### 2. framer-motion 10.x --> motion 12.x (Package Rename)
+
+| | |
+|---|---|
+| **Old Package** | `framer-motion` `^10.16.4` |
+| **New Package** | `motion` `^12.34.0` |
+| **Confidence** | **HIGH** |
+
+**Key facts:**
+- `framer-motion` has been renamed to `motion`. The `framer-motion` npm package still publishes but is effectively a redirect. New development is on the `motion` package.
+- Import path changes from `"framer-motion"` to `"motion/react"`.
+- 109 files in this project import from `framer-motion`.
+
+**Breaking changes from v10 to v12 that affect this project:**
+
+| Breaking Change | Applies to This Project? | Action Required |
+|---|---|---|
+| Package rename: `framer-motion` --> `motion` | YES | `npm uninstall framer-motion && npm install motion` |
+| Import path: `"framer-motion"` --> `"motion/react"` | YES (109 files) | Find-and-replace across all files |
+| `AnimateSharedLayout` removed | NO -- not used in codebase | None |
+| `useInvertedScale` removed | NO -- not used | None |
+| `exitBeforeEnter` removed (use `mode="wait"`) | NO -- project already uses `mode="wait"` | None |
+| `motion()` function removed (use `motion.create()`) | NO -- project uses `<motion.div>` JSX, not `motion()` | None |
+| Legacy repeat syntax (`yoyo`, `flip`, `loop`) removed | Needs verification -- unlikely in this codebase | Audit animation configs |
+| `DragControls.start` only accepts `PointerEvent` | NO -- no drag controls used | None |
+| `Variants` type import | YES -- one file imports `Variants` | Import from `"motion/react"` instead |
+
+**What the project uses (confirmed via grep):**
+- `motion` component (JSX): `<motion.div>`, `<motion.section>`, etc. -- **unchanged API**
+- `AnimatePresence`: **unchanged API**, still exported from `"motion/react"`
+- `Variants` type: **still exported** from `"motion/react"`
+- No advanced hooks (`useAnimation`, `useScroll`, `useMotionValue`, `useTransform`) -- pure declarative usage
+
+**Migration is mechanical:** The project uses a simple subset of the API (motion components + AnimatePresence + variants). The migration is a package swap + import path replacement across 109 files. No behavioral changes expected.
+
+**Migration steps:**
+```bash
+# 1. Swap packages
+npm uninstall framer-motion
+npm install motion@^12.34.0
+
+# 2. Find-and-replace imports (all 109 files)
+# FROM: import { motion } from 'framer-motion';
+# TO:   import { motion } from 'motion/react';
+# FROM: import { motion, AnimatePresence } from 'framer-motion';
+# TO:   import { motion, AnimatePresence } from 'motion/react';
+# FROM: import { motion, Variants } from 'framer-motion';
+# TO:   import { motion, Variants } from 'motion/react';
+```
+
+**Performance note:** The `motion` v12 package supports `LazyMotion` with `domAnimation` features for tree-shaking. After migration, wrap the app in `<LazyMotion features={domAnimation} strict>` to reduce bundle size by only loading animation features actually used. This optimization should be done as part of the migration, not separately.
+
+**Source:** [Motion upgrade guide](https://motion.dev/docs/react-upgrade-guide) | [motion npm](https://www.npmjs.com/package/motion) | [CHANGELOG](https://github.com/motiondivision/motion/blob/main/CHANGELOG.md)
+
+---
+
+## Security Hardening Stack
+
+### 3. Security Headers: @nosecone/next
+
+| | |
+|---|---|
+| **Package** | `@nosecone/next` |
+| **Version** | `^1.1.0` |
+| **Confidence** | **HIGH** |
+
+**Why @nosecone/next (not helmet, not next-secure-headers, not manual headers):**
+
+- Built specifically for Next.js middleware with nonce-based CSP support
+- From the Arcjet team -- same ecosystem as the rate limiter (see below), consistent API design
+- Handles the tricky part: generating per-request CSP nonces in middleware and propagating them to script tags
+- Works with or without the Arcjet SDK -- it is an independent library
+- Lightweight, well-maintained, actively developed (v1.1.0 released 2026-02-13)
+
+The project currently sets `X-Frame-Options`, `X-Content-Type-Options`, and `Referrer-Policy` in `next.config.js` headers. These are good but incomplete. Missing:
+- **Content-Security-Policy** (CSP) -- the single most impactful security header
+- **Strict-Transport-Security** (HSTS)
+- **Permissions-Policy** (restrict browser features)
+- **X-Permitted-Cross-Domain-Policies**
+
+@nosecone/next provides all of these with sensible defaults and middleware integration.
 
 **Why NOT alternatives:**
 
 | Alternative | Why Not |
 |---|---|
-| **Vercel Cron Jobs** | Project deploys to Azure App Service, not Vercel. Not available. |
-| **Azure WebJobs** | Requires separate deployment artifact, separate configuration (`settings.job` in `App_Data/jobs/`), and complicates CI/CD. Overkill for a single lightweight sync. |
-| **Azure Functions (Timer Trigger)** | Requires a separate Azure Function App resource, separate deployment pipeline, separate codebase. Massive overhead for a simple periodic fetch. |
-| **Inngest / Trigger.dev** | External SaaS dependencies with their own pricing, infrastructure, and vendor lock-in. Absurdly overengineered for syncing ~500 records every few hours. |
-| **External cron services** (cron-job.org, EasyCron) | Requires exposing an unauthenticated HTTP endpoint or managing API keys. Adds external dependency for something the process can handle itself. |
+| **helmet** | Built for Express. Next.js does not use Express. Would require a custom server, which Next.js explicitly recommends against. |
+| **next-secure-headers** | Last published 3 years ago. Stale maintenance. Does not support nonce-based CSP in middleware. |
+| **next-security** | Low adoption, based on OWASP patterns but less mature than Nosecone. |
+| **Manual CSP in next.config.js** | Cannot generate per-request nonces. Static CSP headers without nonces break inline scripts that Next.js generates. |
+| **Custom middleware CSP** | Viable (30-50 lines of code) but requires maintaining nonce propagation, directive formatting, and keeping up with CSP spec changes. Nosecone does this correctly and keeps up with best practices. |
 
-**Implementation pattern:** Initialize `node-cron` in a Next.js [instrumentation hook](https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation) (`instrumentation.ts`). This file runs once when the server starts, making it the ideal place to register cron schedules.
+**Integration point:** Extends the existing `src/middleware.ts` (which handles auth). CSP nonces require dynamic rendering for pages that need inline scripts. The project's authenticated routes are already dynamic.
 
-```typescript
-// instrumentation.ts
-export async function register() {
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
-    const { startShipSyncCron } = await import('./lib/ship-sync/cron');
-    startShipSyncCron();
-  }
-}
-```
-
-**Risk:** If Azure App Service recycles the process (deployments, scaling events, crashes), the cron state is lost. Mitigation: Store `lastSyncedAt` timestamp in MongoDB. On startup, check if a sync is overdue and run immediately. This makes the system self-healing.
+**Source:** [Nosecone docs](https://docs.arcjet.com/nosecone/quick-start) | [@nosecone/next npm](https://www.npmjs.com/package/@nosecone/next) | [Arcjet security headers blog](https://blog.arcjet.com/nosecone-a-library-for-setting-security-headers-in-next-js-sveltekit-node-js-bun-and-deno/)
 
 ---
 
-### 2. FleetYards API Client: Native `fetch` with typed wrapper
+### 4. Rate Limiting & Bot Protection: @arcjet/next
 
 | | |
 |---|---|
-| **Package** | None (use built-in `fetch`) |
-| **Confidence** | **HIGH** |
+| **Package** | `@arcjet/next` |
+| **Version** | `^1.0.0-beta.15` |
+| **Confidence** | **MEDIUM** |
 
-**Why native `fetch` (not Axios, not Ky):**
-- Axios is already in the project (`^1.6.7`), but for server-side-only code (the sync pipeline), native `fetch` is the better choice:
-  - Zero additional bundle impact
-  - Built into Node.js 18+ (project requires `>=18`)
-  - Next.js extends `fetch` with caching semantics in server contexts
-  - The FleetYards API is a simple REST API with no authentication -- just GET requests with pagination
-- Axios's value (interceptors, request cancellation, browser compatibility) is irrelevant for a server-side sync script that makes 3 sequential GET requests.
+**Why @arcjet/next (not custom rate limiter, not express-rate-limit):**
+
+The project has a custom in-memory rate limiter (`src/lib/rate-limiter.ts`) that uses a `Map<string, RateLimitEntry>`. This has critical limitations:
+- **Memory-only**: Rate limit state is lost on process restart/deployment
+- **Single-instance**: Does not work across multiple server instances (if Azure scales out)
+- **No bot detection**: Only counts requests, cannot distinguish bots from humans
+- **No IP intelligence**: Cannot identify known bad actors or VPN/proxy abuse
+- **No attack detection**: Cannot detect application-layer attacks (SQLi probes, path traversal attempts)
+
+@arcjet/next provides:
+- **Rate limiting** with sliding window and token bucket algorithms
+- **Bot detection** that identifies and blocks known bad bots while allowing legitimate ones (Googlebot, etc.)
+- **Shield WAF** that detects common attack patterns (SQLi, XSS probes, path traversal)
+- **Decision caching** for performance (does not add latency to every request)
+- **Free tier** sufficient for this project's traffic levels
+
+**Why beta is acceptable:** Arcjet has been in beta since early 2024 with steady releases. The "beta" label reflects their cautious versioning, not instability. Used in production by numerous Vercel template apps.
 
 **Why NOT alternatives:**
 
 | Alternative | Why Not |
 |---|---|
-| **Axios** | Already in project but adds unnecessary overhead for simple server-side GET requests. Would work fine but is not the better tool for this job. |
-| **Ky** | Good library (~3KB), but adding a new dependency for 3 fetch calls is unjustifiable. |
-| **ofetch** | Same argument as Ky. |
-| **got** | Server-only, heavy. No reason to add for this use case. |
+| **Keep custom rate limiter** | Memory-only, single-instance, no bot detection, no attack detection. Inadequate for production security. |
+| **express-rate-limit** | Express middleware, not compatible with Next.js middleware. |
+| **upstash/ratelimit** | Requires Redis (Upstash). Adds external service dependency and cost for rate limiting only. No bot/attack detection. |
+| **rate-limiter-flexible** | Node.js library, requires manual middleware integration. No bot/attack detection. |
+| **MongoDB-backed custom rate limiter** | Better than in-memory (survives restarts), but still requires building bot detection, WAF, and IP intelligence from scratch. Significant engineering effort for inferior results. |
 
-**What to build:** A thin typed wrapper around `fetch` specific to the FleetYards API:
+**Integration point:** Can be used in middleware for global protection AND in individual API route handlers for route-specific limits. The existing custom rate limiter's per-route configurations (100 req/min for API, 5 req/5min for auth) can be replicated with Arcjet's configuration.
 
-```typescript
-// lib/fleetyards/client.ts
-const FLEETYARDS_BASE = 'https://api.fleetyards.net/v1';
-const PER_PAGE = 200; // FleetYards max
+**If the team prefers zero external services:** Keep the custom rate limiter but upgrade it to use MongoDB-backed storage (TTL collection for auto-cleanup) instead of in-memory Map. This solves the persistence problem but does not add bot detection or WAF capabilities. This is the minimum viable alternative.
 
-async function fetchPage<T>(path: string, page: number): Promise<{data: T[], hasMore: boolean}> {
-  const res = await fetch(`${FLEETYARDS_BASE}${path}?page=${page}&perPage=${PER_PAGE}`, {
-    headers: { 'Accept': 'application/json' },
-    cache: 'no-store', // bypass Next.js fetch cache for sync operations
-  });
-  if (!res.ok) throw new FleetYardsApiError(res.status, path);
-  const linkHeader = res.headers.get('Link');
-  const hasMore = linkHeader?.includes('rel="next"') ?? false;
-  return { data: await res.json(), hasMore };
-}
-```
-
-**Retry logic:** Build a simple exponential backoff wrapper (3 retries, 1s/2s/4s delays). Respect `Retry-After` header if present. No library needed -- this is ~20 lines of code.
+**Source:** [@arcjet/next npm](https://www.npmjs.com/package/@arcjet/next) | [Arcjet docs](https://docs.arcjet.com/reference/nextjs/) | [Arcjet security checklist](https://blog.arcjet.com/next-js-security-checklist/)
 
 ---
 
-### 3. API Response Validation: Zod (existing)
+### 5. Input Validation: Zod (existing -- expand coverage)
 
 | | |
 |---|---|
 | **Package** | `zod` (already installed) |
-| **Version** | Keep `^3.24.4` (installed: 3.25.76) |
+| **Version** | Keep `^3.24.4` |
 | **Confidence** | **HIGH** |
 
-**Why keep Zod 3.x (not upgrade to Zod 4.x):**
-- Zod 4.0 was released July 2025 with breaking changes and a new API surface. The project currently uses Zod 3.x (`3.25.76` installed).
-- Upgrading to Zod 4.x is a **separate migration task** that touches every Zod schema in the app. Mixing Zod 3 and Zod 4 in the same codebase is possible (via `zod/v3` and `zod/v4` subpaths) but adds confusion.
-- Zod 3.x is stable, maintained, and receives bug fixes. No urgency to upgrade for this milestone.
-- The ship sync feature only needs basic Zod capabilities (object schemas, arrays, transforms) which work identically in v3.
+**Current state:** Zod is already used in 14 API routes for input validation. This is the correct approach for structured data (JSON payloads, query params, form data).
 
-**Pattern:** Define a `FleetYardsModelSchema` that validates and transforms the raw API response into the internal `Ship` type. Use `.safeParse()` at the trust boundary (immediately after `fetch`) so malformed records are logged and skipped rather than crashing the sync.
+**Gap:** Not all API routes have Zod validation. Audit needed to identify routes that accept raw `request.json()` without schema validation. Every API route that accepts user input must validate with Zod at the entry point.
 
-```typescript
-const FleetYardsModelSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  slug: z.string(),
-  scIdentifier: z.string().nullable(),
-  manufacturer: z.object({ name: z.string(), code: z.string() }),
-  // ... more fields
-}).transform(raw => toInternalShip(raw));
-```
+**Do NOT add:**
+- **isomorphic-dompurify** -- No HTML sanitization use case exists. The project accepts plain text inputs only. Zod `.string().trim().max(N)` is sufficient. React's JSX escaping prevents XSS in rendering.
+- **validator.js** -- Zod already provides string validation (email, URL, UUID, regex). No need for a second validation library.
+- **joi** -- Inferior to Zod for TypeScript projects (no type inference).
 
 ---
 
-### 4. Database Sync: MongoDB `bulkWrite` with upserts
+## Performance Optimization Stack
+
+### 6. Bundle Analysis: @next/bundle-analyzer (existing -- version bump)
 
 | | |
 |---|---|
-| **Package** | `mongodb` (already installed) |
-| **Version** | Keep `^6.16.0` (installed: 6.21.0) |
+| **Package** | `@next/bundle-analyzer` |
+| **Version** | Upgrade to `^15.5.12` (match Next.js version) |
 | **Confidence** | **HIGH** |
 
-**Why NOT upgrade to MongoDB driver 7.0:**
-- Version 7.0.0 was released ~2 months ago and contains breaking changes.
-- The project's `mongodb-client.ts` uses patterns (singleton `MongoClient`, `Collection` type exports) that may need refactoring for v7.
-- Azure Cosmos DB (vCore) compatibility with the v7 driver is not yet widely documented.
-- The v6 driver is fully sufficient and actively maintained.
-- Upgrading the MongoDB driver is a separate infrastructure task, not part of ship database feature work.
-
-**Sync strategy:** Use `collection.bulkWrite()` with `updateOne` + `upsert: true` operations, keyed on the FleetYards UUID (`id` field). This is the standard pattern for external API data sync:
-
-```typescript
-const operations = validatedShips.map(ship => ({
-  updateOne: {
-    filter: { fleetyardsId: ship.fleetyardsId },
-    update: {
-      $set: { ...ship, syncedAt: new Date() },
-      $setOnInsert: { createdAt: new Date() },
-    },
-    upsert: true,
-  },
-}));
-await shipsCollection.bulkWrite(operations, { ordered: false });
-```
-
-**Key design decisions:**
-- **`ordered: false`**: Allows parallel execution on the server and continues on individual errors. If one ship fails, the others still sync.
-- **`fleetyardsId` as the match key**: The FleetYards UUID is the canonical identifier. Create a unique index on this field.
-- **`$setOnInsert` for `createdAt`**: Only set on first insert, never overwritten on updates.
-- **Batch size**: ~500 ships is well within MongoDB's `maxWriteBatchSize` limit (100,000). Single `bulkWrite` call, no batching needed.
-- **No deletion sync**: Do NOT auto-delete ships that disappear from FleetYards. Ships may be temporarily removed from the API. Instead, mark them as `lastSeenAt` and handle stale records separately.
+Already installed and configured with `npm run analyze`. Upgrade version to match Next.js 15.5.12 for compatibility.
 
 ---
 
-### 5. Image CDN: FleetYards CDN (direct linking)
+### 7. Performance Monitoring: web-vitals
 
 | | |
 |---|---|
-| **Package** | None (configuration only) |
+| **Package** | `web-vitals` |
+| **Version** | `^4.2.4` |
 | **Confidence** | **HIGH** |
 
-**Verified CDN hostname:** `cdn.fleetyards.net` (confirmed via live API response)
+**Why:** Provides direct measurement of Core Web Vitals (LCP, INP, CLS, FCP, TTFB) in production. Lightweight (~1.5KB gzipped), browser-only. Needed to measure the impact of performance optimizations.
 
-**Image URL structure:** FleetYards provides multiple sizes per image:
-- Original: `https://cdn.fleetyards.net/uploads/model/store_image/{uuid_parts}/{filename}.jpg`
-- Small: `https://cdn.fleetyards.net/uploads/model/store_image/{uuid_parts}/small_{filename}.jpg`
-- Medium: `https://cdn.fleetyards.net/uploads/model/store_image/{uuid_parts}/medium_{filename}.jpg`
-- Large: `https://cdn.fleetyards.net/uploads/model/store_image/{uuid_parts}/large_{filename}.jpg`
-- XLarge: `https://cdn.fleetyards.net/uploads/model/store_image/{uuid_parts}/xlarge_{filename}.jpg`
+**Implementation:** Create a client component that reports vitals:
 
-**Image types available per ship:**
-- `storeImage` (marketing photo, multiple sizes)
-- `fleetchartImage` (silhouette for fleet charts)
-- `angledView`, `sideView`, `topView`, `frontView` (each with multiple sizes)
+```typescript
+// src/lib/web-vitals.ts
+import { onCLS, onINP, onLCP, onFCP, onTTFB } from 'web-vitals';
 
-**Next.js configuration required** (add to `next.config.js` `images.remotePatterns`):
-
-```javascript
-{
-  protocol: 'https',
-  hostname: 'cdn.fleetyards.net',
-  pathname: '/uploads/**',
+export function reportWebVitals() {
+  onCLS(console.log);
+  onINP(console.log);
+  onLCP(console.log);
+  onFCP(console.log);
+  onTTFB(console.log);
 }
 ```
 
-**Why direct CDN linking (not mirroring to Cloudflare R2):**
-- FleetYards CDN is fast, reliable, and free to consume. Images are already optimized at multiple sizes.
-- Mirroring ~500 ships x ~6 image types x ~5 sizes = ~15,000 images to R2 adds massive complexity (download pipeline, storage costs, staleness management, broken link detection).
-- Next.js `Image` component will handle format conversion (WebP/AVIF) and further optimization via its built-in optimizer when serving from remote patterns.
-- If FleetYards CDN ever becomes unreliable, mirroring can be added later as a separate enhancement. Start simple.
-
-**Risk:** FleetYards CDN availability. If `cdn.fleetyards.net` goes down, all ship images break. Mitigation: Store image URLs in MongoDB; display a placeholder/fallback image when the CDN is unavailable. Consider a future enhancement to lazy-mirror critical images to R2.
-
 ---
 
-### 6. Rate Limiting & Concurrency: `p-limit`
+## Dependency Cleanup (Removals)
 
-| | |
+Based on the project review's finding of 8 unused packages, these should be removed:
+
+| Package | Reason for Removal |
 |---|---|
-| **Package** | `p-limit` |
-| **Version** | `^7.3.0` |
-| **Confidence** | **MEDIUM** |
+| `@azure/cosmos` | Project uses MongoDB driver for Cosmos DB vCore, not the Cosmos SDK |
+| `@azure/identity` | Not imported anywhere in application code |
+| `@azure/msal-node` | Not imported; auth uses NextAuth with Entra ID provider |
+| `azure-ad-verify-token` | Legacy; superseded by NextAuth's built-in token handling |
+| `mammoth` | DOCX-to-HTML converter; not imported in any component or route |
+| `openid-client` | Not imported; NextAuth handles OIDC internally |
+| `bcrypt` | Duplicate of bcryptjs; both installed, project should use only bcryptjs |
+| `@types/bcrypt` | Remove with bcrypt |
 
-**Why `p-limit`:**
-- FleetYards API does not document rate limits explicitly, but as a community-maintained project, it likely has modest infrastructure. Being a responsible API consumer means limiting concurrent requests.
-- `p-limit` provides a simple concurrency limiter. Set concurrency to 1 (sequential page fetches) or 2 at most.
-- The total data volume is small (3 pages at 200 per page for ~500 ships), so concurrency is not about speed but about being polite.
+**Verification required:** Before removing, run grep for each package to confirm no imports exist. Some may be used in scripts not under `src/`.
 
-**Why NOT alternatives:**
-
-| Alternative | Why Not |
-|---|---|
-| **p-queue** | More features than needed (priority queues, events). `p-limit` is simpler. |
-| **bottleneck** | Rate limiter with reservoir pattern. Overkill for 3 sequential requests. |
-| **Custom implementation** | `p-limit` is 1.3KB. Not worth reimplementing. |
-
-**Note:** `p-limit` is ESM-only since v4. The project uses Next.js 15 which supports ESM. Verify that the build pipeline handles ESM-only dependencies correctly.
+**npm audit impact:** Removing `@azure/cosmos` eliminates the entire `@aws-sdk/*` dependency tree (transitive), which accounts for 20+ of the 29 npm audit vulnerabilities. Removing `bcrypt` eliminates the `tar` vulnerability chain (via `@mapbox/node-pre-gyp`).
 
 ---
 
-## New Collection Schema
+## Vulnerability Remediation Summary
 
-**Collection name:** `ships`
-
-**Indexes to create:**
-1. `{ fleetyardsId: 1 }` - unique index, primary lookup key
-2. `{ slug: 1 }` - unique index, used for URL-friendly lookups
-3. `{ "manufacturer.code": 1 }` - for filtering by manufacturer
-4. `{ productionStatus: 1 }` - for filtering flight-ready vs in-concept
-5. `{ name: "text", "manufacturer.name": "text" }` - text index for search
-
-**Add to existing `mongo-indexes.ts`** following the project's established pattern.
-
----
-
-## FleetYards API Reference
-
-| Property | Value |
-|---|---|
-| **Base URL** | `https://api.fleetyards.net/v1` |
-| **Short URL** | `https://api.fltyrd.net/v1` (alias) |
-| **Models endpoint** | `/models` |
-| **Single model** | `/models/{slug}` |
-| **Authentication** | None required for read operations |
-| **Pagination** | `?page=1&perPage=200` (1-based, max 200 per page, default 30) |
-| **Pagination headers** | `Link` header with `rel="next"`, `rel="last"` |
-| **Rate limits** | Not documented. Be conservative (1 req/sec). |
-| **Image CDN** | `cdn.fleetyards.net` |
-| **Project status** | Actively maintained, v5.32.12 (Dec 2025), 6,672 commits |
-| **Total ships** | ~500+ models |
+| Vulnerability Source | Severity | Fix |
+|---|---|---|
+| `next` (8 CVEs including RCE) | CRITICAL | Upgrade to 15.5.12 |
+| `@aws-sdk/*` chain (via @azure/cosmos) | HIGH (20+ vulns) | Remove unused @azure/cosmos |
+| `axios` (DoS via __proto__) | HIGH | `npm install axios@latest` |
+| `nodemailer` (addressparser DoS) | HIGH | `npm install nodemailer@latest` |
+| `tar` (path traversal, via @mapbox/node-pre-gyp via bcrypt) | HIGH | Remove bcrypt (keep bcryptjs -- pure JS, no native deps) |
+| `discord.js` --> `undici` (decompression DoS) | MODERATE | `npm install discord.js@latest` |
+| `lodash` (prototype pollution) | MODERATE | Transitive; likely resolved by @azure/cosmos removal |
+| `fast-xml-parser` (DoS) | HIGH | Transitive via @aws-sdk; resolved by @azure/cosmos removal |
 
 ---
 
-## Complete Installation Command
+## ESLint Migration (Prepare for Next.js 16)
+
+The current setup uses `.eslintrc.js` with `"next lint"` in the lint script. While `next lint` still works in 15.5, it shows a deprecation warning. Prepare by updating the script:
+
+**Do now (15.5.12):**
+```json
+{
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  }
+}
+```
+
+**Do NOT do now:**
+- Do not migrate to ESLint flat config (ESLint 8 is still in use, flat config is ESLint 9+)
+- Do not switch to Biome (different rule set, learning curve, separate decision)
+- Do not upgrade to ESLint 9 (breaking changes in plugin ecosystem)
+
+**Source:** [Next.js 15.5 lint deprecation](https://nextjs.org/blog/next-15-5#next-lint-deprecation)
+
+---
+
+## Complete Installation Commands
 
 ```bash
-# New production dependencies
-npm install node-cron@^4.2.1 p-limit@^7.3.0
+# Step 1: Upgrade existing packages (security-critical)
+npm install next@15.5.12 eslint-config-next@15.5.12 @next/bundle-analyzer@15.5.12
 
-# New dev dependencies
-npm install -D @types/node-cron@^3.0.11
+# Step 2: Fix known vulnerabilities in other deps
+npm install axios@latest nodemailer@latest discord.js@latest
+
+# Step 3: Swap framer-motion for motion
+npm uninstall framer-motion
+npm install motion@^12.34.0
+
+# Step 4: Add security headers library
+npm install @nosecone/next@^1.1.0
+
+# Step 5: Add performance monitoring
+npm install web-vitals@^4.2.4
+
+# Step 6: Remove unused dependencies (verify with grep first)
+npm uninstall @azure/cosmos @azure/identity @azure/msal-node azure-ad-verify-token mammoth openid-client bcrypt @types/bcrypt
+
+# Step 7 (OPTIONAL - requires free Arcjet account): Add rate limiting & bot protection
+npm install @arcjet/next@^1.0.0-beta.15
 ```
 
-**That's it.** Two new production dependencies. Everything else (Zod, MongoDB driver, fetch) is already in the project.
+**Net result:** Remove 8 packages, add 3 (or 4 with Arcjet). Eliminate 25+ of 29 npm audit vulnerabilities.
 
 ---
 
-## Environment Variables Required
-
-```env
-# Ship sync configuration
-SHIP_SYNC_CRON_SCHEDULE=0 */6 * * *    # Every 6 hours (default suggestion)
-SHIP_SYNC_ENABLED=true                  # Kill switch for sync
-SHIP_SYNC_SECRET=<random-string>        # Auth token for manual sync trigger endpoint
-```
-
----
-
-## What NOT to Do
+## What NOT to Add
 
 | Anti-Pattern | Why Avoid |
 |---|---|
-| **Upgrade to Next.js 16** | Major version jump unrelated to this feature. Separate task. |
-| **Upgrade to MongoDB driver 7** | Breaking changes, unverified Cosmos DB compatibility. Separate task. |
-| **Upgrade to Zod 4** | Breaking changes across all schemas. Separate task. |
-| **Add Mongoose** | The project uses the raw MongoDB driver throughout. Adding Mongoose for one collection creates two data access patterns. |
-| **Add Prisma** | Same argument as Mongoose. Does not support Cosmos DB well. |
-| **Mirror images to R2** | Massive scope creep. Start with direct CDN linking. |
-| **Use a message queue (Redis, RabbitMQ, SQS)** | The sync is a simple sequential process. No fan-out, no parallel workers, no retry queues needed. |
-| **Build a custom admin UI for sync** | Start with a protected API route (`POST /api/admin/sync-ships`) that can be triggered manually via curl or a simple button. |
-| **Use ISR/revalidation for ship data** | Ships change rarely (new ships added every few months). Database-backed API routes with reasonable cache headers are simpler and more predictable than ISR. |
+| **Next.js 16** | React 19 migration, middleware-to-proxy rename, Turbopack default breaking webpack config, next-auth v4 incompatibility. Separate milestone. |
+| **React 19** | Only required for Next.js 16. Massive migration (forwardRef removal, useFormState to useActionState, ref as prop). Not needed for security/perf goals. |
+| **next-auth v5 / Auth.js** | Different cookie names (logs everyone out), different API surface. Separate migration milestone. |
+| **Mongoose / Prisma** | Project uses raw MongoDB driver everywhere. Adding an ORM is unrelated to security/perf work. |
+| **helmet** | Express-only. Not compatible with Next.js without custom server. |
+| **Tailwind CSS v4** | Breaking changes (PostCSS plugin removal, new config format). Separate task. |
+| **Zod 4** | Breaking API changes across all 14+ files using Zod schemas. Separate task. |
+| **MongoDB driver 7** | Breaking changes, unverified Cosmos DB vCore compatibility. Separate task. |
+| **Sentry / DataDog** | External monitoring services. Valuable but orthogonal to security hardening. Separate decision. |
+| **isomorphic-dompurify** | No HTML sanitization use case currently exists. Add only when rich text input is needed. |
+| **Redis** | No need for distributed state at current traffic levels. Arcjet or MongoDB-backed rate limiting handles this without infrastructure. |
+| **Biome** | Linter/formatter replacement for ESLint. Significant migration. Not in scope. |
+
+---
+
+## Version Compatibility Matrix
+
+| Package | Current | Target | React 18 | Next.js 15.5.12 | Node.js 20+ |
+|---|---|---|---|---|---|
+| next | 15.3.3 | 15.5.12 | YES | -- | YES |
+| motion | N/A (framer-motion 10.16.4) | 12.34.0 | YES | YES | YES |
+| @nosecone/next | N/A | 1.1.0 | YES | YES | YES |
+| @arcjet/next | N/A | 1.0.0-beta.15 | YES | YES | YES (20+) |
+| web-vitals | N/A | 4.2.4 | YES | YES | N/A (browser) |
+| eslint-config-next | 15.3.3 | 15.5.12 | -- | YES | YES |
+| @next/bundle-analyzer | 15.3.3 | 15.5.12 | -- | YES | YES |
+| axios | ^1.6.7 | latest | -- | YES | YES |
+| nodemailer | ^7.0.10 | latest | -- | -- | YES |
+| discord.js | ^14.22.1 | latest | -- | -- | YES |
+
+**Node.js compatibility note:** The project's `engines` field specifies `>=18 <=22`. Node.js 24.5.0 is currently installed on the dev machine, which exceeds this range. Consider updating `engines` to `>=20` (matching Next.js 16's future requirement and dropping EOL Node 18) with no upper bound restriction. Next.js 15.5.12 supports Node.js 18+.
+
+---
+
+## next.config.js Changes Required
+
+**For the 15.5.12 upgrade, minimal config changes are needed:**
+
+```javascript
+// Add to images config to suppress deprecation warnings
+images: {
+    // ... existing remotePatterns, dangerouslyAllowSVG, minimumCacheTTL ...
+    qualities: [75], // Explicit quality list (Next.js 16 will require this)
+},
+```
+
+**No webpack config changes needed** for the 15.3 to 15.5 upgrade. The discord.js externals configuration remains valid.
+
+**Security headers migration:** Move static security headers from `next.config.js` `headers()` to middleware (handled by @nosecone/next). The static headers in `next.config.js` can remain as a fallback for routes not processed by middleware.
+
+**Cache header improvements (performance):**
+```javascript
+// Immutable cache for hashed static assets
+{ source: '/_next/static/:path*', headers: [
+    { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }
+]},
+// Long cache for fonts (they never change)
+{ source: '/fonts/:path*', headers: [
+    { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }
+]},
+// Reasonable cache for images/assets (may change occasionally)
+{ source: '/images/:path*', headers: [
+    { key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }
+]},
+```
 
 ---
 
@@ -327,45 +429,49 @@ SHIP_SYNC_SECRET=<random-string>        # Auth token for manual sync trigger end
 
 | Area | Level | Reason |
 |---|---|---|
-| Scheduling (node-cron) | **HIGH** | Well-established pattern for Azure App Service with Always On. Verified that the project uses standalone output mode. |
-| API Client (native fetch) | **HIGH** | FleetYards API verified live. Pagination, response structure, and CDN hostname confirmed via actual API calls. |
-| Validation (Zod 3.x) | **HIGH** | Already in project, well-documented patterns. No version change needed. |
-| Database Sync (bulkWrite) | **HIGH** | Standard MongoDB pattern. Verified bulkWrite is available in driver v6. Project already uses similar patterns for users. |
-| Image CDN (direct linking) | **HIGH** | CDN hostname verified via live API response (`cdn.fleetyards.net`). Next.js remotePatterns configuration is straightforward. |
-| Rate limiting (p-limit) | **MEDIUM** | FleetYards rate limits are undocumented. Conservative approach recommended. p-limit is well-maintained but ESM-only may need verification in the build pipeline. |
+| Next.js 15.5.12 upgrade path | **HIGH** | Official docs verified, breaking changes analyzed against codebase, no blockers found |
+| framer-motion to motion migration | **HIGH** | Breaking changes enumerated, codebase grep confirms only simple API usage, migration is mechanical find-and-replace |
+| Security headers (@nosecone/next) | **HIGH** | Official docs, active maintenance (v1.1.0 released 2 days ago), designed specifically for Next.js middleware |
+| Rate limiting (@arcjet/next) | **MEDIUM** | Beta status, requires external account. Functionality verified via docs. Falls back to MongoDB-backed custom limiter if team declines. |
+| Dependency cleanup | **MEDIUM** | Unused packages identified by project review; each removal needs grep verification before execution |
+| Performance monitoring (web-vitals) | **HIGH** | Standard library, no integration risk, browser-only |
+| ESLint migration path | **HIGH** | 15.5 deprecation is warning-only, no action required yet, clear path documented |
+| Vulnerability remediation | **HIGH** | npm audit output confirms vulnerability sources, fix paths are standard version bumps or removals |
 
 ---
 
 ## Sources
 
-### Verified via Live API Calls (HIGH confidence)
-- FleetYards API v1 Models endpoint: `https://api.fleetyards.net/v1/models`
-- FleetYards API single model: `https://api.fleetyards.net/v1/models/aurora-mr`
-- Image CDN hostname confirmed: `cdn.fleetyards.net`
-- Pagination: `?page=1&perPage=200` with `Link` header confirmed
+### Official Documentation (HIGH confidence)
+- [Next.js 15.5 release blog](https://nextjs.org/blog/next-15-5)
+- [Next.js 16 upgrade guide](https://nextjs.org/docs/app/guides/upgrading/version-16) -- used to confirm what NOT to do yet
+- [Next.js Security Update Dec 2025](https://nextjs.org/blog/security-update-2025-12-11)
+- [CVE-2025-66478 advisory](https://nextjs.org/blog/CVE-2025-66478)
+- [Next.js CSP guide](https://nextjs.org/docs/app/guides/content-security-policy)
+- [Motion upgrade guide](https://motion.dev/docs/react-upgrade-guide)
+- [Motion changelog](https://github.com/motiondivision/motion/blob/main/CHANGELOG.md)
+- [Arcjet Next.js SDK reference](https://docs.arcjet.com/reference/nextjs/)
+- [Nosecone quick start](https://docs.arcjet.com/nosecone/quick-start)
 
-### Verified via npm Registry (HIGH confidence)
-- `node-cron` latest: 4.2.1 (verified `npm show node-cron version`)
-- `@types/node-cron` latest: 3.0.11 (verified `npm show @types/node-cron version`)
-- `zod` latest: 4.3.6, installed: 3.25.76 (verified `npm ls zod`)
-- `mongodb` latest: 7.0.0, installed: 6.21.0 (verified `npm ls mongodb`)
-- `p-limit` latest: 7.3.0 (verified `npm show p-limit version`)
+### npm Registry / Release Data (HIGH confidence)
+- [Next.js endoflife.date](https://endoflife.date/nextjs) -- 15.5.12 released 2026-02-04, supported through 2026-10-21
+- [motion npm](https://www.npmjs.com/package/motion) -- v12.34.0, latest
+- [framer-motion npm](https://www.npmjs.com/package/framer-motion) -- v12.34.0 (same version, redirect to motion)
+- [@nosecone/next npm](https://www.npmjs.com/package/@nosecone/next) -- v1.1.0
+- [@arcjet/next npm](https://www.npmjs.com/package/@arcjet/next) -- v1.0.0-beta.15
 
-### Verified via Project Codebase (HIGH confidence)
-- Deployment target: Azure App Service (`.github/workflows/main_aydocorp.yml`)
-- Standalone output mode: `scripts/next.config.js` line 5
-- Existing MongoDB patterns: `src/lib/mongodb-client.ts`, `src/lib/mongodb.ts`
-- Existing ships data: `public/data/ships.json` (static, ~500 ships)
-- Existing Zod usage: `package.json` dependency `^3.24.4`
+### Security Advisories (HIGH confidence)
+- [React CVE-2025-55182 (RCE via RSC)](https://react.dev/blog/2025/12/03/critical-security-vulnerability-in-react-server-components)
+- [Next.js GHSA-9qr9-h5gf-34mp](https://github.com/vercel/next.js/security/advisories/GHSA-9qr9-h5gf-34mp)
+- [Wiz exploitation tracking](https://www.wiz.io/blog/critical-vulnerability-in-react-cve-2025-55182) -- confirmed active exploitation since Dec 2025
+- [Palo Alto Unit 42 analysis](https://unit42.paloaltonetworks.com/cve-2025-55182-react-and-cve-2025-66478-next/)
 
-### WebSearch + Official Documentation (MEDIUM confidence)
-- Vercel Cron Jobs docs: https://vercel.com/docs/cron-jobs (confirmed NOT applicable -- project is on Azure)
-- MongoDB bulkWrite docs: https://www.mongodb.com/docs/drivers/node/current/crud/bulk-write/
-- FleetYards GitHub: https://github.com/fleetyards/fleetyards (v5.32.12, Dec 2025, actively maintained)
-- FleetYards docs: https://docs.fleetyards.net/
-- Zod 4 release: https://www.infoq.com/news/2025/08/zod-v4-available/
-- Next.js image remotePatterns: https://nextjs.org/docs/app/api-reference/components/image
-
-### Training Data Only (LOW confidence)
-- Azure App Service "Always On" behavior with Next.js standalone mode. Needs validation during implementation.
-- FleetYards API rate limits (not documented anywhere found). Conservative approach assumed.
+### Project Codebase Analysis (HIGH confidence)
+- 109 files import from `framer-motion` -- all use `motion` component + `AnimatePresence` + `Variants` type
+- 14 files already use Zod for input validation
+- Custom rate limiter at `src/lib/rate-limiter.ts` is in-memory Map-based
+- Middleware at `src/middleware.ts` handles auth only, no security headers
+- All `params` access already uses `await` (async request APIs migrated)
+- No deprecated Next.js APIs used (`legacyBehavior`, `useAmp`, `serverRuntimeConfig`)
+- npm audit: 29 vulnerabilities (1 critical, 23 high, 5 moderate)
+- `engines` field: `>=18 <=22` (needs updating)

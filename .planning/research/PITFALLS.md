@@ -1,357 +1,428 @@
-# Domain Pitfalls: FleetYards API Integration
+# Domain Pitfalls: Security Hardening, Dependency Upgrades, and Design System Consolidation
 
-**Domain:** Third-party API data sync (Star Citizen ship database) into existing Next.js/MongoDB production application
-**Researched:** 2026-02-03
-**Overall Confidence:** HIGH (based on codebase analysis, FleetYards API probing, Cosmos DB documentation, and domain research)
+**Domain:** Production Next.js app modernization -- security hardening, Next.js 15.3 to 15.5 upgrade, framer-motion v10 to motion v12 migration, Server Component conversion, design system consolidation
+**Researched:** 2026-02-15
+**Overall Confidence:** HIGH (codebase analysis of 109 framer-motion files, 50+ auth-dependent files, 530+ MobiGlas CSS references, 97 files with hand-coded MG patterns; verified against official Next.js 15.5 release notes, Motion upgrade guide, CVE-2025-29927 disclosure, and Next.js CSP documentation)
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that cause data corruption, broken user experiences, or require emergency rollbacks.
+Mistakes that cause auth bypass, broken pages, or require full rollbacks across the 69-page app.
 
 ---
 
-### Pitfall 1: Name-Matching Migration Produces Orphaned or Mismatched Ship References
+### Pitfall 1: CVE-2025-29927 -- Middleware Authorization Bypass on Current Next.js Version
 
-**What goes wrong:** The migration script that converts existing ship name strings (in `user.ships[]`, `MissionParticipant.shipName`, `OperationParticipant.shipName`, `MissionShip.shipName`, `PlannedMission.ships[]`) to FleetYards UUIDs fails to match a significant percentage of ships because the names don't align exactly.
+**What goes wrong:** The app currently runs Next.js 15.3.3. CVE-2025-29927 disclosed that all Next.js versions before 15.2.3 (and select later versions) allowed attackers to bypass middleware by injecting an `x-middleware-subrequest` internal header. The current middleware at `src/middleware.ts` uses `getToken()` from `next-auth/jwt` to protect `/dashboard`, `/userprofile`, and `/admin` routes. If the fix is incomplete or headers are not stripped, an attacker can access all protected routes without authentication.
 
-**Why it happens:** The current `ships.json` uses names like `"Constellation Andromeda"` but FleetYards may store it differently (e.g., with manufacturer prefix `"RSI Constellation Andromeda"` or shortened `"Andromeda"`). The codebase already has evidence of naming inconsistencies -- the hardcoded `shipManufacturers` array in `ShipData.ts` uses `"CNOU (Consolidated Outland)"` while FleetYards uses `"Consolidated Outland"`, and `"Kruger Intergalatic"` (sic) vs the correct `"Kruger Intergalactic"`. Special character ships like `"San'tok.yai"` have their own bespoke handling (`formatShipImageName` special-cases it). Ship names also change between Star Citizen patches -- CIG regularly renames ships (e.g., Hornet variants got "Mk I"/"Mk II" suffixes in 3.x patches).
+**Why it happens:** Next.js internally uses `x-middleware-subrequest` to prevent infinite middleware loops on subrequests. Versions prior to the fix did not strip this header from external requests, so any HTTP client could set it and skip middleware entirely. The fix (in 15.2.3+) strips internal headers and validates against a random hex string.
 
-**Consequences:**
-- User fleet profiles lose ships silently (UUID becomes null, ship disappears from profile)
-- Historical missions reference ships that can't be resolved, breaking mission detail views
-- Operations show participants with no ship assignment even though they had one before migration
-- The `MissionShip.image` field in `PlannedMission` records stores absolute image URLs pointing to the old R2 CDN -- these become stale after migration even if the UUID matches
-
-**Warning signs:**
-- Migration dry-run reports >5% unmatched ships
-- Any ship with special characters (apostrophes, periods, diacritics) fails to match
-- Ships added between the last `ships.json` update and the FleetYards sync have no match candidates
+**Consequences:** Complete auth bypass on all protected routes. Dashboard, user profiles, admin pages, fleet operations, finance tracker -- all exposed without login.
 
 **Prevention:**
-1. Build a **name-mapping table** before migration: dump all unique ship name strings from every MongoDB collection (`users.ships[].name`, `missions.participants[].shipName`, `operations.participants[].shipName`, `planned-missions.ships[].shipName`), then run each against the FleetYards API with fuzzy matching
-2. Use a **multi-pass matching strategy**: exact match first, then case-insensitive, then with/without manufacturer prefix, then Levenshtein distance for typos, then manual mapping for known discrepancies
-3. Require **100% match rate** before migration proceeds -- any unmatched ship name must be manually resolved into a mapping entry
-4. Store the **original ship name alongside the UUID** during migration (e.g., `shipNameLegacy` field) so the old name is recoverable
-5. Write a **verification query** that runs post-migration to confirm every document that had a ship reference still has one
+- Verify the installed Next.js version (15.3.3) includes the CVE fix by checking the changelog -- it does (15.2.3+ patched), but this must be re-verified after any upgrade.
+- **Never rely solely on middleware for authorization.** Add `getServerSession()` checks in every API route and Server Component that serves sensitive data. Currently, the API routes already check `getServerSession(authOptions)` -- confirm coverage across all 35+ auth-dependent files.
+- After upgrading to 15.5, explicitly test that the `x-middleware-subrequest` header is stripped from external requests.
 
-**Phase:** Must be completed in the Migration phase. The mapping table should be built during the Sync Engine phase as a development artifact.
+**Detection:** Run `curl -H "x-middleware-subrequest: middleware" https://yoursite.com/dashboard` -- if it returns 200 instead of a redirect, the vulnerability is present.
+
+**Phase mapping:** Security Hardening phase (do first, before any other changes).
+
+**Confidence:** HIGH -- CVE-2025-29927 is well-documented by Datadog, JFrog, and NVD. The current version 15.3.3 should include the fix, but verification is required.
 
 ---
 
-### Pitfall 2: Big-Bang Migration Corrupts Production Data with No Rollback Path
+### Pitfall 2: CSP Nonce Implementation Forces All Pages to Dynamic Rendering
 
-**What goes wrong:** The migration runs against production MongoDB/Cosmos DB, updates thousands of documents across multiple collections simultaneously, and either partially fails (leaving half the data in old format, half in new) or succeeds but introduces subtle bugs discovered days later when users report broken profiles.
+**What goes wrong:** Adding Content-Security-Policy with nonces to prevent inline script injection requires generating a fresh nonce per request. This forces every page to render dynamically (no SSG, no CDN caching of HTML). For a 69-page app with many static-eligible pages (about, join, services, contact), this eliminates static optimization and increases server load.
 
-**Why it happens:** The PROJECT.md explicitly states "big-bang migration" with "no dual-format transition period." This means every ship reference across `users`, `missions`, `operations`, `planned-missions`, and `escort-requests` collections must be updated atomically. Cosmos DB's transaction support is severely limited: multi-document transactions only work within an unsharded collection (not across collections), and the transaction timeout is 5 seconds (30 seconds on vCore). A cross-collection migration cannot be transactional on Cosmos DB.
+**Why it happens:** Next.js applies nonces during server-side rendering based on the CSP header in the request. Static pages are generated at build time when no request exists, so no nonce can be injected. Additionally, Next.js uses inline scripts during hydration (`__next_f.push([...])`) which get blocked by strict CSP unless you either use `'unsafe-inline'` (defeats the purpose) or nonces (requires dynamic rendering).
 
 **Consequences:**
-- Partial migration leaves the application in an inconsistent state where some code expects UUIDs and other data still has name strings
-- Users see broken profiles, missing fleet data, or corrupted mission records
-- Rollback requires restoring from backup, losing any data created between backup and rollback
-- If the backup is stale (even by hours), user profile edits, new missions, new registrations are lost
-
-**Warning signs:**
-- Migration script has no dry-run mode
-- No pre-migration backup verification step
-- Migration doesn't track progress per-collection (so you don't know where it stopped on failure)
-- No rollback script exists
+- All pages become dynamically rendered, increasing TTFB by 200-500ms per page.
+- CDN caching becomes HTML-level ineffective (can still cache assets).
+- Performance regression across the entire site, not just protected pages.
 
 **Prevention:**
-1. Take a **point-in-time Cosmos DB backup** immediately before migration and verify it's restorable
-2. Implement migration as **per-collection sequential updates** with progress tracking (store last-processed document ID so it can resume)
-3. Add a **schema version field** to each collection (e.g., `_schemaVersion: 2`) so code can detect pre/post-migration documents
-4. Build the **rollback script before the migration script** -- if you can't reverse it, don't run it
-5. Put the application in **read-only mode** (or maintenance page) during migration to prevent new data from being created in the old format
-6. Run the migration on a **staging copy of production data first** and verify with automated checks before touching production
+- **Use CSP without nonces for static pages.** Apply `'unsafe-inline'` for script-src only on truly static marketing pages, and nonce-based CSP only on authenticated pages.
+- Alternatively, use `'strict-dynamic'` with a hash-based approach for static pages and nonce-based for dynamic pages.
+- Set CSP headers in middleware selectively -- only add nonces to paths under `/dashboard/`, `/admin/`, `/userprofile/`, not to `/`, `/about/`, `/services/`, etc.
+- The existing `next.config.js` `headers()` already sets X-Frame-Options, X-Content-Type-Options, and Referrer-Policy. CSP can be added there for static pages and in middleware for dynamic pages.
 
-**Phase:** Migration phase exclusively. The maintenance mode mechanism should be built in the API/UI phase as preparation.
+**Detection:** After implementation, check response headers on static pages. If `x-nextjs-cache: HIT` disappears from all pages, dynamic rendering has been forced globally.
+
+**Phase mapping:** Security Hardening phase, but plan CSP strategy BEFORE implementing to avoid the all-dynamic trap.
+
+**Confidence:** HIGH -- confirmed in Next.js 15 CSP documentation and GitHub discussion #80997.
 
 ---
 
-### Pitfall 3: FleetYards CDN Goes Down and All Ship Images Break Site-Wide
+### Pitfall 3: framer-motion to motion Package Rename Breaks 109 Files Simultaneously
 
-**What goes wrong:** After switching from self-hosted R2 images (`images.aydocorp.space`) to FleetYards CDN images, a FleetYards CDN outage causes every ship image across the entire site to display as broken/missing images -- fleet profiles, mission planners, operation views, ship selection dropdowns, and the resource archive page all show empty boxes or broken image icons.
+**What goes wrong:** The migration from `framer-motion` (v10) to `motion` (v12) involves a package rename: all 109 files importing from `'framer-motion'` must change to `'motion/react'`. If done as a single commit, a single typo or missed file breaks the entire build. If done incrementally, having both packages installed simultaneously causes bundle duplication and potential version conflicts.
 
-**Why it happens:** The PROJECT.md explicitly states "FleetYards CDN uptime required for ship images -- no local fallback planned" and "Mirroring images to R2 -- using FleetYards CDN directly, simpler." FleetYards is a community-maintained project with no SLA. Their GitHub issues show CORS errors (#3514) and API failures (#2502). The CDN could go down for maintenance, domain expiration, or the maintainer taking a break. The current `next.config.js` only whitelists `images.aydocorp.space` in `remotePatterns` -- FleetYards domains aren't even configured yet.
+**Why it happens:** The Motion project rebranded from `framer-motion` to `motion` starting with v11. While `framer-motion` as a package still exists and re-exports from `motion`, it is deprecated and will stop receiving updates. The React API itself has no breaking changes between v10 and v12 -- the risk is entirely in the import path migration across 109 files.
 
 **Consequences:**
-- Every ship image on the site breaks simultaneously (the `UserFleetBuilder`, `MissionDetail`, `OperationDetailView`, `ShipImage` components all render broken images)
-- The existing `onError` handler in `UserFleetBuilder` catches individual failures but the fallback placeholder (`/assets/ship-placeholder.png`) gives a degraded experience for the entire ship catalog
-- User perception: the site looks broken/abandoned even though it's only an image CDN issue
-- No way to fix it without a code change or waiting for FleetYards to come back
-
-**Warning signs:**
-- FleetYards CDN returns 5xx errors or connection timeouts during development/testing
-- CORS errors appear in browser console for FleetYards image URLs
-- Image load times are significantly slower than the self-hosted R2 CDN
-- FleetYards changes their image URL structure (they've had schema refactoring effort #2652)
+- Build failure if any file still imports `'framer-motion'` after the old package is uninstalled.
+- Bundle bloat if both `framer-motion` and `motion` are installed simultaneously (two copies of the same library).
+- `MotionProps` type import changes from `'framer-motion'` to `'motion/react'` -- the `MobiGlasPanel` component uses `MotionProps` explicitly and will fail to type-check.
 
 **Prevention:**
-1. Implement a **ship image proxy/cache layer**: store the FleetYards image URL in the ship document but serve images through a Next.js API route or edge function that caches to local storage / R2 / blob storage with a configurable TTL (e.g., 24 hours). This decouples display from CDN availability
-2. If the proxy is too complex for this milestone: at minimum, use the existing `onError` pattern in all image components with a **high-quality placeholder per ship size category** (not just one generic placeholder) and add `fleetyards.net` to Next.js `remotePatterns` in `next.config.js`
-3. **Store image URLs in the ship database document** during sync so they're served from your API, not constructed client-side from a CDN base URL. If the CDN URL structure changes, only the sync needs updating, not client code
-4. Set up a **health check** that periodically tests FleetYards image URLs and alerts if failure rate exceeds a threshold
+- Do the migration as a single atomic commit using a find-and-replace operation:
+  1. `npm install motion@latest`
+  2. Replace all `from 'framer-motion'` with `from 'motion/react'` across all 109 files.
+  3. `npm uninstall framer-motion`
+  4. Run `npm run type-check && npm run build` to verify.
+- Verify these specific import patterns exist in the codebase and must all be updated:
+  - `import { motion } from 'framer-motion'` (most files)
+  - `import { motion, AnimatePresence } from 'framer-motion'` (20+ files)
+  - `import { motion, MotionProps } from 'framer-motion'` (MobiGlasPanel.tsx)
+- **Do NOT try to migrate files incrementally** -- the "both packages installed" state is a trap.
 
-**Phase:** Must be designed in the Sync Engine phase (image URL storage) and implemented in the API/UI phase (error handling, proxy if chosen). The `next.config.js` update is needed at the very start.
+**Detection:** `grep -r "from 'framer-motion'" src/` returns 0 results after migration. `npm ls framer-motion` returns empty.
+
+**Phase mapping:** framer-motion Migration phase (standalone, do NOT combine with other refactoring).
+
+**Confidence:** HIGH -- verified from Motion upgrade guide and codebase grep showing exact import patterns.
 
 ---
 
-### Pitfall 4: Sync Job Silently Overwrites Good Data with Stale or Malformed API Response
+### Pitfall 4: Removing 'use client' from Components That Use Hooks or framer-motion
 
-**What goes wrong:** The FleetYards API returns unexpected data (empty array for a page, missing fields on a ship, null values where strings were expected, or an entirely different schema version) and the sync job writes this data directly into the ships collection, replacing previously good data.
+**What goes wrong:** Attempting to convert a component from Client to Server Component by removing `'use client'` fails silently at build time or crashes at runtime if the component (or any of its children) uses `useState`, `useEffect`, `useRef`, `framer-motion`, `useSession`, or any other client-only API. With 109 files using framer-motion and 50+ files using session hooks, the blast radius is enormous.
 
-**Why it happens:** Community APIs evolve without versioned contracts or changelogs. The FleetYards API is based on an OpenAPI 3.0.3 spec but the documentation page showed only minimal configuration -- no detailed schema guarantees. The response from `api.fleetyards.net/v1/models?page=15&perPage=25` returned an empty `[]` during testing, which means pagination can overshoot silently. If the sync job interprets an empty response as "no ships exist" and does a replace-all, the entire ship collection gets wiped.
+**Why it happens:** In Next.js App Router, all components are Server Components by default. The `'use client'` directive marks the boundary. Any component that uses React hooks, browser APIs, or client-side libraries (framer-motion, next-auth `useSession`) MUST be a Client Component. Developers often think "server components are better" and try to remove `'use client'` without auditing every hook and import in the file.
 
 **Consequences:**
-- Ship collection in MongoDB goes from 500+ records to 0 (if replace-all on empty response)
-- Ship collection gets partial data (if API paginates differently than expected)
-- Ship details have null/undefined fields that crash components expecting strings
-- `crewRequirement`, `cargoCapacity`, `size` fields change types or go missing, breaking mission planner filtering
-
-**Warning signs:**
-- Sync returns significantly fewer ships than expected (<400 when 500+ are known to exist)
-- Sync response includes ships with null `name` or null `manufacturer`
-- API response structure doesn't match the TypeScript types without transformation
-- Empty pages appear before the full dataset is consumed
+- Build error: `You're importing a component that needs useState. It only works in a Client Component.`
+- Runtime crash: `TypeError: Cannot read properties of null (reading 'useState')`
+- Subtle bug: Component renders without animations on server, looks broken to users.
 
 **Prevention:**
-1. **Never replace-all**: use upsert-by-UUID for each ship, and only mark ships as inactive/archived if they disappear from the API for N consecutive syncs (not on the first absence)
-2. **Validate the total count**: FleetYards likely returns pagination headers or total count. Compare the total ships received against the expected range (e.g., 400-700 for current Star Citizen). Abort sync if count is <80% of previous sync count
-3. **Schema validation on each ship record** before writing: require non-null `id`, `name`, `manufacturer.name` at minimum. Log and skip malformed records rather than writing them
-4. **Keep a `lastSyncedAt` timestamp** and `syncVersion` counter. Never delete the previous sync data until the new sync is validated
-5. **Store raw API response** (or at least a hash + count) in a sync audit log for debugging
+- **Do NOT attempt wholesale conversion.** Audit each component individually for:
+  1. React hooks (`useState`, `useEffect`, `useRef`, `useContext`, `useCallback`, `useMemo`)
+  2. framer-motion imports (109 files -- ALL must remain client components)
+  3. Event handlers (`onClick`, `onChange`, `onSubmit`, etc.)
+  4. `useSession` or `useSearchParams` or `useRouter` (from `next/navigation`)
+  5. Browser APIs (`window`, `document`, `localStorage`)
+- The conversion candidates are components that ONLY render static JSX with no interactivity -- likely only layout wrappers and static content sections. In this codebase, that number is small because the MobiGlas design system uses framer-motion pervasively.
+- Use the **composition pattern**: keep a Server Component as the parent, pass data down to a thin Client Component child that handles interactivity.
+- **The realistic opportunity is moving data fetching UP to server components**, not eliminating client components. Create Server Component wrappers that fetch data and pass it as props to existing Client Components.
 
-**Phase:** Sync Engine phase. The validation logic is core to the sync implementation, not an afterthought.
+**Detection:** `npm run type-check` catches most violations, but some only surface at runtime (e.g., conditional hook usage). Run `npm run build` for full validation.
+
+**Phase mapping:** Performance Optimization phase (after framer-motion migration, after security hardening).
+
+**Confidence:** HIGH -- well-documented Next.js behavior, verified against codebase analysis showing 109 framer-motion files and hook usage patterns.
+
+---
+
+### Pitfall 5: In-Memory Rate Limiter Fails in Multi-Instance and Serverless Deployments
+
+**What goes wrong:** The current rate limiter at `src/lib/rate-limiter.ts` uses an in-memory `Map<string, RateLimitEntry>` to track request counts. In production with Azure's standalone deployment (multiple instances), each instance has its own Map. An attacker can distribute requests across instances and bypass the rate limit entirely. The Map also resets on every deployment or instance restart.
+
+**Why it happens:** The `apiRateLimiter` and `authRateLimiter` are module-level singletons. In a single-process Node.js server, this works. In containerized/scaled deployments (Azure App Service with multiple instances, or any serverless setup), each instance is a separate process with its own memory space.
+
+**Consequences:**
+- Rate limiting is effectively disabled in multi-instance production deployments.
+- Auth brute-force protection (5 requests per 5 minutes) does not work across instances.
+- Memory leak: the `Map` grows unbounded since there is no cleanup of expired entries.
+
+**Prevention:**
+- **Replace in-memory Map with MongoDB/Cosmos DB storage for rate limit state.** The app already has a MongoDB connection (`mongodb-client.ts`). Add a `rateLimits` collection with TTL index for automatic expiration.
+- Alternatively, use Redis/Upstash for rate limiting if latency is critical (MongoDB adds ~5-10ms per rate limit check).
+- Add a cleanup mechanism for expired entries -- the current implementation never removes entries from the Map.
+- For the auth rate limiter specifically, consider using IP + handle combination as the key, not just IP, to prevent one user's failed attempts from locking out others on the same network.
+
+**Detection:** In production, check `process.env.NODE_ENV === 'production'` and log a warning if the in-memory rate limiter is being used. Add monitoring for rate limit bypass attempts.
+
+**Phase mapping:** Security Hardening phase (address alongside CSP and middleware hardening).
+
+**Confidence:** HIGH -- directly verified from `src/lib/rate-limiter.ts` code analysis and confirmed by multiple sources on in-memory rate limiting failures in production.
+
+---
+
+### Pitfall 6: Dual MongoDB Client Modules Create Connection Pool Exhaustion
+
+**What goes wrong:** The codebase has two separate MongoDB client modules -- `mongodb-client.ts` and `mongodb.ts` -- each creating their own `MongoClient` instances with `maxPoolSize: 100`. In production, this means up to 200 concurrent connections to Cosmos DB, which may exceed the connection limit and cause connection timeouts or "MongoServerSelectionError" failures.
+
+**Why it happens:** `mongodb-client.ts` manages its own `client` variable with `ensureConnection()` retry logic, while `mongodb.ts` uses the Next.js-recommended `clientPromise` pattern with `global` caching for HMR. Both are imported by different parts of the app -- storage modules use one, page components may use the other. Consolidating them risks breaking either consumer pattern.
+
+**Consequences:**
+- Double connection pool usage in production (200 connections instead of 100).
+- Connection pool exhaustion causes cascading failures across all DB-dependent features.
+- Subtle bugs where one module's connection drops but the other's doesn't, creating inconsistent behavior.
+- During the security hardening phase, adding rate limit storage to MongoDB adds a third pattern of DB access, worsening the problem.
+
+**Prevention:**
+- **Consolidate to a single MongoDB client module BEFORE adding new DB consumers** (rate limiting, session storage, etc.).
+- Keep the `mongodb.ts` pattern (clientPromise with global caching) as the canonical approach.
+- Migrate all `mongodb-client.ts` consumers to use the shared client.
+- Reduce `maxPoolSize` to 50 after consolidation -- Cosmos DB vCore has connection limits per tier.
+- Add connection pool monitoring with `client.on('connectionPoolCreated')` and `client.on('connectionPoolClosed')`.
+
+**Detection:** In Azure Cosmos DB metrics, check "Total Connections" -- if it exceeds `maxPoolSize` consistently, you have multiple client instances.
+
+**Phase mapping:** Technical debt phase (do BEFORE security hardening, since security adds more DB consumers).
+
+**Confidence:** HIGH -- directly observed in codebase. Both files exist and both create `new MongoClient()`.
 
 ---
 
 ## Moderate Pitfalls
 
-Mistakes that cause delays, degraded performance, or technical debt.
+Mistakes that cause regressions, extra work, or delayed delivery but don't break the app catastrophically.
 
 ---
 
-### Pitfall 5: Cosmos DB MongoDB Compatibility Gaps Break Sync or Query Operations
+### Pitfall 7: Next.js 15.5 Deprecates `next lint` -- Build Pipeline Will Emit Warnings
 
-**What goes wrong:** The sync engine or ship query API uses MongoDB features that aren't supported by Azure Cosmos DB's MongoDB compatibility layer, causing silent data loss, incorrect query results, or runtime errors in production.
+**What goes wrong:** The app's `package.json` uses `"lint": "next lint"`. Next.js 15.5 deprecates the `next lint` command and will show deprecation warnings. In Next.js 16, `next lint` will be removed entirely. Additionally, `next build` currently runs a linting step automatically -- this auto-lint during builds will also be removed in Next.js 16.
 
-**Why it happens:** The existing codebase already accounts for this with `retryWrites: false` in `mongodb.ts` (Cosmos DB 3.6 doesn't support retryable writes). However, new ship collection operations might use unsupported features:
-- Bulk write operations with `$lookup` (not fully supported in RU-based Cosmos DB)
-- Text search indexes for ship name search (not supported in classic Cosmos DB)
-- `$regex` with case-insensitive flag causes full collection scans instead of using indexes
-- `bulkWrite` with `ordered: false` may behave differently under Cosmos DB's partition model
-- If the ship collection uses a partition key, cross-partition queries for "list all ships" will fan out and be expensive
-
-**Consequences:**
-- Ship search by name becomes extremely slow (full collection scan on 500+ documents per query)
-- Bulk upsert during sync fails partway through and doesn't report which records succeeded
-- Aggregation queries for statistics (ship count by manufacturer, size distribution) return incorrect results
-- RU consumption spikes unexpectedly during sync, potentially hitting Cosmos DB throttling limits (429 errors)
-
-**Warning signs:**
-- `429 Too Many Requests` errors from Cosmos DB during or after sync
-- Ship search queries take >500ms
-- Index creation fails silently (the existing pattern in `mongo-indexes.ts` catches and ignores errors)
-- Cosmos DB billing shows unexpected RU consumption after sync job runs
+**Why it happens:** Next.js is decoupling its linting from the framework, preferring direct ESLint CLI or Biome usage.
 
 **Prevention:**
-1. **Test every query against Cosmos DB specifically**, not just local MongoDB. Queries that work on local MongoDB 7.x may fail on Cosmos DB 4.2 compat
-2. Use simple indexes only -- no text indexes, no compound indexes with more than 8 keys. Check the Cosmos DB 4.2 feature support matrix before writing any new query
-3. For ship name search, use **application-level filtering** on the cached dataset rather than database `$regex` queries. The ship collection is small enough (~500 docs) to cache in memory
-4. During sync, use **individual upsert operations** with error handling per document, not bulk writes. This is slower but more reliable on Cosmos DB
-5. Create a **dedicated ship collection index** for the UUID field and the slug/name field early, and verify it exists before running sync
-6. Monitor RU consumption with `db.collection.stats()` or Azure metrics after each sync run
+- After upgrading to 15.5, run the official codemod: `npx @next/codemod@latest next-lint-to-eslint-cli .`
+- Update `package.json` scripts from `"lint": "next lint"` to `"lint": "eslint ."` (or `"lint": "eslint"` for ESLint v9+ flat config).
+- The current `.eslintrc.js` config extends `next/core-web-vitals` and `next/typescript` -- these still work with direct ESLint CLI invocation.
+- Ensure `eslint` and `eslint-config-next` are in `devDependencies` (they already are).
 
-**Phase:** Sync Engine phase (query design) and API phase (search implementation).
+**Phase mapping:** Next.js Upgrade phase (handle during 15.3 to 15.5 migration).
+
+**Confidence:** HIGH -- confirmed in official Next.js 15.5 release notes.
 
 ---
 
-### Pitfall 6: Ship Data Schema Drift Between FleetYards Versions and Local Types
+### Pitfall 8: `next/image` Quality Prop Deprecation Breaks Navigation Logo
 
-**What goes wrong:** The FleetYards API response schema evolves (fields renamed, nested objects restructured, new fields added, image URL formats changed) and the TypeScript types in the codebase become stale. The sync continues to "work" but either drops new fields or crashes on renamed ones.
+**What goes wrong:** The Navigation component uses `quality={90}` on the logo image. In Next.js 15.5, this emits a deprecation warning. In Next.js 16, using `quality` values other than 75 without explicit `images.qualities` configuration will error.
 
-**Why it happens:** The FleetYards API is at v1 but is actively maintained (their GitHub shows ongoing releases and schema refactoring effort #2652). There's no webhook, changelog subscription, or schema versioning guarantee. Star Citizen itself adds new ship properties with major patches (e.g., new fuel types, new size categories, module systems) that FleetYards reflects.
-
-**Consequences:**
-- New ship data fields (e.g., quantum fuel capacity, module slots) are silently discarded during sync
-- Changed field names cause the sync to write null/undefined for previously populated fields
-- Image URL structure changes break all images (e.g., if they move from `fleetyards.net/uploads/` to a different CDN path)
-- Type mismatches cause runtime crashes in components that assume field types (e.g., `ship.crew.min` restructured to `ship.minCrew`)
-
-**Warning signs:**
-- Sync logs show `undefined` or `null` for fields that should have values
-- New ships added to the game appear with incomplete data compared to older ships
-- TypeScript `any` casts creep in to suppress type errors after API changes
+**Why it happens:** Next.js is restricting the quality prop to reduce CDN cache variation. Each quality value creates a separate cached version of the image.
 
 **Prevention:**
-1. **Map from API response to internal types explicitly** -- never store the raw FleetYards response directly. Write a `mapFleetYardsShipToLocalShip()` transformer function that picks only known fields and provides defaults for missing ones
-2. **Log dropped/unknown fields** during sync at the `warn` level so new API fields are discovered passively
-3. **Pin the sync to specific known fields** and treat everything else as optional metadata. The core fields are: `id` (UUID), `name`, `slug`, `manufacturer.name`, `manufacturer.code`, `classification`, `crew.min`, `crew.max`, `metrics.cargo`, `metrics.length`, `metrics.beam`, `metrics.height`, `metrics.mass`, `productionStatus`, and `media` (image URLs)
-4. **Version the transformer function** so when FleetYards makes breaking changes, you can update the mapper without changing the storage schema
-5. Add an **integration test** that fetches one page from the live FleetYards API and validates the response matches expected field presence (run weekly, not on every deploy)
+- Add `images: { qualities: [75, 90] }` to `next.config.js` during the upgrade.
+- Or change the logo to `quality={75}` if the visual difference is negligible.
+- Audit all `<Image>` components for `quality` props -- current codebase has only 1 instance in `Navigation.tsx`.
 
-**Phase:** Sync Engine phase (transformer design). Integration test in the Testing phase.
+**Phase mapping:** Next.js Upgrade phase (trivial fix, handle alongside upgrade).
+
+**Confidence:** HIGH -- confirmed in Next.js 15.5 release notes, verified single usage in codebase.
 
 ---
 
-### Pitfall 7: Cron Job Execution Issues on the Deployment Platform
+### Pitfall 9: Design System Consolidation Breaks Visual Consistency During Migration
 
-**What goes wrong:** The scheduled sync job either doesn't run, runs too frequently, runs multiple times concurrently, or gets killed mid-execution due to platform timeout limits.
+**What goes wrong:** The codebase has 530+ references to MobiGlas CSS patterns (`border-[rgba(var(--mg-*` across 106 files) and two competing button implementations: `MobiGlasButton` (in `ui/mobiglas/`) and `HolographicButton` (in `fleet-ops/mission-planner/`). Consolidating these creates a period where some pages use the old hand-coded patterns and others use the new components, causing visual inconsistency across the site.
 
-**Why it happens:** The application deploys to Azure as a standalone Next.js app. The execution context for cron/scheduled tasks depends entirely on the hosting model:
-- **Azure App Service**: No built-in cron for Next.js. Requires Azure Functions, Logic Apps, or an external cron service to trigger a sync API endpoint
-- **Serverless functions**: Have execution time limits (typically 10-60 seconds). Syncing 500+ ships with pagination could easily exceed this
-- **Multiple instances**: If the app runs on multiple instances (scaling), each instance might trigger its own sync, causing duplicate writes or race conditions
-- **Cold starts**: The first sync after a deployment might fail because the database connection isn't established yet
+**Why it happens:** The MobiGlas design system grew organically. Components like `HolographicButton` were built independently for the mission planner with ~250 lines of custom framer-motion animation code. Meanwhile, `MobiGlasButton` in `ui/mobiglas/` serves a similar purpose with different styling. Pages directly use CSS patterns like `border-[rgba(var(--mg-primary),0.3)]` instead of going through components. Consolidating 530+ inline style references is not a "find and replace" -- each instance needs visual verification.
 
 **Consequences:**
-- Ship data goes stale for days/weeks because the sync never actually runs
-- Concurrent syncs create duplicate ships or trigger Cosmos DB throttling
-- Long-running sync gets killed at 50% completion, leaving partial data
-- Sync appears to work in development but fails silently in production
-
-**Warning signs:**
-- No sync audit records in the database after deployment
-- Ship data still shows previous patch information after a Star Citizen update
-- Cosmos DB metrics show double the expected write operations during sync windows
-- Application logs show timeout errors from the sync endpoint
+- Visual regression on pages migrated to new components while others still use old patterns.
+- Users see inconsistent button styles, panel borders, and animation behaviors across different sections.
+- QA burden is enormous -- every page must be visually inspected.
 
 **Prevention:**
-1. **Make the sync endpoint idempotent and resumable**: track which page was last successfully synced so a killed job can resume
-2. **Use a distributed lock** (e.g., a `sync-locks` collection with a TTL document) to prevent concurrent syncs across instances
-3. **Implement the sync as a paginated, chunked operation**: fetch one page, upsert those ships, record progress, fetch next page. If killed, resume from last page
-4. **Protect the sync endpoint** with a secret token (`CRON_SECRET` header) so it can only be triggered by the legitimate cron service
-5. **Choose the cron trigger approach based on deployment**: for Azure App Service, use Azure Timer Trigger Function or an external cron service like cron-job.org to hit the sync API endpoint
-6. **Set sync frequency to once daily** (not hourly) -- ship data changes only with Star Citizen patches (roughly monthly). Over-syncing wastes RUs and risks hitting FleetYards rate limits
-7. Log every sync execution (start time, end time, ships processed, errors) to a `sync-audit` collection
+- **Build the consolidated design system components FIRST, then migrate page by page.** Never delete old CSS until all consumers are migrated.
+- Create a visual regression testing setup (screenshots or Storybook) before starting.
+- Migrate in sections: all dashboard pages first, then public pages, then fleet-ops.
+- Keep both button components functional during migration -- deprecate `HolographicButton` only after all consumers use `MobiGlasButton`.
+- The `ui/mobiglas/index.ts` barrel export already has the right structure -- add new consolidated components there.
 
-**Phase:** Sync Engine phase (idempotency, locking, pagination) and Deployment phase (cron trigger setup).
+**Phase mapping:** Design System phase (do AFTER framer-motion migration, since both buttons use framer-motion heavily and the import paths need to be stable first).
+
+**Confidence:** HIGH -- directly verified from codebase analysis showing 530+ inline pattern references and two competing button components.
 
 ---
 
-### Pitfall 8: Ship Name Search After UUID Migration Breaks User Workflows
+### Pitfall 10: framer-motion `AnimatePresence` Behavioral Changes in Rapid State Updates
 
-**What goes wrong:** After migration to UUIDs, the ship selection UI in the fleet builder and mission planner no longer supports the fuzzy name matching that users relied on. Users can't find ships because the search only works on exact UUID matches or the FleetYards canonical name, which may differ from what they're used to typing.
+**What goes wrong:** The codebase uses `AnimatePresence` in 20+ components (Navigation, HomeContent, SignupForm, ContactHero, ServicesSection, FleetBreakdownTable, etc.). Known bugs in framer-motion v10-v11 cause `AnimatePresence` to get stuck when state changes rapidly -- exit animations don't complete, leaving ghost elements in the DOM. The v12 upgrade may fix some of these but could also change timing behavior, causing subtle animation differences.
 
-**Why it happens:** The current `getShipByName()` function in `ShipData.ts` has a multi-pass fuzzy search: direct name match, then type match, then partial includes in both directions. The current `UserFleetBuilder` uses `getShipsByManufacturer()` for dropdown population. After migration, if the ship selection switches to a database-backed API that searches by UUID or exact name, the fuzzy matching is lost. FleetYards ship names may also use different conventions than what users have memorized (e.g., `"F7C-M Super Hornet Mk II"` vs. `"Super Hornet"`).
+**Why it happens:** `AnimatePresence` tracks enter/exit states internally. When React state updates faster than animation duration, the component can lose track of which children are entering vs. exiting. The `mode="wait"` prop (used in `HomeContent.tsx` and `AboutSection.tsx`) is particularly susceptible because it queues exit before enter.
 
 **Consequences:**
-- Users can't find their ship in the fleet builder because they're searching for `"Super Hornet"` but the canonical name is `"F7C-M Super Hornet Mk II"`
-- Mission planners take longer because the ship selection UX regresses from the current experience
-- Users report "my ship is gone" when it's actually present but under a different name
-
-**Warning signs:**
-- User complaints increase after the migration goes live
-- Ship selection usage (add ship events) drops measurably compared to before migration
-- Support requests about "can't find my ship"
+- Ghost elements remaining in DOM after rapid navigation.
+- Exit animations not firing, causing abrupt layout shifts.
+- Components appearing "stuck" in their exit state.
 
 **Prevention:**
-1. **Build a searchable name index** that includes the canonical name, common aliases, short names, and the ship's slug. For example, index both `"F7C-M Super Hornet Mk II"` and `"Super Hornet"`
-2. **Preserve the manufacturer-grouped dropdown UX** from the current `UserFleetBuilder` -- don't switch to a search-only interface without also keeping the browse-by-manufacturer flow
-3. **Include the ship's previous name** (from the pre-migration `ships.json`) as a searchable alias in the database
-4. **Add autocomplete/typeahead** that searches across name, slug, manufacturer, and role fields simultaneously
-5. **Test the new UI with actual users** (or at least with the pre-migration ship name list) to verify that every ship currently in users' fleets can be found through the new selection interface
+- After upgrading to motion v12, test all `AnimatePresence` instances with rapid state changes (fast clicking, quick navigation).
+- Pay special attention to `mode="wait"` instances -- the codebase has at least 2: `HomeContent.tsx` line 727 and `AboutSection.tsx` line 85.
+- Pay special attention to `layoutId` instances -- the codebase has 2: `AboutSection.tsx` (`activeTabLine`) and `FleetCompositionTabs.tsx` (`fleet-tab-indicator`). Layout animations interact with `AnimatePresence` and have had bugs around exit timing.
+- Consider adding `onExitComplete` callbacks to detect stuck states and force cleanup.
 
-**Phase:** API/UI phase. The search index design should be part of the Sync Engine schema.
+**Phase mapping:** framer-motion Migration phase (test as part of migration validation).
+
+**Confidence:** MEDIUM -- the bugs are documented in GitHub issues #2554 and #2023, but whether v12 resolves them is not confirmed. Test after migration.
+
+---
+
+### Pitfall 11: Security Middleware Expansion Conflicts with Existing Middleware Matcher
+
+**What goes wrong:** The current middleware matcher excludes API routes (`/api/*`), static files, and images. Adding CSP headers, rate limiting, or additional auth checks in middleware requires expanding what the middleware handles. If the matcher is changed to include API routes (for rate limiting), it could interfere with NextAuth's `[...nextauth]` catch-all route, breaking login/logout flows.
+
+**Why it happens:** The current matcher pattern `'/((?!api|_next/static|_next/image|...)*)'` explicitly excludes all API routes. Rate limiting in middleware would need to include `/api/*` routes. But NextAuth's internal routes (`/api/auth/callback/*`, `/api/auth/session`, etc.) make their own internal requests that would be rate-limited, potentially blocking legitimate auth flows.
+
+**Consequences:**
+- Login flow breaks because NextAuth callback requests are rate-limited.
+- Discord OAuth flow fails because the callback URL hits the rate limiter.
+- API routes that serve dashboard data get blocked during normal usage.
+
+**Prevention:**
+- **Keep rate limiting in individual API route handlers**, not in middleware. The current pattern of using `apiRateLimiter.isRateLimited(key)` in route files is correct architecturally.
+- If middleware rate limiting is desired, add explicit exclusions for `/api/auth/*` routes.
+- For CSP headers in middleware, keep the existing matcher pattern that excludes API routes -- CSP is only needed for HTML responses, not API JSON responses.
+- Test the Discord OAuth flow end-to-end after any middleware changes.
+
+**Phase mapping:** Security Hardening phase (careful design before implementation).
+
+**Confidence:** HIGH -- directly observed in current middleware.ts matcher and NextAuth route structure.
+
+---
+
+### Pitfall 12: Node.js Middleware Runtime Change in 15.5 Alters getToken() Behavior
+
+**What goes wrong:** Next.js 15.5 stabilizes Node.js middleware runtime (previously Edge-only). If the middleware is configured with `runtime: 'nodejs'` (either explicitly or as a future default), the `getToken()` function from `next-auth/jwt` may behave differently. The Edge runtime uses Web Crypto API for JWT verification, while Node.js runtime uses the `crypto` module. Token format or verification differences could cause intermittent auth failures.
+
+**Why it happens:** NextAuth's `getToken()` implementation has different code paths for Edge vs Node.js runtimes. The current middleware runs on Edge runtime (the default). Switching to Node.js runtime may use different JWT verification, cookie handling, or request parsing. The `next-auth` package version 4.24.11 may not fully support the Node.js middleware runtime since it predates the stable release.
+
+**Consequences:**
+- Intermittent 403 errors on protected routes.
+- Token validation failures after deployment but not in development.
+- All authenticated users locked out if the runtime change affects `getToken()`.
+
+**Prevention:**
+- **Do NOT switch to `runtime: 'nodejs'` in middleware during the initial upgrade.** Keep the default Edge runtime.
+- Test `getToken()` explicitly after the 15.5 upgrade with the default runtime before considering any runtime change.
+- If Node.js middleware runtime is needed (for rate limiting with DB access), consider upgrading to `next-auth@5` (Auth.js) which has explicit Edge compatibility support -- but this is a separate major migration.
+
+**Phase mapping:** Next.js Upgrade phase (preserve current runtime, test before changing).
+
+**Confidence:** MEDIUM -- the interaction between next-auth v4 and Node.js middleware runtime is not well-documented. Test empirically.
 
 ---
 
 ## Minor Pitfalls
 
-Mistakes that cause annoyance, minor bugs, or extra work but are quickly fixable.
+Mistakes that cause developer friction or minor UX issues.
 
 ---
 
-### Pitfall 9: `next.config.js` Missing FleetYards Domain in Image RemotePatterns
+### Pitfall 13: Turbopack CSS Ordering Differs from Webpack
 
-**What goes wrong:** FleetYards CDN images fail to load in production because the Next.js Image component blocks external domains not listed in `remotePatterns`.
+**What goes wrong:** Next.js 15.5 introduces Turbopack builds in beta. If enabled (`next build --turbopack`), CSS files may be concatenated in a different order than Webpack. For a design system with 530+ inline style references and custom CSS variables (`--mg-primary`, `--mg-background`, etc.), ordering changes could cause styles to override differently, producing subtle visual bugs.
 
-**Why it happens:** The current `next.config.js` (in `scripts/next.config.js`) only whitelists `images.aydocorp.space` and `aydocorp.space`. FleetYards images come from a different domain (likely `fleetyards.net` or a CDN subdomain). If anyone uses `<Image>` (Next.js optimized) instead of `<img>` for ship images, it will fail in production.
+**Why it happens:** Turbopack uses different heuristics for side-effects handling, which changes CSS concatenation order.
 
 **Prevention:**
-1. Add FleetYards CDN domains to `remotePatterns` in `next.config.js` at the start of the project, before any image work begins
-2. Identify the exact FleetYards image domain(s) from the API response `media` field and add all of them
-3. Consider using `unoptimized={true}` on FleetYards images to avoid double-optimization costs (FleetYards already provides multiple resolutions)
+- Do not enable Turbopack for production builds during this milestone.
+- If exploring Turbopack in development, visually compare key pages between `next dev` (Webpack) and `next dev --turbopack` before committing.
+- The CSS variable approach used by the MobiGlas design system is less susceptible to ordering issues than class-based overrides, but verify.
 
-**Phase:** Very first task -- prerequisite for any image work.
+**Phase mapping:** Next.js Upgrade phase (informational, do not enable Turbopack yet).
+
+**Confidence:** HIGH -- documented in Next.js 15.5 release notes as a known difference.
 
 ---
 
-### Pitfall 10: Existing R2 CDN Image References Become Dead Links After Migration
+### Pitfall 14: framer-motion MotionValue Velocity Calculation Change
 
-**What goes wrong:** After migration, old `user.ships[].image` values still contain R2 CDN URLs (e.g., `https://images.aydocorp.space/constellation_andromeda.png`). If the R2 bucket is decommissioned before all references are updated, these become dead links. Also, `MissionShip.image` fields in `PlannedMission` documents store absolute R2 URLs that aren't part of the UUID migration.
+**What goes wrong:** From v11 onward, subsequent value updates within synchronous blocks of code are no longer considered part of a MotionValue's velocity calculations. Components using `useMotionValue` or `useSpring` for gesture-driven animations may feel "different" after the upgrade.
 
-**Why it happens:** The migration focuses on converting ship name strings to UUIDs, but image URL fields are separate strings that may not be updated by the same migration. The `PlannedMission` type stores `image: string` as an absolute URL, not a reference to the ship database. Historical mission records will forever contain old R2 URLs unless explicitly migrated.
+**Why it happens:** The Motion team changed velocity tracking to prevent unrealistic velocity spikes from synchronous batched updates.
 
 **Prevention:**
-1. **Include image URL migration** in the ship reference migration script -- update `user.ships[].image` and `MissionShip.image` fields alongside the UUID conversion
-2. **Don't decommission the R2 bucket** until a grace period (e.g., 30 days) after migration, to catch missed references
-3. Consider **redirecting the R2 domain** to serve placeholder images or FleetYards equivalents, rather than returning 404s
-4. For historical missions (completed/archived), accept that images may break and use the ship placeholder fallback gracefully
+- Search the codebase for `useMotionValue`, `useSpring`, `useTransform` -- these are the affected APIs.
+- Current codebase grep shows no direct usage of these hooks, so this is LOW risk for this project.
+- The `HolographicButton` and `EventCarousel` use `motion.div` with `animate` props (declarative) rather than imperative motion values, so they are unaffected.
 
-**Phase:** Migration phase (image URL update). R2 decommission in a post-migration cleanup phase.
+**Phase mapping:** framer-motion Migration phase (verify, likely no action needed).
+
+**Confidence:** MEDIUM -- the API change is documented, but this codebase appears to not use the affected APIs.
 
 ---
 
-### Pitfall 11: Memory Pressure from Caching 500+ Ship Records with Full Image Metadata
+### Pitfall 15: Props Serialization Boundary Errors in Server/Client Component Composition
 
-**What goes wrong:** The current `loadShipDatabase()` in `ship-data.ts` caches all ships in a module-level variable (`shipCache`). After the FleetYards migration, each ship record will be significantly larger (multiple image URLs in multiple resolutions, full specs, availability data) which increases memory usage. On a serverless platform, this cache is lost on every cold start, requiring a fresh database fetch.
+**What goes wrong:** When wrapping existing Client Components in new Server Component data-fetching parents, props passed across the boundary must be serializable. Functions, classes, Dates, Maps, Sets, and Symbols cannot be passed from Server to Client Components. Some components may receive callback functions or complex objects as props that work fine when both parent and child are Client Components but fail at the serialization boundary.
 
-**Why it happens:** The current `ships.json` is lean (~20 fields per ship). A FleetYards ship record with media, pricing, availability, and full specs could be 10-20x larger. Caching 500 of these in memory uses non-trivial RAM, and the cache lifetime is unpredictable on serverless.
-
-**Prevention:**
-1. **Store only the fields you need** in the ships collection (the mapper function from Pitfall 6 naturally handles this)
-2. **Use a lean projection** when querying ships for list views (name, UUID, manufacturer, size, primary image only -- not full specs)
-3. Consider **ISR (Incremental Static Regeneration)** or **server-side caching** with a TTL for the ship list API endpoint, rather than in-memory caching per request
-4. If using in-memory cache, set a **cache size limit** and eviction strategy
-
-**Phase:** API phase (query projection design) and Sync Engine phase (storage schema -- only store needed fields).
-
----
-
-### Pitfall 12: Inconsistent Ship Data During Sync Window
-
-**What goes wrong:** While the sync job is running (potentially taking 30-60 seconds for 500+ ships across paginated API calls), different API requests to the application may return different ship data -- some requests see the old data, some see partially-updated data.
-
-**Why it happens:** The upsert-by-UUID approach means ships are updated one page at a time. A user browsing ships during this window might see a mix of old and new data, or might get a stale cache hit followed by fresh data.
+**Why it happens:** React Server Components serialize props to JSON when passing from server to client. Non-serializable values cause runtime errors.
 
 **Prevention:**
-1. **Accept eventual consistency** -- for a daily sync of reference data, brief inconsistency is tolerable
-2. **Invalidate the in-memory ship cache** only after the full sync completes, not during
-3. If stronger consistency is needed: sync into a **staging collection** (`ships_staging`), then atomically rename/swap collections after validation
-4. Use a `lastSyncCompletedAt` timestamp that the API layer checks to decide whether to invalidate its cache
+- Before converting a parent component to Server Component, audit all props passed to its Client Component children.
+- Common violations: `onClick` handlers passed as props (must stay in client), Date objects (serialize to string), and MongoDB ObjectId instances (not serializable).
+- The pattern is: Server Component fetches data, serializes to plain objects, passes to Client Component which handles interactivity.
 
-**Phase:** Sync Engine phase (cache invalidation strategy).
+**Phase mapping:** Performance Optimization phase (when implementing Server Component wrappers).
+
+**Confidence:** HIGH -- fundamental React Server Components constraint, well-documented.
 
 ---
 
 ## Phase-Specific Warnings
 
-| Phase | Likely Pitfall | Mitigation | Severity |
-|-------|---------------|------------|----------|
-| **Sync Engine** | Empty API page interpreted as "delete all" (P4) | Validate total count before committing | Critical |
-| **Sync Engine** | FleetYards schema change breaks transformer (P6) | Explicit field mapping with defaults | Moderate |
-| **Sync Engine** | Concurrent sync instances on multi-node deploy (P7) | Distributed lock document with TTL | Moderate |
-| **Ship Data Model** | Cosmos DB doesn't support text search indexes (P5) | In-memory or application-level search | Moderate |
-| **Migration** | Name-to-UUID matching fails for 10%+ of ships (P1) | Pre-migration mapping table with manual overrides | Critical |
-| **Migration** | Partial failure leaves mixed format data (P2) | Per-collection progress tracking + rollback script | Critical |
-| **Migration** | Image URLs not updated alongside ship references (P10) | Include image migration in same script | Minor |
-| **API/UI** | FleetYards CDN outage breaks all ship images (P3) | Proxy layer or comprehensive error handling | Critical |
-| **API/UI** | Ship search UX regresses after UUID switch (P8) | Searchable alias index + preserve browse UX | Moderate |
-| **API/UI** | Next.js blocks FleetYards images (P9) | Add remotePatterns before any image work | Minor |
-| **Deployment** | Cron job doesn't trigger in Azure hosting (P7) | External cron service + audit logging | Moderate |
-| **Post-Migration** | R2 decommission breaks historical references (P10) | 30-day grace period + redirects | Minor |
+| Phase Topic | Likely Pitfall | Mitigation | Severity |
+|---|---|---|---|
+| **Security Hardening** | CSP nonces force all pages dynamic (Pitfall 2) | Split CSP strategy: hash-based for static, nonce-based for dynamic pages only | Critical |
+| **Security Hardening** | In-memory rate limiter ineffective in production (Pitfall 5) | Move to MongoDB-backed rate limiting before hardening | Critical |
+| **Security Hardening** | Middleware expansion breaks NextAuth (Pitfall 11) | Keep rate limiting in route handlers, not middleware | Moderate |
+| **MongoDB Consolidation** | Dual client modules (Pitfall 6) | Consolidate BEFORE adding new DB consumers | Critical |
+| **Next.js 15.3 to 15.5** | `next lint` deprecation (Pitfall 7) | Run codemod during upgrade | Moderate |
+| **Next.js 15.3 to 15.5** | Image quality prop deprecation (Pitfall 8) | Add `images.qualities` config | Minor |
+| **Next.js 15.3 to 15.5** | Middleware runtime change risk (Pitfall 12) | Do NOT change runtime during upgrade | Moderate |
+| **Next.js 15.3 to 15.5** | Turbopack CSS ordering (Pitfall 13) | Do not enable Turbopack for production yet | Minor |
+| **framer-motion Migration** | 109-file import rename (Pitfall 3) | Single atomic commit with find-and-replace | Critical |
+| **framer-motion Migration** | AnimatePresence behavioral changes (Pitfall 10) | Test all 20+ AnimatePresence instances | Moderate |
+| **framer-motion Migration** | MotionValue velocity change (Pitfall 14) | Verify no affected APIs used (likely clean) | Minor |
+| **Server Component Conversion** | Removing 'use client' from hook-using components (Pitfall 4) | Audit each component, convert only pure-render wrappers | Critical |
+| **Server Component Conversion** | Props serialization boundary (Pitfall 15) | Audit props before conversion | Moderate |
+| **Design System Consolidation** | Visual inconsistency during migration (Pitfall 9) | Build new components first, migrate page-by-page | Moderate |
+
+---
+
+## "Looks Done But Isn't" Checklist
+
+These items appear complete after initial implementation but have hidden failure modes.
+
+- [ ] **CSP headers set** -- but did you test that `__next_f.push()` inline scripts still work? Next.js hydration uses inline scripts that CSP blocks.
+- [ ] **Rate limiter moved to DB** -- but did you add TTL indexes for auto-cleanup? Without them, the rate limit collection grows unbounded.
+- [ ] **framer-motion imports updated** -- but did you check `MotionProps` type import in `MobiGlasPanel.tsx`? It uses `MotionProps` from `framer-motion` explicitly.
+- [ ] **Middleware auth works** -- but did you test the Discord OAuth callback flow? It makes multiple redirects that each hit middleware.
+- [ ] **Server Components added** -- but did you test with JavaScript disabled? Server Components render HTML, but if client hydration fails, interactive elements break silently.
+- [ ] **Design system components consolidated** -- but did you verify the 530+ inline `rgba(var(--mg-*))` references still resolve? CSS variable names changing breaks every page.
+- [ ] **`next lint` migrated to ESLint CLI** -- but did you verify `npm run build` no longer auto-runs lint? In 15.5 it still does; in 16 it won't.
+- [ ] **All pages tested** -- but did you test on mobile? The MobiGlas design uses `whileHover` animations (159 instances across 43 files) that don't trigger on touch devices.
+
+---
+
+## Recommended Phase Ordering Based on Pitfall Dependencies
+
+Based on the pitfall analysis, this is the safest order:
+
+1. **MongoDB Consolidation** (Pitfall 6) -- merge dual clients before adding any new DB consumers.
+2. **Security Hardening** (Pitfalls 1, 2, 5, 11) -- fix rate limiter, add CSP, verify CVE patch. Requires consolidated DB.
+3. **Next.js 15.3 to 15.5 Upgrade** (Pitfalls 7, 8, 12, 13) -- update framework, handle deprecations. Clean security baseline needed first.
+4. **framer-motion v10 to motion v12** (Pitfalls 3, 10, 14) -- atomic import rename, test animations. Independent of Next.js version but do after framework is stable.
+5. **Server Component Optimization** (Pitfalls 4, 15) -- move data fetching to server layer. Requires stable imports (post-motion migration).
+6. **Design System Consolidation** (Pitfall 9) -- consolidate MobiGlas components. Requires stable framer-motion imports and server component boundaries.
+
+**Critical dependency chain:** MongoDB Consolidation MUST precede Security Hardening. framer-motion Migration MUST precede Design System Consolidation. Next.js Upgrade should precede framer-motion migration (to have the latest framework before changing animation library).
 
 ---
 
 ## Sources
 
-- **Codebase analysis**: `src/types/ShipData.ts`, `src/lib/ship-data.ts`, `src/types/user.ts` (UserShip), `src/types/Mission.ts` (MissionParticipant), `src/types/Operation.ts` (OperationParticipant), `src/types/PlannedMission.ts` (MissionShip), `src/lib/mongodb.ts`, `src/lib/mongo-indexes.ts`, `scripts/next.config.js` -- HIGH confidence
-- **FleetYards API probing**: Live API calls to `api.fleetyards.net/v1/models` confirming UUID format, response structure, empty page behavior, and manufacturer naming -- HIGH confidence
-- **FleetYards GitHub Issues**: [#2502](https://github.com/fleetyards/fleetyards/issues/2502) (API data pull failures), [#3514](https://github.com/fleetyards/fleetyards/issues/3514) (CORS errors), [#2652](https://github.com/fleetyards/fleetyards/issues/2652) (schema refactoring) -- MEDIUM confidence
-- **Cosmos DB compatibility**: [Microsoft Learn - Feature support 4.0](https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/feature-support-40), [MongoDB Cosmos DB compatibility docs](https://www.mongodb.com/docs/drivers/cosmosdb-support/), [WillowTree migration guide](https://www.willowtreeapps.com/craft/azure-cosmos-db-mongo-api-5-things-to-know-before-you-migrate) -- HIGH confidence
-- **Next.js image handling**: [next/image fallback discussion #19544](https://github.com/vercel/next.js/discussions/19544), [next/image CDN issue #33488](https://github.com/vercel/next.js/issues/33488) -- MEDIUM confidence
-- **UUID migration patterns**: [Code with Jason - UUID migration lessons](https://www.codewithjason.com/lessons-learned-converting-database-ids-uuids/), [Django UUID migration pitfalls](https://medium.com/@mahmood.nasr/migrating-from-integer-id-to-uuid-in-django-hidden-pitfalls-and-how-to-solve-them-7f16c5e46dc5) -- MEDIUM confidence (different frameworks, same patterns)
-- **PROJECT.md decisions**: FleetYards CDN-only (no R2 mirror), big-bang migration (no dual-format), cron-only sync (no manual trigger) -- from `.planning/PROJECT.md` -- HIGH confidence
+- [Next.js 15.5 Release Notes](https://nextjs.org/blog/next-15-5) -- HIGH confidence
+- [CVE-2025-29927: Next.js Middleware Authorization Bypass (Datadog)](https://securitylabs.datadoghq.com/articles/nextjs-middleware-auth-bypass/) -- HIGH confidence
+- [CVE-2025-29927 (JFrog)](https://jfrog.com/blog/cve-2025-29927-next-js-authorization-bypass/) -- HIGH confidence
+- [Motion & Framer Motion React Upgrade Guide](https://motion.dev/docs/react-upgrade-guide) -- HIGH confidence
+- [Motion JavaScript Upgrade Guide](https://motion.dev/docs/upgrade-guide) -- HIGH confidence
+- [Next.js CSP Documentation](https://nextjs.org/docs/app/guides/content-security-policy) -- HIGH confidence
+- [Next.js 15 CSP Headers Production Issue (GitHub #80997)](https://github.com/vercel/next.js/discussions/80997) -- MEDIUM confidence
+- [AnimatePresence stuck on rapid state changes (GitHub #2554)](https://github.com/framer/motion/issues/2554) -- MEDIUM confidence
+- [Next.js Server and Client Components](https://nextjs.org/docs/app/getting-started/server-and-client-components) -- HIGH confidence
+- [Auth.js Edge Compatibility](https://authjs.dev/guides/edge-compatibility) -- MEDIUM confidence
+- [Upstash Edge Rate Limiting](https://upstash.com/blog/edge-rate-limiting) -- MEDIUM confidence
+- Codebase analysis: `src/middleware.ts`, `src/lib/rate-limiter.ts`, `src/lib/mongodb-client.ts`, `src/lib/mongodb.ts`, `src/components/ui/mobiglas/`, 109 framer-motion files -- HIGH confidence (direct observation)
