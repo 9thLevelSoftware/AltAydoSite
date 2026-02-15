@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth';
+import { requireAuth, AuthResult } from '@/lib/auth-guards';
 import { EscortRequestResponse, EscortRequestStatus, EscortRequestFilters } from '@/types/EscortRequest';
 import * as escortRequestStorage from '@/lib/escort-request-storage';
+
+const LEADERSHIP_ROLES = ['Director', 'Manager', 'Board Member'];
+
+function isLeadership(auth: AuthResult): boolean {
+  return LEADERSHIP_ROLES.includes(auth.role) || auth.clearanceLevel >= 3;
+}
 
 // Validation for escort request data
 const validateEscortRequestData = (data: any) => {
@@ -161,10 +168,8 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // Check authorization
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
     // Parse request body
     const requestData = await request.json();
@@ -174,6 +179,27 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required field: id' },
         { status: 400 }
+      );
+    }
+
+    // Ownership check: creator, assigned security officer, or leadership
+    const existing = await escortRequestStorage.getEscortRequestById(requestData.id);
+    if (!existing) {
+      return NextResponse.json(
+        { error: `Escort request not found with ID: ${requestData.id}` },
+        { status: 404 }
+      );
+    }
+
+    const isCreator = existing.requestedByUserId === auth.userId;
+    const isAssignedOfficer = existing.securityOfficerUserId === auth.userId;
+    const hasLeadership = isLeadership(auth);
+
+    if (!isCreator && !isAssignedOfficer && !hasLeadership) {
+      console.log(`RBAC_AUDIT: User ${auth.userId} denied PUT on escort request ${requestData.id} (not creator/officer/leadership)`);
+      return NextResponse.json(
+        { error: 'Access denied' },
+        { status: 403 }
       );
     }
 
@@ -212,10 +238,8 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     // Check authorization
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
     // Parse query parameters
     const { searchParams } = new URL(request.url);
@@ -225,6 +249,26 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required parameter: id' },
         { status: 400 }
+      );
+    }
+
+    // Ownership check: only creator or leadership can delete (officer cannot)
+    const existing = await escortRequestStorage.getEscortRequestById(id);
+    if (!existing) {
+      return NextResponse.json(
+        { error: `Escort request not found with ID: ${id}` },
+        { status: 404 }
+      );
+    }
+
+    const isCreator = existing.requestedByUserId === auth.userId;
+    const hasLeadership = isLeadership(auth);
+
+    if (!isCreator && !hasLeadership) {
+      console.log(`RBAC_AUDIT: User ${auth.userId} denied DELETE on escort request ${id} (not creator/leadership)`);
+      return NextResponse.json(
+        { error: 'Access denied' },
+        { status: 403 }
       );
     }
 
