@@ -8,6 +8,8 @@ import Image from 'next/image';
 import { MobiGlasPanel } from '@/components/ui/mobiglas';
 import MobiGlasButton from '../ui/mobiglas/MobiGlasButton';
 import MissionPlannerForm from './MissionPlannerForm';
+import { useToast } from '@/hooks/useToast';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
   PlannedMission,
   PlannedMissionResponse,
@@ -51,6 +53,8 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { toast } = useToast();
+  const { confirm } = useConfirmDialog();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [missions, setMissions] = useState<PlannedMissionResponse[]>([]);
   const [templates, setTemplates] = useState<MissionTemplate[]>([]);
@@ -319,7 +323,14 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
 
   // Delete mission
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this mission?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Mission',
+      message: 'Are you sure you want to delete this mission? This action cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger'
+    });
+    if (!confirmed) return;
 
     setIsLoading(true);
     try {
@@ -352,13 +363,13 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
         setSelectedMission(data.mission);
         setFormData(prev => ({ ...prev, status: 'SCHEDULED' }));
         await fetchMissions();
-        alert('Mission published to Discord successfully!');
+        toast.success('Mission published to Discord successfully!');
       } else {
         const data = await res.json();
-        alert(`Failed to publish: ${data.error}`);
+        toast.error(`Failed to publish: ${data.error}`);
       }
     } catch (error) {
-      alert('Network error. Please try again.');
+      toast.error('Network error. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -440,13 +451,13 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
         await fetchMissions();
         setViewMode('list');
         setSelectedMission(null);
-        alert('Attendance saved successfully!');
+        toast.success('Attendance saved successfully!');
       } else {
         const data = await res.json();
-        alert(`Failed to save attendance: ${data.error}`);
+        toast.error(`Failed to save attendance: ${data.error}`);
       }
     } catch (error) {
-      alert('Network error. Please try again.');
+      toast.error('Network error. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -468,10 +479,10 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
         await fetchMissions();
         setViewMode('list');
         setSelectedMission(null);
-        alert('Mission marked as completed!');
+        toast.success('Mission marked as completed!');
       }
     } catch (error) {
-      alert('Network error. Please try again.');
+      toast.error('Network error. Please try again.');
     } finally {
       setIsLoading(false);
     }
