@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 ## Current Position
 
-Phase: 8 of 15 (MongoDB Consolidation)
-Plan: 1 of 2 in current phase
-Status: Plan 08-01 complete, ready for 08-02
-Last activity: 2026-02-15 -- Plan 08-01 executed (canonical client + user CRUD)
+Phase: 8 of 15 (MongoDB Consolidation) -- COMPLETE
+Plan: 2 of 2 in current phase (all plans complete)
+Status: Phase 8 complete, ready for Phase 9
+Last activity: 2026-02-15 -- Plan 08-02 executed (client consolidation + profile API versioning)
 
-Progress: [█░░░░░░░░░] 6%
+Progress: [█░░░░░░░░░] 12%
 
 ## Performance Metrics
 
@@ -24,13 +24,14 @@ Progress: [█░░░░░░░░░] 6%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 1
+- Total plans completed: 2
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 08    | 01   | 3min     | 2     | 2     |
+| 08    | 02   | 5min     | 3     | 10    |
 
 ## Accumulated Context
 
@@ -42,6 +43,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 08-01: Index creation fire-and-forget with once-per-process guard (no per-call ping)
 08-01: expectedVersion optional on updateUser() for backward-compatible rollout
 08-01: StaleDocumentError never triggers local fallback -- must propagate to API routes
+08-02: Token CRUD inlined in password-reset-storage.ts (no separate token-storage module)
+08-02: Profile API ships-only detection filters __v from key count for backward compat
+08-02: __v destructured from validated updates before passing to updateUser() to prevent $set conflict
 
 ### Pending Todos
 
@@ -60,5 +64,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 08-01-PLAN.md
-Resume file: .planning/phases/08-mongodb-consolidation/08-01-SUMMARY.md
+Stopped at: Completed 08-02-PLAN.md (Phase 8 complete)
+Resume file: .planning/phases/08-mongodb-consolidation/08-02-SUMMARY.md
