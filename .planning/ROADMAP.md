@@ -56,12 +56,13 @@ Plans:
   3. Error messages styled with --mg-error are visible (red text renders correctly across all 13 files)
   4. npm audit shows zero critical vulnerabilities; Next.js version is 15.5.12+
   5. Malicious input in email/handle fields, email templates, auth redirects, and API error responses cannot trigger ReDoS, XSS, or information leakage
-**Plans**: TBD
+**Plans**: 4 plans in 2 waves
 
 Plans:
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
-- [ ] 09-03: TBD
+- [ ] 09-01-PLAN.md -- Endpoint security hardening: delete debug endpoints, fail-closed cron auth, fix finance DB
+- [ ] 09-02-PLAN.md -- Input sanitization & auth safety: eliminate regex lookups, escape email templates, validate callbacks, fix OAuth hash
+- [ ] 09-03-PLAN.md -- Error sanitization & CSS variables: sanitize error.message from 38 API routes, define --mg-error and --mg-panel
+- [ ] 09-04-PLAN.md -- Dependency cleanup & Next.js upgrade: remove 8 unused packages, move @types/*, upgrade to 15.5.12
 
 ### Phase 10: Access Control Hardening
 **Goal**: Every protected route enforces authorization, rate limiting prevents brute force, and security headers defend against injection
@@ -179,7 +180,7 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 8. MongoDB Consolidation | v1.1 | 2/2 | Complete | 2026-02-15 |
-| 9. Emergency Security & Deps | v1.1 | 0/TBD | Not started | - |
+| 9. Emergency Security & Deps | v1.1 | 0/4 | Planned | - |
 | 10. Access Control Hardening | v1.1 | 0/TBD | Not started | - |
 | 11. UX Critical Fixes | v1.1 | 0/TBD | Not started | - |
 | 12. Motion v12 Migration | v1.1 | 0/TBD | Not started | - |
