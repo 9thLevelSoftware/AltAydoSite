@@ -40,11 +40,11 @@ See `.planning/MILESTONES.md` for v1.0 details. 26 plans across 8 phases (includ
   2. Application starts with a single connection pool (50 connections max, not 200)
   3. All existing database operations (users, missions, ships, escorts, finance) work identically after consolidation
   4. Race condition in updateUser() is eliminated -- concurrent profile saves do not silently overwrite each other
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md -- Refactor mongodb.ts canonical client + migrate user CRUD with optimistic locking
+- [ ] 08-02-PLAN.md -- Migrate remaining storage modules, wire profile API, delete mongodb-client.ts
 
 ### Phase 9: Emergency Security & Dependency Cleanup
 **Goal**: Critical security vulnerabilities are patched, the RCE-vulnerable Next.js version is upgraded, unused packages are removed, and error messages become visible
@@ -178,7 +178,7 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 8. MongoDB Consolidation | v1.1 | 0/TBD | Not started | - |
+| 8. MongoDB Consolidation | v1.1 | 0/2 | Planned | - |
 | 9. Emergency Security & Deps | v1.1 | 0/TBD | Not started | - |
 | 10. Access Control Hardening | v1.1 | 0/TBD | Not started | - |
 | 11. UX Critical Fixes | v1.1 | 0/TBD | Not started | - |
