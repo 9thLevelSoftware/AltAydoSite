@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 Phase: 10 of 15 (Access Control Hardening)
 Plan: 3 of 5 in current phase (10-01, 10-03, 10-04 complete)
 Status: Executing Phase 10
-Last activity: 2026-02-15 -- Plan 10-03 executed (MongoDB-backed auth rate limiting)
+Last activity: 2026-02-15 -- Plan 10-01 executed (RBAC authorization guards)
 
 Progress: [███░░░░░░░] 25%
 
@@ -37,6 +37,7 @@ Progress: [███░░░░░░░] 25%
 | 09    | 03   | 7min     | 2     | 36    |
 | 09    | 04   | 4min     | 2     | 3     |
 | 10    | 03   | 4min     | 3     | 6     |
+| 10    | 01   | 5min     | 3     | 8     |
 | 10    | 04   | 2min     | 2     | 1     |
 
 ## Accumulated Context
@@ -71,6 +72,10 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 10-03: Login rate limit throws Error (NextAuth authorize) vs standalone routes return 429 JSON
 10-04: unsafe-inline for script-src/style-src required by Next.js hydration and Tailwind inline styles
 10-04: API cache headers via next.config.js headers() instead of middleware to avoid matcher conflicts
+10-01: Leadership = role in [Director, Manager, Board Member] OR clearance >= 3, matching original commented-out logic
+10-01: Auth guard pattern: async function returns AuthResult | NextResponse, caller checks instanceof
+10-01: canUserAccessTemplate clearance >= 2 sees all templates, lower clearance own-only
+10-01: missions/route.ts return true left alone -- validates participant data structure, not RBAC
 10-04: X-Frame-Options DENY kept alongside CSP frame-ancestors none for older browser fallback
 
 ### Pending Todos
@@ -81,7 +86,7 @@ None yet.
 
 - [Tech Debt]: MissionParticipant.fleetyardsId optional -- tighten after confirming all records migrated
 - [Security]: npm audit 2 high (build-time tar/bcrypt only), 4 moderate (discord.js/undici) -- remaining after Phase 9
-- [Security]: RBAC hardcoded to return true -- addressed in Phase 10
+- [RESOLVED]: RBAC hardcoded to return true -- fixed in Plan 10-01 with auth-guards.ts
 - [RESOLVED]: Next.js RCE vulnerability CVE-2025-55182 -- patched by upgrade to 15.5.12 in Plan 09-04
 - [Risk]: CSP nonces force dynamic rendering -- Phase 10 uses split strategy (hash for static, nonces for auth pages)
 - [Risk]: framer-motion migration affects 109 files atomically -- Phase 12
@@ -90,5 +95,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 10-03-PLAN.md (MongoDB-backed auth rate limiting)
-Resume file: .planning/phases/10-access-control-hardening/10-03-SUMMARY.md
+Stopped at: Completed 10-01-PLAN.md (RBAC authorization guards)
+Resume file: .planning/phases/10-access-control-hardening/10-01-SUMMARY.md
