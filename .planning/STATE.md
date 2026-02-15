@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 10 of 15 (Access Control Hardening)
-Plan: 4 of 4 in current phase (10-04 complete)
+Plan: 3 of 5 in current phase (10-01, 10-03, 10-04 complete)
 Status: Executing Phase 10
-Last activity: 2026-02-15 -- Plan 10-04 executed (CSP and security headers)
+Last activity: 2026-02-15 -- Plan 10-03 executed (MongoDB-backed auth rate limiting)
 
 Progress: [███░░░░░░░] 25%
 
@@ -24,7 +24,7 @@ Progress: [███░░░░░░░] 25%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 7
+- Total plans completed: 8
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -36,6 +36,7 @@ Progress: [███░░░░░░░] 25%
 | 09    | 02   | 3min     | 2     | 5     |
 | 09    | 03   | 7min     | 2     | 36    |
 | 09    | 04   | 4min     | 2     | 3     |
+| 10    | 03   | 4min     | 3     | 6     |
 | 10    | 04   | 2min     | 2     | 1     |
 
 ## Accumulated Context
@@ -65,6 +66,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 09-04: Accepted 2 high-severity tar vulns as build-time only (bcrypt native addon, not runtime exploitable)
 09-04: Accepted 4 moderate undici/discord.js vulns as requiring major version change (out of scope)
 09-04: @types/bcrypt and @types/nodemailer moved to devDependencies (development-only tooling)
+10-03: Atomic findOneAndUpdate with $inc/$setOnInsert for race-condition-safe rate limiting
+10-03: Fail open on MongoDB errors -- rate limit check allows request with console.warn
+10-03: Login rate limit throws Error (NextAuth authorize) vs standalone routes return 429 JSON
 10-04: unsafe-inline for script-src/style-src required by Next.js hydration and Tailwind inline styles
 10-04: API cache headers via next.config.js headers() instead of middleware to avoid matcher conflicts
 10-04: X-Frame-Options DENY kept alongside CSP frame-ancestors none for older browser fallback
@@ -86,5 +90,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 10-04-PLAN.md (CSP and security headers)
-Resume file: .planning/phases/10-access-control-hardening/10-04-SUMMARY.md
+Stopped at: Completed 10-03-PLAN.md (MongoDB-backed auth rate limiting)
+Resume file: .planning/phases/10-access-control-hardening/10-03-SUMMARY.md
