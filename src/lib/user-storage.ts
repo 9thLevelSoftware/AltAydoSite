@@ -1,7 +1,18 @@
 import { User } from '@/types/user';
 import crypto from 'crypto';
-import * as mongoDb from './mongodb-client';
+import { getDb } from './mongodb';
 import * as localStorage from './local-storage';
+
+/**
+ * Thrown when an optimistic-locking version mismatch is detected.
+ * API routes should catch this and return 409 Conflict.
+ */
+export class StaleDocumentError extends Error {
+  constructor(collection: string, id: string) {
+    super(`Document in ${collection} with id ${id} was modified by another request. Please reload and try again.`);
+    this.name = 'StaleDocumentError';
+  }
+}
 
 // State to track if we should use local storage fallback
 let usingFallback = false;
@@ -13,8 +24,7 @@ async function shouldUseFallback(): Promise<boolean> {
   if (connectionChecked) return false;
 
   try {
-    // Quick check to see if we can connect
-    await mongoDb.ensureConnection(1); // 1 retry
+    await getDb(); // If this succeeds, MongoDB is reachable
     connectionChecked = true;
     return false;
   } catch (error) {
@@ -34,7 +44,12 @@ export async function getUserById(id: string): Promise<User | null> {
 
   console.log(`STORAGE: [MongoDB] Getting user by ID: ${id}`);
   try {
-    return await mongoDb.getUserById(id);
+    const db = await getDb();
+    const doc = await db.collection('users').findOne({ id }, { projection: { _id: 0 } });
+    if (!doc) return null;
+    // Normalize: treat missing __v as version 0
+    if ((doc as any).__v === undefined) (doc as any).__v = 0;
+    return doc as unknown as User;
   } catch (error) {
     console.error('STORAGE: [MongoDB] getUserById failed, trying fallback:', error);
     usingFallback = true;
@@ -50,7 +65,17 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 
   console.log(`STORAGE: [MongoDB] Getting user by email: ${email}`);
   try {
-    return await mongoDb.getUserByEmail(email);
+    const db = await getDb();
+    const emailLower = email.toLowerCase();
+    const doc = await db.collection('users').findOne({
+      $or: [
+        { emailLower },
+        { email: { $regex: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+      ],
+    }, { projection: { _id: 0 } });
+    if (!doc) return null;
+    if ((doc as any).__v === undefined) (doc as any).__v = 0;
+    return doc as unknown as User;
   } catch (error) {
     console.error('STORAGE: [MongoDB] getUserByEmail failed, trying fallback:', error);
     usingFallback = true;
@@ -66,7 +91,17 @@ export async function getUserByHandle(aydoHandle: string): Promise<User | null> 
 
   console.log(`STORAGE: [MongoDB] Getting user by handle: ${aydoHandle}`);
   try {
-    return await mongoDb.getUserByHandle(aydoHandle);
+    const db = await getDb();
+    const aydoHandleLower = aydoHandle.toLowerCase();
+    const doc = await db.collection('users').findOne({
+      $or: [
+        { aydoHandleLower },
+        { aydoHandle: { $regex: new RegExp(`^${aydoHandle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+      ],
+    }, { projection: { _id: 0 } });
+    if (!doc) return null;
+    if ((doc as any).__v === undefined) (doc as any).__v = 0;
+    return doc as unknown as User;
   } catch (error) {
     console.error('STORAGE: [MongoDB] getUserByHandle failed, trying fallback:', error);
     usingFallback = true;
@@ -82,7 +117,11 @@ export async function getUserByDiscordId(discordId: string): Promise<User | null
 
   console.log(`STORAGE: [MongoDB] Getting user by Discord ID: ${discordId}`);
   try {
-    return await mongoDb.getUserByDiscordId(discordId);
+    const db = await getDb();
+    const doc = await db.collection('users').findOne({ discordId }, { projection: { _id: 0 } });
+    if (!doc) return null;
+    if ((doc as any).__v === undefined) (doc as any).__v = 0;
+    return doc as unknown as User;
   } catch (error) {
     console.error('STORAGE: [MongoDB] getUserByDiscordId failed, trying fallback:', error);
     usingFallback = true;
@@ -108,7 +147,18 @@ export async function createUser(user: User): Promise<User> {
 
   console.log(`STORAGE: [MongoDB] Creating user: ${user.aydoHandle}`);
   try {
-    return await mongoDb.createUser(user);
+    const db = await getDb();
+    // Ensure normalized fields
+    const userDoc = {
+      ...user,
+      email: user.email.toLowerCase(),
+      emailLower: user.email.toLowerCase(),
+      aydoHandleLower: user.aydoHandle.toLowerCase(),
+      __v: 0,
+    };
+    await db.collection('users').insertOne(userDoc);
+    console.log('User created successfully:', user.aydoHandle);
+    return { ...userDoc } as User;
   } catch (error) {
     console.error('STORAGE: [MongoDB] createUser failed, trying fallback:', error);
     usingFallback = true;
@@ -116,7 +166,7 @@ export async function createUser(user: User): Promise<User> {
   }
 }
 
-export async function updateUser(id: string, userData: Partial<User>): Promise<User | null> {
+export async function updateUser(id: string, userData: Partial<User>, expectedVersion?: number): Promise<User | null> {
   if (await shouldUseFallback()) {
     console.log(`STORAGE: [Local] Updating user: ${id}`);
     return await localStorage.updateUser(id, userData);
@@ -124,9 +174,49 @@ export async function updateUser(id: string, userData: Partial<User>): Promise<U
 
   console.log(`STORAGE: [MongoDB] Updating user: ${id}`);
   try {
-    const result = await mongoDb.updateUser(id, userData);
-    return result;
+    const db = await getDb();
+
+    // Build the version filter
+    // If expectedVersion is provided, enforce optimistic locking
+    // If expectedVersion is undefined, skip version checking (backward compat for callers not yet updated)
+    const versionFilter: Record<string, unknown> = {};
+    if (expectedVersion !== undefined) {
+      // Handle documents that may not have __v yet (treat missing as 0)
+      if (expectedVersion === 0) {
+        versionFilter.$or = [{ __v: 0 }, { __v: { $exists: false } }];
+      } else {
+        versionFilter.__v = expectedVersion;
+      }
+    }
+
+    // Remove fields that should not be $set directly
+    const { id: _ignoreId, __v: _ignoreV, ...updateFields } = userData as any;
+
+    const result = await db.collection('users').findOneAndUpdate(
+      { id, ...versionFilter },
+      {
+        $set: { ...updateFields, updatedAt: new Date().toISOString() },
+        $inc: { __v: 1 },
+      },
+      { returnDocument: 'after', projection: { _id: 0 } }
+    );
+
+    if (!result) {
+      // Distinguish "not found" from "version mismatch"
+      if (expectedVersion !== undefined) {
+        const exists = await db.collection('users').findOne({ id }, { projection: { __v: 1 } });
+        if (exists) {
+          throw new StaleDocumentError('users', id);
+        }
+      }
+      return null;
+    }
+
+    return result as unknown as User;
   } catch (error) {
+    if (error instanceof StaleDocumentError) {
+      throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
+    }
     console.error('STORAGE: [MongoDB] updateUser failed, trying fallback:', error);
     usingFallback = true;
     return await localStorage.updateUser(id, userData);
@@ -142,7 +232,8 @@ export async function deleteUser(id: string): Promise<void> {
 
   console.log(`STORAGE: [MongoDB] Deleting user: ${id}`);
   try {
-    await mongoDb.deleteUser(id);
+    const db = await getDb();
+    await db.collection('users').deleteOne({ id });
   } catch (error) {
     console.error('STORAGE: [MongoDB] deleteUser failed, trying fallback:', error);
     usingFallback = true;
@@ -158,7 +249,12 @@ export async function getAllUsers(): Promise<User[]> {
 
   console.log('STORAGE: [MongoDB] Getting all users');
   try {
-    return await mongoDb.getAllUsers();
+    const db = await getDb();
+    const docs = await db.collection('users').find({}, { projection: { _id: 0 } }).toArray();
+    return docs.map(doc => {
+      if ((doc as any).__v === undefined) (doc as any).__v = 0;
+      return doc as unknown as User;
+    });
   } catch (error) {
     console.error('STORAGE: [MongoDB] getAllUsers failed, trying fallback:', error);
     usingFallback = true;
