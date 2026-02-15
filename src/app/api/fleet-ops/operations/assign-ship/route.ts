@@ -1,21 +1,32 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/auth';
+import { requireAuth } from '@/lib/auth-guards';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
+
+const LEADERSHIP_ROLES = ['Director', 'Manager', 'Board Member'];
 
 export async function POST(request: Request) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
 
     const { userId, shipId, shipName, shipType, missionId } = await request.json();
 
     if (!userId || !shipId || !missionId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Authorization: self-assignment OR leadership clearance
+    const isSelfAssignment = userId === auth.userId;
+    const hasLeadership = LEADERSHIP_ROLES.includes(auth.role) || auth.clearanceLevel >= 3;
+
+    if (!isSelfAssignment && !hasLeadership) {
+      console.log(`RBAC_AUDIT: User ${auth.userId} denied ship assignment to user ${userId} on mission ${missionId} (not self/leadership)`);
+      return NextResponse.json(
+        { error: 'Not authorized to assign ships to this operation' },
+        { status: 403 }
+      );
     }
 
     // Connect to MongoDB
