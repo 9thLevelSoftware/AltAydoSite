@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth';
 import { MissionResponse, MissionStatus, MissionType } from '@/types/Mission';
 import * as missionStorage from '@/lib/mission-storage';
+import { isValidMissionTransition, getValidTransitions } from '@/lib/state-machines/mission-status';
 
 // Validation schema for mission participant
 const validateMissionParticipant = (participant: any) => {
@@ -171,6 +172,31 @@ export async function PUT(request: NextRequest) {
     }
 
     try {
+      // If status is being changed, validate the transition
+      if (missionData.status) {
+        const currentMission = await missionStorage.getMissionById(missionData.id);
+        if (!currentMission) {
+          return NextResponse.json(
+            { error: `Mission not found with ID: ${missionData.id}` },
+            { status: 404 }
+          );
+        }
+
+        const currentStatus = currentMission.status;
+        const newStatus = missionData.status as MissionStatus;
+
+        // Only validate if status is actually changing
+        if (currentStatus !== newStatus) {
+          if (!isValidMissionTransition(currentStatus, newStatus)) {
+            const validOptions = getValidTransitions(currentStatus);
+            return NextResponse.json(
+              { error: `Invalid status transition from "${currentStatus}" to "${newStatus}". Valid transitions: ${validOptions.join(', ') || 'none'}` },
+              { status: 400 }
+            );
+          }
+        }
+      }
+
       // Update mission using the mission-storage module
       const mission = await missionStorage.updateMission(missionData.id, missionData);
 
