@@ -1,18 +1,30 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { cdn } from '@/lib/cdn';
 import { motion } from 'motion/react';
 import { MobiGlasPanel, MobiGlasButton, StatusIndicator } from '@/components/ui/mobiglas';
 
 interface AboutHeroProps {
-  time: Date;
-  scrollPosition: number;
   onInitializeDataFeed: () => void;
 }
 
-export default function AboutHero({ time, scrollPosition, onInitializeDataFeed }: AboutHeroProps) {
+export default function AboutHero({ onInitializeDataFeed }: AboutHeroProps) {
+  // Self-contained timer and scroll state to prevent parent re-renders
+  const [time, setTime] = useState(new Date());
+  const [scrollPosition, setScrollPosition] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    const handleScroll = () => setScrollPosition(window.scrollY);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
   // Parallax effect based on scroll position
   const parallaxOffset = (depth: number) => {
     return scrollPosition * depth;

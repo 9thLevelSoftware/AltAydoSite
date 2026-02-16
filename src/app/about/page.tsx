@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import AboutHero from '../../components/about/AboutHero';
 import DataFeedSection from '../../components/about/DataFeedSection';
@@ -10,29 +10,10 @@ import JoinCTASection from '../../components/about/JoinCTASection';
 import AboutTabs from '../../components/about/AboutTabs';
 
 export default function About() {
-  const [time, setTime] = useState(new Date());
-  const [scrollPosition, setScrollPosition] = useState(0);
   const [isDataFeedActive, setIsDataFeedActive] = useState(false);
   const [connectionProgress, setConnectionProgress] = useState(0);
   const [connectionComplete, setConnectionComplete] = useState(false);
   const [connectionMessages, setConnectionMessages] = useState<string[]>([]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTime(new Date());
-    }, 1000);
-
-    const handleScroll = () => {
-      setScrollPosition(window.scrollY);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
 
   const startDataFeed = () => {
     setIsDataFeedActive(true);
@@ -72,8 +53,6 @@ export default function About() {
     }>
       <>
         <AboutHero
-          time={time}
-          scrollPosition={scrollPosition}
           onInitializeDataFeed={startDataFeed}
         />
 
@@ -97,4 +76,4 @@ export default function About() {
       </>
     </ErrorBoundary>
   );
-} 
+}

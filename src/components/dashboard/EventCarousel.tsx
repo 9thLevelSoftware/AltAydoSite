@@ -80,6 +80,9 @@ const EventCarousel = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const autoplayRef = useRef<NodeJS.Timeout | null>(null);
   const containerControls = useAnimation();
+
+  // Calculate next slide index for preloading
+  const nextIndex = (currentIndex + 1) % images.length;
   
   // Effect for automatic slideshow
   useEffect(() => {
@@ -257,13 +260,22 @@ const EventCarousel = () => {
                 alt={images[currentIndex].alt}
                 fill
                 className="object-cover"
-                priority={currentIndex === 0}
+                priority={true}
                 unoptimized={true}
                 onError={(e) => {
                   // If image fails to load, fall back to a default image
                   const target = e.target as HTMLImageElement;
                   target.src = cdn('/spacebg.jpg');
                 }}
+              />
+
+              {/* Preload next slide image for smoother transitions */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={images[nextIndex].src}
+                alt=""
+                aria-hidden="true"
+                style={{ display: 'none' }}
               />
               
               {/* Information overlay at bottom */}
