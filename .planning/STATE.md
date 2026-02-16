@@ -51,6 +51,7 @@ Progress: [██████░░░░] 58%
 | 13    | 02   | 5min     | 2     | 14    |
 | 13    | 04   | 4min     | 2     | 6     |
 | 14    | 01   | 2min     | 2     | 3     |
+| 14    | 02   | 2min     | 2     | 3     |
 | 14    | 06   | 2min     | 2     | 3     |
 
 ## Accumulated Context
@@ -124,6 +125,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 13-02: aria-labelledby with role=radiogroup/group for radio and checkbox groups
 14-01: HTML attributes passed explicitly (not via spread) to avoid MotionProps conflicts on MobiGlasButton
 14-01: ariaLabel prop name maps to aria-label on element for TypeScript compatibility
+14-02: OperationCard has no mg-button usage (clickable div card) -- no changes needed
+14-02: HolographicButton icon prop mapped to MobiGlasButton leftIcon prop
+14-02: mg-button-secondary CSS in globals.css left in place (dead CSS cleanup out of scope)
 14-06: MissionDetail has no form-level errors (read-only view) -- no changes needed
 14-06: Escort submit uses variant=danger matching security page red theme
 14-06: Success messages kept as plain styled div (MobiGlasFormError is error-only)
