@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 11 of 15 (UX Critical Fixes)
-Plan: 3 of 5 in current phase (11-01, 11-03 complete)
+Plan: 3 of 5 in current phase (11-01, 11-02, 11-03 complete)
 Status: In Progress
-Last activity: 2026-02-15 -- Plan 11-03 executed (replace browser dialogs)
+Last activity: 2026-02-15 -- Plan 11-02 executed (server-first profile storage)
 
-Progress: [████░░░░░░] 42%
+Progress: [████░░░░░░] 44%
 
 ## Performance Metrics
 
@@ -24,7 +24,7 @@ Progress: [████░░░░░░] 42%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 11
+- Total plans completed: 14
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -42,6 +42,7 @@ Progress: [████░░░░░░] 42%
 | 10    | 02   | 4min     | 3     | 2     |
 | 10    | 05   | 4min     | 2     | 4     |
 | 11    | 01   | 2min     | 2     | 7     |
+| 11    | 02   | 4min     | 2     | 5     |
 | 11    | 03   | 3min     | 2     | 3     |
 
 ## Accumulated Context
@@ -91,6 +92,10 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 11-01: crypto.randomUUID() for toast IDs instead of Math.random for collision safety
 11-01: React.createElement in ConfirmDialogProvider to keep hook as .ts file
 11-01: Toast provider outside ConfirmDialog provider so confirms can trigger toasts
+11-02: Server is source of truth; localStorage is write-through cache only
+11-02: One-time localStorage migration for preferredGameplayLoops on first server load
+11-02: Optimistic state not reverted on save error -- localStorage cache preserves user intent
+11-02: Field mapping layer: subsidiary<->division, handle<->aydoHandle between client/server
 11-03: Confirmation in UserFleetBuilder (child) wrapping onRemoveShip prop, not in parent wrapper
 11-03: ResetProfileComponent prompts confirmation before executing, redirects to profile on cancel
 11-03: ResetProfileComponent also resets server-side profile via API PUT (not just localStorage)
@@ -107,10 +112,10 @@ None yet.
 - [RESOLVED]: Next.js RCE vulnerability CVE-2025-55182 -- patched by upgrade to 15.5.12 in Plan 09-04
 - [Risk]: CSP nonces force dynamic rendering -- Phase 10 uses split strategy (hash for static, nonces for auth pages)
 - [Risk]: framer-motion migration affects 109 files atomically -- Phase 12
-- [Risk]: Profile localStorage migration needs conflict resolution strategy -- Phase 11
+- [RESOLVED]: Profile localStorage migration -- server-first with one-time migration in Plan 11-02
 
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 11-03-PLAN.md (replace browser dialogs)
-Resume file: .planning/phases/11-ux-critical-fixes/11-03-SUMMARY.md
+Stopped at: Completed 11-02-PLAN.md (server-first profile storage)
+Resume file: .planning/phases/11-ux-critical-fixes/11-02-SUMMARY.md
