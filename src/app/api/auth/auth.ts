@@ -7,6 +7,7 @@ import { User } from '@/types/user';
 import * as userStorage from '@/lib/user-storage';
 import { syncDiscordProfile } from '@/lib/discord-oauth';
 import { checkRateLimit, AUTH_RATE_LIMIT } from '@/lib/rate-limit-store';
+import { logger } from '@/lib/logger';
 
 // SECURITY FIX: Hardcoded admin user removed for production security
 // Admin users must be created in the database with secure, unique passwords
@@ -48,7 +49,7 @@ export const authOptions: NextAuthOptions = {
           } catch (e) {
             // Re-throw rate limit errors; fail open on MongoDB errors
             if (e instanceof Error && e.message.includes('Too many')) throw e;
-            console.warn('Rate limit check failed, allowing request:', e);
+            logger.warn('Rate limit check failed, allowing request', { module: 'auth', error: e instanceof Error ? e.message : String(e) });
           }
 
           let user: User | null = null;
@@ -62,7 +63,7 @@ export const authOptions: NextAuthOptions = {
 
           // Ensure the user has a passwordHash
           if (!user.passwordHash) {
-            console.error('AUTH: User missing passwordHash:', user.aydoHandle);
+            logger.error('User missing passwordHash', undefined, { module: 'auth', aydoHandle: user.aydoHandle });
             return null;
           }
 
@@ -83,7 +84,7 @@ export const authOptions: NextAuthOptions = {
             rsiAccountName: user.rsiAccountName || null
           };
         } catch (error) {
-          console.error('AUTH: Authentication error:', error);
+          logger.error('Authentication error', error instanceof Error ? error : new Error(String(error)), { module: 'auth' });
           throw new Error('Authentication error');
         }
       }
@@ -145,7 +146,7 @@ export const authOptions: NextAuthOptions = {
             await userStorage.createUser(newUser);
           }
         } catch (error) {
-          console.error('AUTH: Error handling Discord sign in:', error);
+          logger.error('Error handling Discord sign in', error instanceof Error ? error : new Error(String(error)), { module: 'auth' });
           return false;
         }
       }
@@ -225,7 +226,7 @@ export const authOptions: NextAuthOptions = {
             token.lastUpdated = now;
           }
         } catch (e) {
-          console.warn('AUTH: jwt callback - failed to refresh user from storage:', e);
+          logger.warn('JWT callback - failed to refresh user from storage', { module: 'auth', error: e instanceof Error ? e.message : String(e) });
         }
       }
       

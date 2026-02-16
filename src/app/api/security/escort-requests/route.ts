@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/auth';
 import { requireAuth, AuthResult } from '@/lib/auth-guards';
 import { EscortRequestResponse, EscortRequestStatus, EscortRequestFilters } from '@/types/EscortRequest';
 import * as escortRequestStorage from '@/lib/escort-request-storage';
+import { logger } from '@/lib/logger';
 
 const LEADERSHIP_ROLES = ['Director', 'Manager', 'Board Member'];
 
@@ -79,17 +80,17 @@ export async function GET(request: NextRequest) {
     const requestedBy = searchParams.get('requestedBy');
     if (requestedBy) filters.requestedBy = requestedBy;
 
-    console.log('Fetching escort requests with filters:', filters);
+    logger.info('Fetching escort requests', { route: '/api/security/escort-requests', filters });
 
     // Get escort requests using the escort-request-storage module
     const requests = await escortRequestStorage.getAllEscortRequests(filters);
 
-    console.log(`Returning ${requests.length} escort requests`);
+    logger.info('Returning escort requests', { route: '/api/security/escort-requests', count: requests.length });
 
     return NextResponse.json(requests);
 
   } catch (error) {
-    console.error('Error fetching escort requests:', error);
+    logger.error('Error fetching escort requests', error instanceof Error ? error : new Error(String(error)), { route: '/api/security/escort-requests' });
     return NextResponse.json(
       { error: 'Failed to fetch escort requests' },
       { status: 500 }
@@ -144,10 +145,10 @@ export async function POST(request: NextRequest) {
     try {
       // Create escort request using the escort-request-storage module
       const escortRequest = await escortRequestStorage.createEscortRequest(escortRequestData);
-      console.log('Escort request created successfully:', escortRequest.id);
+      logger.info('Escort request created successfully', { route: '/api/security/escort-requests', requestId: escortRequest.id });
       return NextResponse.json(escortRequest, { status: 201 });
     } catch (storageError) {
-      console.error('Error in escort request storage layer:', storageError);
+      logger.error('Error in escort request storage layer', storageError instanceof Error ? storageError : new Error(String(storageError)), { route: '/api/security/escort-requests', operation: 'create' });
 
       return NextResponse.json(
         { error: 'Failed to create escort request' },
@@ -155,7 +156,7 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Error creating escort request:', error);
+    logger.error('Error creating escort request', error instanceof Error ? error : new Error(String(error)), { route: '/api/security/escort-requests' });
 
     return NextResponse.json(
       { error: 'Failed to create escort request' },
@@ -196,7 +197,7 @@ export async function PUT(request: NextRequest) {
     const hasLeadership = isLeadership(auth);
 
     if (!isCreator && !isAssignedOfficer && !hasLeadership) {
-      console.log(`RBAC_AUDIT: User ${auth.userId} denied PUT on escort request ${requestData.id} (not creator/officer/leadership)`);
+      logger.info('RBAC_AUDIT: User denied PUT on escort request', { route: '/api/security/escort-requests', userId: auth.userId, requestId: requestData.id, reason: 'not creator/officer/leadership' });
       return NextResponse.json(
         { error: 'Access denied' },
         { status: 403 }
@@ -214,10 +215,10 @@ export async function PUT(request: NextRequest) {
         );
       }
 
-      console.log('Escort request updated successfully:', escortRequest.id);
+      logger.info('Escort request updated successfully', { route: '/api/security/escort-requests', requestId: escortRequest.id });
       return NextResponse.json(escortRequest, { status: 200 });
     } catch (storageError) {
-      console.error('Error in escort request storage layer:', storageError);
+      logger.error('Error in escort request storage layer', storageError instanceof Error ? storageError : new Error(String(storageError)), { route: '/api/security/escort-requests', operation: 'update' });
 
       return NextResponse.json(
         { error: 'Failed to update escort request' },
@@ -225,7 +226,7 @@ export async function PUT(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Error updating escort request:', error);
+    logger.error('Error updating escort request', error instanceof Error ? error : new Error(String(error)), { route: '/api/security/escort-requests' });
 
     return NextResponse.json(
       { error: 'Failed to update escort request' },
@@ -265,7 +266,7 @@ export async function DELETE(request: NextRequest) {
     const hasLeadership = isLeadership(auth);
 
     if (!isCreator && !hasLeadership) {
-      console.log(`RBAC_AUDIT: User ${auth.userId} denied DELETE on escort request ${id} (not creator/leadership)`);
+      logger.info('RBAC_AUDIT: User denied DELETE on escort request', { route: '/api/security/escort-requests', userId: auth.userId, requestId: id, reason: 'not creator/leadership' });
       return NextResponse.json(
         { error: 'Access denied' },
         { status: 403 }
@@ -283,10 +284,10 @@ export async function DELETE(request: NextRequest) {
         );
       }
 
-      console.log('Escort request deleted successfully:', id);
+      logger.info('Escort request deleted successfully', { route: '/api/security/escort-requests', requestId: id });
       return NextResponse.json({ message: 'Escort request deleted successfully' }, { status: 200 });
     } catch (storageError) {
-      console.error('Error in escort request storage layer:', storageError);
+      logger.error('Error in escort request storage layer', storageError instanceof Error ? storageError : new Error(String(storageError)), { route: '/api/security/escort-requests', operation: 'delete' });
 
       return NextResponse.json(
         { error: 'Failed to delete escort request' },
@@ -294,7 +295,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Error deleting escort request:', error);
+    logger.error('Error deleting escort request', error instanceof Error ? error : new Error(String(error)), { route: '/api/security/escort-requests' });
 
     return NextResponse.json(
       { error: 'Failed to delete escort request' },

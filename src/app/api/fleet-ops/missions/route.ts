@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/auth';
 import { MissionResponse, MissionStatus, MissionType } from '@/types/Mission';
 import * as missionStorage from '@/lib/mission-storage';
 import { isValidMissionTransition, getValidTransitions } from '@/lib/state-machines/mission-status';
+import { logger } from '@/lib/logger';
 
 // Validation schema for mission participant
 const validateMissionParticipant = (participant: any) => {
@@ -72,12 +73,12 @@ export async function GET(request: NextRequest) {
     const leaderId = searchParams.get('leaderId');
     if (leaderId) filters.leaderId = leaderId;
 
-    console.log('Fetching missions with filters:', filters);
+    logger.info('Fetching missions', { route: '/api/fleet-ops/missions', filters });
 
     // Get missions using the mission-storage module
     const missions = await missionStorage.getAllMissions(filters);
 
-    console.log(`Returning ${missions.length} missions`);
+    logger.info('Returning missions', { route: '/api/fleet-ops/missions', count: missions.length });
 
     // Basic pagination at API layer (storage returns full list today)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
     return res;
 
   } catch (error) {
-    console.error('Error fetching missions:', error);
+    logger.error('Error fetching missions', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/missions' });
     return NextResponse.json(
       { error: 'Failed to fetch missions' },
       { status: 500 }
@@ -131,10 +132,10 @@ export async function POST(request: NextRequest) {
     try {
       // Create mission using the mission-storage module
       const mission = await missionStorage.createMission(missionData);
-      console.log('Mission created successfully:', mission.id);
+      logger.info('Mission created successfully', { route: '/api/fleet-ops/missions', missionId: mission.id });
       return NextResponse.json(mission, { status: 201 });
     } catch (storageError) {
-      console.error('Error in mission storage layer:', storageError);
+      logger.error('Error in mission storage layer', storageError instanceof Error ? storageError : new Error(String(storageError)), { route: '/api/fleet-ops/missions', operation: 'create' });
 
       return NextResponse.json(
         { error: 'Failed to create mission' },
@@ -142,7 +143,7 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Error creating mission:', error);
+    logger.error('Error creating mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/missions' });
 
     return NextResponse.json(
       { error: 'Failed to create mission' },
@@ -207,10 +208,10 @@ export async function PUT(request: NextRequest) {
         );
       }
 
-      console.log('Mission updated successfully:', mission.id);
+      logger.info('Mission updated successfully', { route: '/api/fleet-ops/missions', missionId: mission.id });
       return NextResponse.json(mission, { status: 200 });
     } catch (storageError) {
-      console.error('Error in mission storage layer:', storageError);
+      logger.error('Error in mission storage layer', storageError instanceof Error ? storageError : new Error(String(storageError)), { route: '/api/fleet-ops/missions', operation: 'update' });
 
       return NextResponse.json(
         { error: 'Failed to update mission' },
@@ -218,7 +219,7 @@ export async function PUT(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Error updating mission:', error);
+    logger.error('Error updating mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/missions' });
 
     return NextResponse.json(
       { error: 'Failed to update mission' },
@@ -244,7 +245,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Mission ID is required' }, { status: 400 });
     }
 
-    console.log('Deleting mission:', id);
+    logger.info('Deleting mission', { route: '/api/fleet-ops/missions', missionId: id });
 
     // Delete mission using the mission-storage module
     const success = await missionStorage.deleteMission(id);
@@ -253,12 +254,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Mission not found' }, { status: 404 });
     }
 
-    console.log('Mission deleted successfully:', id);
+    logger.info('Mission deleted successfully', { route: '/api/fleet-ops/missions', missionId: id });
 
     return NextResponse.json({ success: true });
 
   } catch (error) {
-    console.error('Error deleting mission:', error);
+    logger.error('Error deleting mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/missions' });
 
     return NextResponse.json(
       { error: 'Failed to delete mission' },

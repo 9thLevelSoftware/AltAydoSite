@@ -3,6 +3,7 @@ import * as operationStorage from '@/lib/operation-storage';
 import * as userStorage from '@/lib/user-storage';
 import { z } from 'zod';
 import { requireAuth, requireLeadership } from '@/lib/auth-guards';
+import { logger } from '@/lib/logger';
 
 // Validation schema for creating an operation
 const operationParticipantSchema = z.object({
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
     return res;
     
   } catch (error) {
-    console.error('Error fetching operations:', error);
+    logger.error('Error fetching operations', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations' });
     return NextResponse.json(
       { error: 'Failed to fetch operations' },
       { status: 500 }
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
     
   } catch (error) {
-    console.error('Error creating operation:', error);
+    logger.error('Error creating operation', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations' });
     return NextResponse.json(
       { error: 'Failed to create operation' },
       { status: 500 }

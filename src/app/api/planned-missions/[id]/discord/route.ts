@@ -5,6 +5,7 @@ import * as plannedMissionStorage from '@/lib/planned-mission-storage';
 import { getDiscordService, DiscordEventUser } from '@/lib/discord';
 import { DiscordEventStatus } from '@/types/DiscordEvent';
 import { PlannedMissionStatus } from '@/types/PlannedMission';
+import { logger } from '@/lib/logger';
 
 // Map Discord event status to mission status
 function mapDiscordStatusToMissionStatus(discordStatus: number, currentMissionStatus: PlannedMissionStatus): PlannedMissionStatus | null {
@@ -147,7 +148,7 @@ export async function POST(
       status: 'SCHEDULED'
     });
 
-    console.log('Mission published to Discord:', id, '-> Event:', discordEvent.id);
+    logger.info('Mission published to Discord', { route: '/api/planned-missions/[id]/discord', missionId: id, discordEventId: discordEvent.id });
 
     return NextResponse.json({
       success: true,
@@ -160,7 +161,7 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('Error publishing mission to Discord:', error);
+    logger.error('Error publishing mission to Discord', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/discord' });
     return NextResponse.json(
       { error: 'Failed to publish to Discord' },
       { status: 500 }
@@ -220,7 +221,7 @@ export async function GET(
     if (discordEvent?.status) {
       const newStatus = mapDiscordStatusToMissionStatus(discordEvent.status, mission.status);
       if (newStatus && newStatus !== mission.status) {
-        console.log(`Syncing mission ${id} status: ${mission.status} -> ${newStatus} (Discord event status: ${discordEvent.status})`);
+        logger.info('Syncing mission status from Discord', { route: '/api/planned-missions/[id]/discord', missionId: id, oldStatus: mission.status, newStatus, discordEventStatus: discordEvent.status });
         updatedMission = await plannedMissionStorage.updatePlannedMission(id, { status: newStatus }) || mission;
         statusSynced = true;
       }
@@ -247,7 +248,7 @@ export async function GET(
     return res;
 
   } catch (error) {
-    console.error('Error fetching Discord RSVPs:', error);
+    logger.error('Error fetching Discord RSVPs', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/discord' });
     return NextResponse.json(
       { error: 'Failed to fetch RSVPs' },
       { status: 500 }
@@ -314,7 +315,7 @@ export async function DELETE(
       status: 'DRAFT'
     });
 
-    console.log('Mission unpublished from Discord:', id);
+    logger.info('Mission unpublished from Discord', { route: '/api/planned-missions/[id]/discord', missionId: id });
 
     return NextResponse.json({
       success: true,
@@ -322,7 +323,7 @@ export async function DELETE(
     });
 
   } catch (error) {
-    console.error('Error unpublishing mission from Discord:', error);
+    logger.error('Error unpublishing mission from Discord', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/discord' });
     return NextResponse.json(
       { error: 'Failed to unpublish from Discord' },
       { status: 500 }
@@ -403,7 +404,7 @@ export async function PATCH(
       location: mission.location || 'Star Citizen'
     });
 
-    console.log('Discord event updated for mission:', id);
+    logger.info('Discord event updated for mission', { route: '/api/planned-missions/[id]/discord', missionId: id });
 
     return NextResponse.json({
       success: true,
@@ -414,7 +415,7 @@ export async function PATCH(
     });
 
   } catch (error) {
-    console.error('Error updating Discord event:', error);
+    logger.error('Error updating Discord event', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/discord' });
     return NextResponse.json(
       { error: 'Failed to update Discord event' },
       { status: 500 }

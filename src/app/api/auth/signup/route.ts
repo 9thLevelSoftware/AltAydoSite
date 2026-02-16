@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { User } from '@/types/user';
 import * as userStorage from '@/lib/user-storage';
 import { checkRateLimit, getRateLimitKey, AUTH_RATE_LIMIT } from '@/lib/rate-limit-store';
+import { logger } from '@/lib/logger';
 
 // Define validation schema for signup data
 const signupSchema = z.object({
@@ -39,18 +40,18 @@ export async function POST(request: NextRequest) {
       }
     } catch (e) {
       // Fail open: if MongoDB is unavailable, allow the request
-      console.warn('Rate limit check failed, allowing request:', e);
+      logger.warn('Rate limit check failed, allowing request', { route: '/api/auth/signup', error: e instanceof Error ? e.message : String(e) });
     }
 
-    console.log('Signup API called');
+    logger.info('Signup API called', { route: '/api/auth/signup' });
     const body = await request.json();
-    console.log('Signup request body received', { ...body, password: '[REDACTED]', confirmPassword: '[REDACTED]' });
+    logger.info('Signup request received', { route: '/api/auth/signup', email: body.email, aydoHandle: body.aydoHandle });
 
     // Validate the request body
     const result = signupSchema.safeParse(body);
     if (!result.success) {
       const errorMessage = result.error.errors[0].message;
-      console.error('Validation error:', errorMessage);
+      logger.warn('Signup validation error', { route: '/api/auth/signup', error: errorMessage });
       return NextResponse.json(
         { error: errorMessage },
         { status: 400 }
@@ -61,10 +62,10 @@ export async function POST(request: NextRequest) {
 
     try {
       // Check if user already exists by handle
-      console.log(`Checking if handle exists: ${aydoHandle}`);
+      logger.info('Checking if handle exists', { route: '/api/auth/signup', aydoHandle });
       const existingUserByHandle = await userStorage.getUserByHandle(aydoHandle);
       if (existingUserByHandle) {
-        console.log(`User with handle ${aydoHandle} already exists`);
+        logger.info('User with handle already exists', { route: '/api/auth/signup', aydoHandle });
         return NextResponse.json(
           { error: 'User with this handle already exists' },
           { status: 409 }
@@ -72,17 +73,17 @@ export async function POST(request: NextRequest) {
       }
 
       // Check if user already exists by email
-      console.log(`Checking if email exists: ${email}`);
+      logger.info('Checking if email exists', { route: '/api/auth/signup', email });
       const existingUserByEmail = await userStorage.getUserByEmail(email);
       if (existingUserByEmail) {
-        console.log(`User with email ${email} already exists`);
+        logger.info('User with email already exists', { route: '/api/auth/signup', email });
         return NextResponse.json(
           { error: 'User with this email already exists' },
           { status: 409 }
         );
       }
     } catch (checkError) {
-      console.error('Error checking for existing user:', checkError);
+      logger.error('Error checking for existing user', checkError instanceof Error ? checkError : new Error(String(checkError)), { route: '/api/auth/signup' });
       return NextResponse.json(
         { error: 'Error checking user existence. Please try again later.' },
         { status: 500 }
@@ -90,12 +91,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Hash the password
-    console.log('Hashing password');
+    logger.info('Hashing password', { route: '/api/auth/signup' });
     let hashedPassword;
     try {
       hashedPassword = await bcrypt.hash(password, 10);
     } catch (hashError) {
-      console.error('Error hashing password:', hashError);
+      logger.error('Error hashing password', hashError instanceof Error ? hashError : new Error(String(hashError)), { route: '/api/auth/signup' });
       return NextResponse.json(
         { error: 'Error processing password. Please try again.' },
         { status: 500 }
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     // Create a unique ID for the user
     const userId = crypto.randomUUID();
-    console.log(`Created user ID: ${userId}`);
+    logger.info('Created user ID', { route: '/api/auth/signup', userId });
 
     // Create a new user
     const newUser: User = {
@@ -122,10 +123,9 @@ export async function POST(request: NextRequest) {
 
     try {
       // Save the user using our hybrid storage approach
-      console.log('Saving user to storage...');
+      logger.info('Saving user to storage', { route: '/api/auth/signup', userId });
       await userStorage.createUser(newUser);
-      console.log('User created successfully');
-      console.log(`Using fallback storage: ${userStorage.isUsingFallbackStorage() ? 'Yes' : 'No'}`);
+      logger.info('User created successfully', { route: '/api/auth/signup', userId, usingFallback: userStorage.isUsingFallbackStorage() });
 
       // Return success
       return NextResponse.json(
@@ -142,14 +142,14 @@ export async function POST(request: NextRequest) {
         { status: 201 }
       );
     } catch (createError) {
-      console.error('Error creating user in database:', createError);
+      logger.error('Error creating user in database', createError instanceof Error ? createError : new Error(String(createError)), { route: '/api/auth/signup' });
       return NextResponse.json(
         { error: 'Failed to create account' },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error during user registration:', error);
+    logger.error('Error during user registration', error instanceof Error ? error : new Error(String(error)), { route: '/api/auth/signup' });
     return NextResponse.json(
       { error: 'Registration failed' },
       { status: 500 }

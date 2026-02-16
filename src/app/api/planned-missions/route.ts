@@ -5,6 +5,7 @@ import { ActivityType, OperationType } from '@/types/MissionTemplate';
 import { PlannedMissionStatus } from '@/types/PlannedMission';
 import * as plannedMissionStorage from '@/lib/planned-mission-storage';
 import { getDiscordService } from '@/lib/discord';
+import { logger } from '@/lib/logger';
 
 // Helper to build Discord event description from mission
 function buildEventDescription(mission: any, baseUrl?: string): string {
@@ -39,7 +40,7 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
   try {
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
-      console.log('Discord not configured, skipping auto-publish');
+      logger.info('Discord not configured, skipping auto-publish', { route: '/api/planned-missions', missionId: mission.id });
       return { success: false, error: 'Discord not configured' };
     }
 
@@ -70,10 +71,10 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
       }
     });
 
-    console.log('Auto-published mission to Discord:', mission.id, '-> Event:', discordEvent.id);
+    logger.info('Auto-published mission to Discord', { route: '/api/planned-missions', missionId: mission.id, discordEventId: discordEvent.id });
     return { success: true, discordEvent };
   } catch (error) {
-    console.error('Failed to auto-publish to Discord:', error);
+    logger.error('Failed to auto-publish to Discord', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions', missionId: mission.id });
     return { success: false, error: 'Failed to publish to Discord' };
   }
 }
@@ -219,12 +220,12 @@ export async function GET(request: NextRequest) {
     const pageSizeRaw = parseInt(searchParams.get('pageSize') || '25', 10);
     const pageSize = Math.min(100, Math.max(1, pageSizeRaw));
 
-    console.log('Fetching planned missions with filters:', filters);
+    logger.info('Fetching planned missions', { route: '/api/planned-missions', filters, page, pageSize });
 
     // DB-level pagination via skip/limit
     const result = await plannedMissionStorage.getAllPlannedMissionsPaginated(page, pageSize, filters);
 
-    console.log(`Returning ${result.missions.length} of ${result.total} planned missions (page ${page})`);
+    logger.info('Returning planned missions', { route: '/api/planned-missions', count: result.missions.length, total: result.total, page });
 
     const res = NextResponse.json({
       items: result.missions,
@@ -237,7 +238,7 @@ export async function GET(request: NextRequest) {
     return res;
 
   } catch (error) {
-    console.error('Error fetching planned missions:', error);
+    logger.error('Error fetching planned missions', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions' });
     return NextResponse.json(
       { error: 'Failed to fetch planned missions' },
       { status: 500 }
@@ -291,7 +292,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const mission = await plannedMissionStorage.createPlannedMission(missionToCreate);
-      console.log('Planned mission created successfully:', mission.id);
+      logger.info('Planned mission created successfully', { route: '/api/planned-missions', missionId: mission.id });
 
       // Auto-publish to Discord if status is SCHEDULED
       let discordPublishResult: { success: boolean; discordEvent?: any; error?: string } | null = null;
@@ -311,14 +312,14 @@ export async function POST(request: NextRequest) {
         discordError: discordPublishResult?.error
       }, { status: 201 });
     } catch (storageError) {
-      console.error('Error in planned mission storage layer:', storageError);
+      logger.error('Error in planned mission storage layer', storageError instanceof Error ? storageError : new Error(String(storageError)), { route: '/api/planned-missions', operation: 'create' });
       return NextResponse.json(
         { error: 'Failed to create planned mission' },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error creating planned mission:', error);
+    logger.error('Error creating planned mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions' });
     return NextResponse.json(
       { error: 'Failed to create planned mission' },
       { status: 500 }
@@ -393,21 +394,21 @@ export async function PUT(request: NextRequest) {
         ? await plannedMissionStorage.getPlannedMissionById(mission.id) || mission
         : mission;
 
-      console.log('Planned mission updated successfully:', mission.id);
+      logger.info('Planned mission updated successfully', { route: '/api/planned-missions', missionId: mission.id });
       return NextResponse.json({
         ...finalMission,
         discordPublished: discordPublishResult?.success || false,
         discordError: discordPublishResult?.error
       }, { status: 200 });
     } catch (storageError) {
-      console.error('Error in planned mission storage layer:', storageError);
+      logger.error('Error in planned mission storage layer', storageError instanceof Error ? storageError : new Error(String(storageError)), { route: '/api/planned-missions', operation: 'update' });
       return NextResponse.json(
         { error: 'Failed to update planned mission' },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error updating planned mission:', error);
+    logger.error('Error updating planned mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions' });
     return NextResponse.json(
       { error: 'Failed to update planned mission' },
       { status: 500 }
@@ -441,7 +442,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    console.log('Deleting planned mission:', id);
+    logger.info('Deleting planned mission', { route: '/api/planned-missions', missionId: id });
 
     const success = await plannedMissionStorage.deletePlannedMission(id);
 
@@ -449,12 +450,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Planned mission not found' }, { status: 404 });
     }
 
-    console.log('Planned mission deleted successfully:', id);
+    logger.info('Planned mission deleted successfully', { route: '/api/planned-missions', missionId: id });
 
     return NextResponse.json({ success: true });
 
   } catch (error) {
-    console.error('Error deleting planned mission:', error);
+    logger.error('Error deleting planned mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions' });
     return NextResponse.json(
       { error: 'Failed to delete planned mission' },
       { status: 500 }

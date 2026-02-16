@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth';
 import * as plannedMissionStorage from '@/lib/planned-mission-storage';
+import { logger } from '@/lib/logger';
 
 // GET handler - Get a single planned mission by ID
 export async function GET(
@@ -32,7 +33,7 @@ export async function GET(
     return res;
 
   } catch (error) {
-    console.error('Error fetching planned mission:', error);
+    logger.error('Error fetching planned mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]' });
     return NextResponse.json(
       { error: 'Failed to fetch planned mission' },
       { status: 500 }
@@ -75,11 +76,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Planned mission not found' }, { status: 404 });
     }
 
-    console.log('Planned mission updated successfully:', mission.id);
+    logger.info('Planned mission updated successfully', { route: '/api/planned-missions/[id]', missionId: mission.id });
     return NextResponse.json(mission, { status: 200 });
 
   } catch (error) {
-    console.error('Error updating planned mission:', error);
+    logger.error('Error updating planned mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]' });
     return NextResponse.json(
       { error: 'Failed to update planned mission' },
       { status: 500 }
@@ -121,12 +122,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Planned mission not found' }, { status: 404 });
     }
 
-    console.log('Planned mission deleted successfully:', id);
+    logger.info('Planned mission deleted successfully', { route: '/api/planned-missions/[id]', missionId: id });
 
     return NextResponse.json({ success: true });
 
   } catch (error) {
-    console.error('Error deleting planned mission:', error);
+    logger.error('Error deleting planned mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]' });
     return NextResponse.json(
       { error: 'Failed to delete planned mission' },
       { status: 500 }

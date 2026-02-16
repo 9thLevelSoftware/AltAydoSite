@@ -3,6 +3,7 @@ import * as operationStorage from '@/lib/operation-storage';
 import * as userStorage from '@/lib/user-storage';
 import { z } from 'zod';
 import { requireAuth, requireLeadership, AuthResult } from '@/lib/auth-guards';
+import { logger } from '@/lib/logger';
 
 // Validation schema for updating an operation
 const operationParticipantSchema = z.object({
@@ -64,7 +65,7 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('Error fetching operation:', error);
+    logger.error('Error fetching operation', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations/[id]' });
     return NextResponse.json(
       { error: 'Failed to fetch operation' },
       { status: 500 }
@@ -139,7 +140,7 @@ export async function PUT(
     });
 
   } catch (error) {
-    console.error('Error updating operation:', error);
+    logger.error('Error updating operation', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations/[id]' });
     return NextResponse.json(
       { error: 'Failed to update operation' },
       { status: 500 }
@@ -188,7 +189,7 @@ export async function DELETE(
     return NextResponse.json({ success: true });
 
   } catch (error) {
-    console.error('Error deleting operation:', error);
+    logger.error('Error deleting operation', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations/[id]' });
     return NextResponse.json(
       { error: 'Failed to delete operation' },
       { status: 500 }

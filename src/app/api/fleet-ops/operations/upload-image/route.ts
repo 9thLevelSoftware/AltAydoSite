@@ -7,6 +7,7 @@ import { validateImageBuffer, MAX_IMAGE_SIZE } from '@/lib/file-validation';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 // Setup local storage for fallback
 const dataDir = path.join(process.cwd(), 'data');
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
           const hasLeadershipClearance = auth.clearanceLevel >= 3;
 
           if (!isLeader && !isParticipant && !hasLeadershipClearance) {
-            console.log(`RBAC_AUDIT: User ${auth.userId} denied upload to mission ${missionId} -- not participant/leader`);
+            logger.info('RBAC_AUDIT: User denied upload to mission', { route: '/api/fleet-ops/operations/upload-image', userId: auth.userId, missionId, reason: 'not participant/leader' });
             return NextResponse.json(
               { error: 'You must be a participant or leader of this operation to upload images' },
               { status: 403 }
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
         }
         // If mission not found, allow upload (mission may be in local storage or about to be created)
       } catch (authCheckError) {
-        console.error('Error checking mission ownership for upload:', authCheckError);
+        logger.error('Error checking mission ownership for upload', authCheckError instanceof Error ? authCheckError : new Error(String(authCheckError)), { route: '/api/fleet-ops/operations/upload-image', missionId });
         // Fail open for auth check DB errors -- the upload will still be attributed to the user
       }
     }
@@ -104,7 +105,7 @@ export async function POST(request: Request) {
     // Try to use MongoDB first
     if (await shouldUseMongoDb()) {
       try {
-        console.log('Storing image in MongoDB...');
+        logger.info('Storing image in MongoDB', { route: '/api/fleet-ops/operations/upload-image', missionId });
         const { db } = await connectToDatabase();
 
         // Convert to ObjectId if not a temp ID and if possible
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
           try {
             mongoMissionId = new ObjectId(missionId);
           } catch {
-            console.log('Could not convert mission ID to ObjectId, using as string');
+            logger.info('Could not convert mission ID to ObjectId, using as string', { route: '/api/fleet-ops/operations/upload-image', missionId });
           }
         }
 
@@ -155,7 +156,7 @@ export async function POST(request: Request) {
                 );
               }
             } catch (updateError) {
-              console.error('Error updating mission with image reference:', updateError);
+              logger.error('Error updating mission with image reference', updateError instanceof Error ? updateError : new Error(String(updateError)), { route: '/api/fleet-ops/operations/upload-image', missionId });
               // Continue even if we can't update the mission
             }
           }
@@ -172,16 +173,16 @@ export async function POST(request: Request) {
           });
         } else {
           const error = new Error('Failed to insert image into MongoDB');
-          console.error('MongoDB image upload failed, falling back to local storage:', error);
+          logger.error('MongoDB image upload failed, falling back to local storage', error, { route: '/api/fleet-ops/operations/upload-image', missionId });
         }
       } catch (mongoError) {
         // Log MongoDB error but continue to fallback
-        console.error('MongoDB image upload failed, falling back to local storage:', mongoError);
+        logger.error('MongoDB image upload failed, falling back to local storage', mongoError instanceof Error ? mongoError : new Error(String(mongoError)), { route: '/api/fleet-ops/operations/upload-image', missionId });
       }
     }
 
     // Fallback to local file storage
-    console.log('Falling back to local file storage for image upload...');
+    logger.info('Falling back to local file storage for image upload', { route: '/api/fleet-ops/operations/upload-image', missionId });
     ensureDirectories();
 
     // Save image to local file system
@@ -218,7 +219,7 @@ export async function POST(request: Request) {
     });
 
   } catch (error) {
-    console.error('Error in upload-image route:', error);
+    logger.error('Error in upload-image route', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations/upload-image' });
     return NextResponse.json({
       error: 'Internal server error'
     }, { status: 500 });

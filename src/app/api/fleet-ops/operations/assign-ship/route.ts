@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-guards';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { logger } from '@/lib/logger';
 
 const LEADERSHIP_ROLES = ['Director', 'Manager', 'Board Member'];
 
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
     const hasLeadership = LEADERSHIP_ROLES.includes(auth.role) || auth.clearanceLevel >= 3;
 
     if (!isSelfAssignment && !hasLeadership) {
-      console.log(`RBAC_AUDIT: User ${auth.userId} denied ship assignment to user ${userId} on mission ${missionId} (not self/leadership)`);
+      logger.info('RBAC_AUDIT: User denied ship assignment', { route: '/api/fleet-ops/operations/assign-ship', userId: auth.userId, targetUserId: userId, missionId, reason: 'not self/leadership' });
       return NextResponse.json(
         { error: 'Not authorized to assign ships to this operation' },
         { status: 403 }
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
     });
 
   } catch (error) {
-    console.error('Error in assign-ship route:', error);
+    logger.error('Error in assign-ship route', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations/assign-ship' });
     return NextResponse.json({
       error: 'Internal server error'
     }, { status: 500 });

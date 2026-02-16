@@ -7,6 +7,7 @@ import {
   canUserModifyMission
 } from '@/lib/planned-mission-storage';
 import { ConfirmedParticipant } from '@/types/PlannedMission';
+import { logger } from '@/lib/logger';
 
 // POST - Save confirmed participants (attendance)
 export async function POST(
@@ -78,7 +79,7 @@ export async function POST(
       confirmedCount: confirmedParticipants.length
     });
   } catch (error) {
-    console.error('Error saving attendance:', error);
+    logger.error('Error saving attendance', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/attendance' });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -118,7 +119,7 @@ export async function GET(
       confirmedCount: mission.confirmedParticipants.length
     });
   } catch (error) {
-    console.error('Error getting attendance:', error);
+    logger.error('Error getting attendance', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/attendance' });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

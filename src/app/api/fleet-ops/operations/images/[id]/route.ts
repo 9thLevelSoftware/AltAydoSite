@@ -6,6 +6,7 @@ import { ObjectId } from 'mongodb';
 import * as fs from 'fs';
 import * as path from 'path';
 import { shouldUseMongoDb } from '@/lib/storage-utils';
+import { logger } from '@/lib/logger';
 
 // Local storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -46,7 +47,7 @@ export async function GET(
       return NextResponse.json({ error: 'Image ID is required' }, { status: 400 });
     }
 
-    console.log(`Retrieving image with ID: ${imageId}`);
+    logger.info('Retrieving image', { route: '/api/fleet-ops/operations/images/[id]', imageId });
 
     // Try to retrieve from MongoDB first
     if (await shouldUseMongoDb()) {
@@ -58,7 +59,7 @@ export async function GET(
         const image = await db.collection('missionImages').findOne(filter);
 
         if (image && image.data) {
-          console.log(`Found image in MongoDB: ${image.filename}`);
+          logger.info('Found image in MongoDB', { route: '/api/fleet-ops/operations/images/[id]', imageId, filename: image.filename });
           
           // Return the image with the correct content type
           const etag = 'W/"' + (image._id?.toString() || image.filename) + '-' + (image.uploadedAt?.getTime?.() || 0) + '"';
@@ -74,13 +75,13 @@ export async function GET(
           });
         }
       } catch (mongoError) {
-        console.error('Error retrieving image from MongoDB:', mongoError);
+        logger.error('Error retrieving image from MongoDB', mongoError instanceof Error ? mongoError : new Error(String(mongoError)), { route: '/api/fleet-ops/operations/images/[id]', imageId });
         // Fall back to local file system
       }
     }
 
     // Try to find image in local file system
-    console.log('Checking for image in local storage...');
+    logger.info('Checking for image in local storage', { route: '/api/fleet-ops/operations/images/[id]', imageId });
     
     // Check for metadata file
     const metadataPath = path.join(imagesDir, `${imageId}.json`);
@@ -94,7 +95,7 @@ export async function GET(
         const imagePath = metadata.storagePath || path.join(imagesDir, `${imageId}.${metadata.filename.split('.').pop()}`);
         
         if (fs.existsSync(imagePath)) {
-          console.log(`Found image in local storage: ${metadata.filename}`);
+          logger.info('Found image in local storage', { route: '/api/fleet-ops/operations/images/[id]', imageId, filename: metadata.filename });
           const imageBuffer = fs.readFileSync(imagePath);
           
           // Return the image with the correct content type
@@ -112,16 +113,16 @@ export async function GET(
           });
         }
       } catch (fsError) {
-        console.error('Error reading image from local storage:', fsError);
+        logger.error('Error reading image from local storage', fsError instanceof Error ? fsError : new Error(String(fsError)), { route: '/api/fleet-ops/operations/images/[id]', imageId });
       }
     }
 
     // If all methods fail, return 404
-    console.log(`Image not found: ${imageId}`);
+    logger.info('Image not found', { route: '/api/fleet-ops/operations/images/[id]', imageId });
     return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     
   } catch (error) {
-    console.error('Error in get-image route:', error);
+    logger.error('Error in get-image route', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations/images/[id]' });
     return NextResponse.json({
       error: 'Internal server error'
     }, { status: 500 });

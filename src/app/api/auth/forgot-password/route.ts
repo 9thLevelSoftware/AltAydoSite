@@ -4,6 +4,7 @@ import * as userStorage from '@/lib/user-storage';
 import * as resetTokenStorage from '@/lib/password-reset-storage';
 import { sendPasswordResetEmail } from '@/lib/email-service';
 import { checkRateLimit, getRateLimitKey, AUTH_RATE_LIMIT } from '@/lib/rate-limit-store';
+import { logger } from '@/lib/logger';
 
 // Define validation schema for forgot password request
 const forgotPasswordSchema = z.object({
@@ -30,18 +31,18 @@ export async function POST(request: NextRequest) {
       }
     } catch (e) {
       // Fail open: if MongoDB is unavailable, allow the request
-      console.warn('Rate limit check failed, allowing request:', e);
+      logger.warn('Rate limit check failed, allowing request', { route: '/api/auth/forgot-password', error: e instanceof Error ? e.message : String(e) });
     }
 
-    console.log('Forgot password API called');
+    logger.info('Forgot password API called', { route: '/api/auth/forgot-password' });
     const body = await request.json();
-    console.log('Forgot password request body received', { email: body.email });
+    logger.info('Forgot password request received', { route: '/api/auth/forgot-password' });
 
     // Validate the request body
     const result = forgotPasswordSchema.safeParse(body);
     if (!result.success) {
       const errorMessage = result.error.errors[0].message;
-      console.error('Validation error:', errorMessage);
+      logger.warn('Forgot password validation error', { route: '/api/auth/forgot-password', error: errorMessage });
       return NextResponse.json(
         { error: errorMessage },
         { status: 400 }
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     // For security reasons, always return success even if user not found
     // This prevents email enumeration attacks
     if (!user) {
-      console.log(`No user found with email: ${email}`);
+      logger.info('Forgot password request for non-existent email', { route: '/api/auth/forgot-password' });
       return NextResponse.json(
         { message: 'If your email is registered, you will receive password reset instructions' },
         { status: 200 }
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
     const emailSent = await sendPasswordResetEmail(user.email, resetToken.token, user.aydoHandle);
     
     if (!emailSent) {
-      console.error('Failed to send password reset email');
+      logger.error('Failed to send password reset email', undefined, { route: '/api/auth/forgot-password' });
       return NextResponse.json(
         { error: 'Failed to send password reset email. Please try again later.' },
         { status: 500 }
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
     res.headers.set('Cache-Control', 'no-store');
     return res;
   } catch (error) {
-    console.error('Error processing forgot password request:', error);
+    logger.error('Error processing forgot password request', error instanceof Error ? error : new Error(String(error)), { route: '/api/auth/forgot-password' });
     return NextResponse.json(
       { error: 'An unexpected error occurred. Please try again later.' },
       { status: 500 }

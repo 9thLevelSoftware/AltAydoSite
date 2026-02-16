@@ -9,6 +9,7 @@ import {
 } from '@/lib/planned-mission-storage';
 import { PlannedMissionStatus } from '@/types/PlannedMission';
 import { getDiscordService } from '@/lib/discord';
+import { logger } from '@/lib/logger';
 
 // Helper to build Discord event description from mission
 function buildEventDescription(mission: any, baseUrl?: string): string {
@@ -43,7 +44,7 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
   try {
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
-      console.log('Discord not configured, skipping auto-publish');
+      logger.info('Discord not configured, skipping auto-publish', { route: '/api/planned-missions/[id]/status', missionId: mission.id });
       return { success: false, error: 'Discord not configured' };
     }
 
@@ -74,10 +75,10 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
       }
     });
 
-    console.log('Auto-published mission to Discord:', mission.id, '-> Event:', discordEvent.id);
+    logger.info('Auto-published mission to Discord', { route: '/api/planned-missions/[id]/status', missionId: mission.id, discordEventId: discordEvent.id });
     return { success: true, discordEvent };
   } catch (error) {
-    console.error('Failed to auto-publish to Discord:', error);
+    logger.error('Failed to auto-publish to Discord', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/status', missionId: mission.id });
     return { success: false, error: 'Failed to publish to Discord' };
   }
 }
@@ -183,7 +184,7 @@ export async function PATCH(
       discordError: discordPublishResult?.error
     });
   } catch (error) {
-    console.error('Error updating mission status:', error);
+    logger.error('Error updating mission status', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/status' });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -221,7 +222,7 @@ export async function GET(
       allowedTransitions: STATUS_TRANSITIONS[mission.status]
     });
   } catch (error) {
-    console.error('Error getting mission status:', error);
+    logger.error('Error getting mission status', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/status' });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

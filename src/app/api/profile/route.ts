@@ -5,6 +5,7 @@ import { authOptions } from '../auth/auth';
 import * as userStorage from '@/lib/user-storage';
 import { StaleDocumentError } from '@/lib/user-storage';
 import { UserShip } from '@/types/user';
+import { logger } from '@/lib/logger';
 
 // Define the UserShip schema
 const userShipSchema = z.object({
@@ -67,7 +68,7 @@ export async function GET() {
     return NextResponse.json(response);
 
   } catch (error) {
-    console.error('Profile fetch error:', error);
+    logger.error('Profile fetch error', error instanceof Error ? error : new Error(String(error)), { route: '/api/profile' });
     return NextResponse.json(
       { error: 'Failed to fetch profile' },
       { status: 500 }
@@ -89,7 +90,7 @@ export async function PUT(request: NextRequest) {
     try {
       body = await request.json();
     } catch (parseError) {
-      console.error('PUT Profile - Invalid JSON in request body:', parseError);
+      logger.warn('PUT Profile - Invalid JSON in request body', { route: '/api/profile', error: parseError instanceof Error ? parseError.message : String(parseError) });
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
     
@@ -99,9 +100,9 @@ export async function PUT(request: NextRequest) {
     if (isShipsOnlyUpdate) {
       
       if (!Array.isArray(body.ships)) {
-        console.error('PUT Profile - Ships data is not an array:', body.ships);
+        logger.warn('PUT Profile - Ships data is not an array', { route: '/api/profile', userId });
         return NextResponse.json(
-          { error: 'Ships data must be an array' }, 
+          { error: 'Ships data must be an array' },
           { status: 400 }
         );
       }
@@ -110,9 +111,9 @@ export async function PUT(request: NextRequest) {
       for (let i = 0; i < body.ships.length; i++) {
         const ship = body.ships[i];
         if (!ship.manufacturer || !ship.name || !ship.fleetyardsId) {
-          console.error(`PUT Profile - Invalid ship at index ${i}:`, ship);
+          logger.warn('PUT Profile - Invalid ship data', { route: '/api/profile', userId, index: i });
           return NextResponse.json(
-            { error: `Ship at index ${i} is missing required fields` }, 
+            { error: `Ship at index ${i} is missing required fields` },
             { status: 400 }
           );
         }
@@ -130,7 +131,7 @@ export async function PUT(request: NextRequest) {
       }, body.__v);
       
       if (!updatedUser) {
-        console.error(`PUT Profile - Failed to update ships for user ${userId}`);
+        logger.error('PUT Profile - Failed to update ships', undefined, { route: '/api/profile', userId });
         return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
       }
       
@@ -159,7 +160,7 @@ export async function PUT(request: NextRequest) {
     const result = profileUpdateSchema.safeParse(body);
     if (!result.success) {
       const errorMessage = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-      console.error(`PUT Profile - Validation error for user ${userId}:`, errorMessage);
+      logger.warn('PUT Profile - Validation error', { route: '/api/profile', userId, error: errorMessage });
       return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
     
@@ -170,7 +171,7 @@ export async function PUT(request: NextRequest) {
     const updatedUser = await userStorage.updateUser(userId, updates, expectedVersion);
     
     if (!updatedUser) {
-      console.error(`PUT Profile - Failed to update profile for user ${userId}`);
+      logger.error('PUT Profile - Failed to update profile', undefined, { route: '/api/profile', userId });
       return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
     }
     
@@ -201,7 +202,7 @@ export async function PUT(request: NextRequest) {
         { status: 409 }
       );
     }
-    console.error('Profile update error:', error);
+    logger.error('Profile update error', error instanceof Error ? error : new Error(String(error)), { route: '/api/profile' });
     return NextResponse.json(
       { error: 'Failed to update profile' },
       { status: 500 }
