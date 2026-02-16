@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { Transaction, TransactionType, TransactionCategory } from '@/types/finance';
 import { MobiGlasButton } from '@/components/ui/mobiglas';
 
@@ -22,6 +23,9 @@ const transactionCategories: TransactionCategory[] = [
 ];
 
 export default function TransactionModal({ isOpen, onClose, onSubmit }: TransactionModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, isOpen, onClose);
+
   const [newTransaction, setNewTransaction] = useState({
     type: 'DEPOSIT' as TransactionType,
     amount: '',
@@ -47,7 +51,7 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div ref={modalRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -68,10 +72,12 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Transaction Type</label>
+                  <label htmlFor="txn-type" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Transaction Type</label>
                   <div className="relative">
                     <select
+                      id="txn-type"
                       value={newTransaction.type}
+                      aria-required={true}
                       onChange={(e) => setNewTransaction({
                         ...newTransaction,
                         type: e.target.value as TransactionType
@@ -90,10 +96,12 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Amount (AUEC)</label>
+                  <label htmlFor="txn-amount" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Amount (AUEC)</label>
                   <input
                     type="number"
+                    id="txn-amount"
                     value={newTransaction.amount}
+                    aria-required={true}
                     onChange={(e) => setNewTransaction({
                       ...newTransaction,
                       amount: e.target.value
@@ -105,9 +113,10 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Category</label>
+                  <label htmlFor="txn-category" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Category</label>
                   <div className="relative">
                     <select
+                      id="txn-category"
                       value={newTransaction.category}
                       onChange={(e) => setNewTransaction({
                         ...newTransaction,
@@ -130,10 +139,12 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Description</label>
+                  <label htmlFor="txn-description" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Description</label>
                   <input
                     type="text"
+                    id="txn-description"
                     value={newTransaction.description}
+                    aria-required={true}
                     onChange={(e) => setNewTransaction({
                       ...newTransaction,
                       description: e.target.value

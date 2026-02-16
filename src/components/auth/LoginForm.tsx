@@ -204,30 +204,34 @@ export default function LoginForm() {
 
           <form onSubmit={handleSubmit}>
             <div className="mg-input-group mb-4">
-              <label className="mg-subtitle text-xs mb-1 block tracking-wider">AYDOCORP HANDLE</label>
+              <label htmlFor="login-handle" className="mg-subtitle text-xs mb-1 block tracking-wider">AYDOCORP HANDLE</label>
               <div className="relative">
                 <input
                   type="text"
+                  id="login-handle"
                   value={aydoHandle}
                   onChange={(e) => setAydoHandle(e.target.value)}
                   className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
                   placeholder="ENTER HANDLE"
                   autoComplete="username"
+                  aria-required={true}
                 />
                 <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
               </div>
             </div>
 
             <div className="mg-input-group mb-6">
-              <label className="mg-subtitle text-xs mb-1 block tracking-wider">PASSWORD</label>
+              <label htmlFor="login-password" className="mg-subtitle text-xs mb-1 block tracking-wider">PASSWORD</label>
               <div className="relative">
                 <input
                   type="password"
+                  id="login-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
                   placeholder="••••••••••••"
                   autoComplete="current-password"
+                  aria-required={true}
                 />
                 <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
               </div>

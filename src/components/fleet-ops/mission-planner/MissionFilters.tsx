@@ -135,13 +135,13 @@ const MissionFilters: React.FC<MissionFiltersProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Status filter */}
           <motion.div variants={itemVariants} className="relative">
-            <label className="block text-xs text-[rgba(var(--mg-primary),0.7)] mb-1">
+            <label htmlFor="filter-status" className="block text-xs text-[rgba(var(--mg-primary),0.7)] mb-1">
               <div className="flex items-center">
-                <motion.svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  className="h-3 w-3 mr-1" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
+                <motion.svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-3 w-3 mr-1"
+                  fill="none"
+                  viewBox="0 0 24 24"
                   stroke="currentColor"
                   animate={{ rotate: isStatusFocused ? [0, 360] : 0 }}
                   transition={{ duration: 0.8, ease: "easeInOut" }}
@@ -149,9 +149,9 @@ const MissionFilters: React.FC<MissionFiltersProps> = ({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </motion.svg>
                 <motion.span
-                  animate={{ 
-                    color: isStatusFocused 
-                      ? ['#7aabd4', '#a1cdf7', '#7aabd4'] 
+                  animate={{
+                    color: isStatusFocused
+                      ? ['#7aabd4', '#a1cdf7', '#7aabd4']
                       : '#7aabd4'
                   }}
                   transition={{ duration: 1.5, repeat: isStatusFocused ? Infinity : 0 }}
@@ -165,7 +165,8 @@ const MissionFilters: React.FC<MissionFiltersProps> = ({
               onFocus={() => setIsStatusFocused(true)}
               onBlur={() => setIsStatusFocused(false)}
             >
-              <select 
+              <select
+                id="filter-status"
                 className="mg-input w-full py-2 px-3 bg-[rgba(var(--mg-panel-dark),0.7)] border border-[rgba(var(--mg-primary),0.25)] rounded-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none appearance-none pr-8"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as MissionStatus | 'all')}
@@ -232,13 +233,13 @@ const MissionFilters: React.FC<MissionFiltersProps> = ({
           
           {/* Type filter */}
           <motion.div variants={itemVariants} className="relative">
-            <label className="block text-xs text-[rgba(var(--mg-primary),0.7)] mb-1">
+            <label htmlFor="filter-type" className="block text-xs text-[rgba(var(--mg-primary),0.7)] mb-1">
               <div className="flex items-center">
-                <motion.svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  className="h-3 w-3 mr-1" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
+                <motion.svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-3 w-3 mr-1"
+                  fill="none"
+                  viewBox="0 0 24 24"
                   stroke="currentColor"
                   animate={{ rotate: isTypeFocused ? [0, 360] : 0 }}
                   transition={{ duration: 0.8, ease: "easeInOut" }}
@@ -246,9 +247,9 @@ const MissionFilters: React.FC<MissionFiltersProps> = ({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                 </motion.svg>
                 <motion.span
-                  animate={{ 
-                    color: isTypeFocused 
-                      ? ['#7aabd4', '#a1cdf7', '#7aabd4'] 
+                  animate={{
+                    color: isTypeFocused
+                      ? ['#7aabd4', '#a1cdf7', '#7aabd4']
                       : '#7aabd4'
                   }}
                   transition={{ duration: 1.5, repeat: isTypeFocused ? Infinity : 0 }}
@@ -262,7 +263,8 @@ const MissionFilters: React.FC<MissionFiltersProps> = ({
               onFocus={() => setIsTypeFocused(true)}
               onBlur={() => setIsTypeFocused(false)}
             >
-              <select 
+              <select
+                id="filter-type"
                 className="mg-input w-full py-2 px-3 bg-[rgba(var(--mg-panel-dark),0.7)] border border-[rgba(var(--mg-primary),0.25)] rounded-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none appearance-none pr-8"
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value as MissionType | 'all')}

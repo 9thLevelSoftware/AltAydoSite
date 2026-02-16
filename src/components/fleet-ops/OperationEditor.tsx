@@ -396,7 +396,7 @@ const OperationEditor: React.FC<OperationEditorProps> = ({
           
           {/* User selector */}
           <div className="mb-6">
-            <label className="mg-label">Add Participant</label>
+            <label htmlFor="op-add-participant" className="mg-label">Add Participant</label>
             <UserSelector 
               users={users} 
               onSelectUser={handleAddParticipant} 
@@ -431,9 +431,10 @@ const OperationEditor: React.FC<OperationEditorProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Role */}
                       <div>
-                        <label className="mg-label">Role</label>
+                        <label htmlFor={`op-participant-role-${index}`} className="mg-label">Role</label>
                         <input
                           type="text"
+                          id={`op-participant-role-${index}`}
                           className="mg-input w-full"
                           value={participant.role}
                           onChange={(e) => handleParticipantChange(index, 'role', e.target.value)}
@@ -444,9 +445,10 @@ const OperationEditor: React.FC<OperationEditorProps> = ({
                       
                       {/* Ship Assignment */}
                       <div>
-                        <label className="mg-label">Assigned Ship</label>
+                        <label htmlFor={`op-participant-ship-${index}`} className="mg-label">Assigned Ship</label>
                         {userShips.length > 0 ? (
                           <select
+                            id={`op-participant-ship-${index}`}
                             className="mg-input w-full"
                             value={`${participant.shipManufacturer || ''}|${participant.shipName || ''}`}
                             onChange={(e) => {
@@ -476,8 +478,9 @@ const OperationEditor: React.FC<OperationEditorProps> = ({
                       
                       {/* Notes */}
                       <div className="md:col-span-2">
-                        <label className="mg-label">Notes</label>
+                        <label htmlFor={`op-participant-notes-${index}`} className="mg-label">Notes</label>
                         <textarea
+                          id={`op-participant-notes-${index}`}
                           className="mg-input w-full"
                           value={participant.notes || ''}
                           onChange={(e) => handleParticipantChange(index, 'notes', e.target.value)}

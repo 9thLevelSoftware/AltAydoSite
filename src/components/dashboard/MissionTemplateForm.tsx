@@ -179,14 +179,16 @@ const MissionTemplateForm: React.FC<MissionTemplateFormProps> = ({
       {/* Template Name */}
       <MobiGlasPanel title="Template Identity">
         <div className="mg-input-group">
-          <label className="mg-subtitle block mb-2">TEMPLATE NAME *</label>
+          <label htmlFor="template-name" className="mg-subtitle block mb-2">TEMPLATE NAME *</label>
           <input
             type="text"
+            id="template-name"
             value={formData.name || ''}
             onChange={(e) => onInputChange('name', e.target.value)}
             className={`mg-input w-full text-lg ${errors.name ? 'border-[rgba(var(--mg-danger),0.5)]' : ''}`}
             placeholder="e.g., Heavy Mining Expedition"
             maxLength={100}
+            aria-required={true}
           />
           {errors.name && (
             <div className="text-[rgba(var(--mg-danger),0.8)] text-sm mt-1">{errors.name}</div>
@@ -394,8 +396,9 @@ const MissionTemplateForm: React.FC<MissionTemplateFormProps> = ({
                   {/* Category and Count */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="mg-subtitle block mb-1 text-xs">CATEGORY</label>
+                      <label htmlFor={`template-ship-category-${index}`} className="mg-subtitle block mb-1 text-xs">CATEGORY</label>
                       <select
+                        id={`template-ship-category-${index}`}
                         value={ship.category}
                         onChange={(e) => onUpdateShip(index, 'category', e.target.value as ShipCategory)}
                         className="mg-input w-full text-sm"
@@ -406,7 +409,7 @@ const MissionTemplateForm: React.FC<MissionTemplateFormProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label className="mg-subtitle block mb-1 text-xs">COUNT</label>
+                      <label htmlFor={`template-ship-count-${index}`} className="mg-subtitle block mb-1 text-xs">COUNT</label>
                       <div className="flex items-center">
                         <button
                           onClick={() => onUpdateShip(index, 'count', Math.max(1, ship.count - 1))}
@@ -418,6 +421,7 @@ const MissionTemplateForm: React.FC<MissionTemplateFormProps> = ({
                           type="number"
                           min="1"
                           max="20"
+                          id={`template-ship-count-${index}`}
                           value={ship.count}
                           onChange={(e) => onUpdateShip(index, 'count', parseInt(e.target.value) || 1)}
                           className="mg-input w-16 text-center rounded-none border-x-0"
@@ -481,8 +485,9 @@ const MissionTemplateForm: React.FC<MissionTemplateFormProps> = ({
 
                   <div className="space-y-3">
                     <div>
-                      <label className="mg-subtitle block mb-1 text-xs">PROFESSION</label>
+                      <label htmlFor={`template-personnel-profession-${index}`} className="mg-subtitle block mb-1 text-xs">PROFESSION</label>
                       <select
+                        id={`template-personnel-profession-${index}`}
                         value={personnel.profession}
                         onChange={(e) => onUpdatePersonnel(index, 'profession', e.target.value as PersonnelProfession)}
                         className="mg-input w-full text-sm"
@@ -493,7 +498,7 @@ const MissionTemplateForm: React.FC<MissionTemplateFormProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label className="mg-subtitle block mb-1 text-xs">COUNT</label>
+                      <label htmlFor={`template-personnel-count-${index}`} className="mg-subtitle block mb-1 text-xs">COUNT</label>
                       <div className="flex items-center">
                         <button
                           onClick={() => onUpdatePersonnel(index, 'count', Math.max(1, personnel.count - 1))}
@@ -505,6 +510,7 @@ const MissionTemplateForm: React.FC<MissionTemplateFormProps> = ({
                           type="number"
                           min="1"
                           max="50"
+                          id={`template-personnel-count-${index}`}
                           value={personnel.count}
                           onChange={(e) => onUpdatePersonnel(index, 'count', parseInt(e.target.value) || 1)}
                           className="mg-input w-full text-center rounded-none border-x-0"
@@ -536,7 +542,9 @@ const MissionTemplateForm: React.FC<MissionTemplateFormProps> = ({
             List specific equipment, gear, or supplies required for this mission type.
           </div>
           <div className="mg-input-group">
+            <label htmlFor="template-equipment" className="sr-only">Required Equipment</label>
             <textarea
+              id="template-equipment"
               value={formData.requiredEquipment || ''}
               onChange={(e) => onInputChange('requiredEquipment', e.target.value)}
               className="mg-input w-full h-32 resize-vertical"

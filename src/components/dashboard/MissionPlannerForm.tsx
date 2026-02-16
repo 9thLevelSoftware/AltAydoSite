@@ -436,14 +436,16 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Mission Name */}
           <div className="md:col-span-2">
-            <label className="mg-subtitle block mb-2">MISSION NAME *</label>
+            <label htmlFor="mission-name" className="mg-subtitle block mb-2">MISSION NAME *</label>
             <input
               type="text"
+              id="mission-name"
               value={formData.name || ''}
               onChange={(e) => onInputChange('name', e.target.value)}
               className={`mg-input w-full text-lg ${errors.name ? 'border-[rgba(var(--mg-danger),0.5)]' : ''}`}
               placeholder="Operation Thunderstrike"
               maxLength={100}
+              aria-required={true}
             />
             {errors.name && (
               <div className="text-[rgba(var(--mg-danger),0.8)] text-sm mt-1">{errors.name}</div>
@@ -452,10 +454,12 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
 
           {/* Date/Time */}
           <div>
-            <label className="mg-subtitle block mb-2">SCHEDULED DATE & TIME *</label>
+            <label htmlFor="mission-datetime" className="mg-subtitle block mb-2">SCHEDULED DATE & TIME *</label>
             <input
               type="datetime-local"
+              id="mission-datetime"
               value={formData.scheduledDateTime ? formatDateTimeForInput(formData.scheduledDateTime) : ''}
+              aria-required={true}
               onChange={(e) => {
                 // Store the datetime-local value directly, converting to ISO only when needed
                 // This prevents timezone shifting during editing
@@ -476,8 +480,9 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
 
           {/* Duration */}
           <div>
-            <label className="mg-subtitle block mb-2">ESTIMATED DURATION</label>
+            <label htmlFor="mission-duration" className="mg-subtitle block mb-2">ESTIMATED DURATION</label>
             <select
+              id="mission-duration"
               value={formData.duration || ''}
               onChange={(e) => onInputChange('duration', e.target.value ? parseInt(e.target.value) : undefined)}
               className="mg-input w-full"
@@ -495,8 +500,9 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
 
           {/* Location */}
           <div className="md:col-span-2">
-            <label className="mg-subtitle block mb-2">LOCATION / SYSTEM</label>
+            <label htmlFor="mission-location" className="mg-subtitle block mb-2">LOCATION / SYSTEM</label>
             <select
+              id="mission-location"
               value={formData.location || ''}
               onChange={(e) => onInputChange('location', e.target.value)}
               className="mg-input w-full"
@@ -540,8 +546,9 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
                 >
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                     <div>
-                      <label className="mg-subtitle block mb-1 text-xs">ROLE</label>
+                      <label htmlFor={`mission-leader-role-${index}`} className="mg-subtitle block mb-1 text-xs">ROLE</label>
                       <select
+                        id={`mission-leader-role-${index}`}
                         value={leader.role}
                         onChange={(e) => updateLeader(index, 'role', e.target.value)}
                         className="mg-input w-full text-sm"
@@ -552,8 +559,9 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label className="mg-subtitle block mb-1 text-xs">LEADER</label>
+                      <label htmlFor={`mission-leader-user-${index}`} className="mg-subtitle block mb-1 text-xs">LEADER</label>
                       <select
+                        id={`mission-leader-user-${index}`}
                         value={leader.userId}
                         onChange={(e) => updateLeader(index, 'userId', e.target.value)}
                         className="mg-input w-full text-sm"
@@ -720,8 +728,9 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
         <div className="space-y-4">
           {/* Objectives */}
           <div>
-            <label className="mg-subtitle block mb-2">OBJECTIVES</label>
+            <label htmlFor="mission-objectives" className="mg-subtitle block mb-2">OBJECTIVES</label>
             <textarea
+              id="mission-objectives"
               value={formData.objectives || ''}
               onChange={(e) => onInputChange('objectives', e.target.value)}
               className={`mg-input w-full h-24 resize-vertical ${errors.objectives ? 'border-[rgba(var(--mg-danger),0.5)]' : ''}`}
@@ -732,8 +741,9 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
 
           {/* Full Briefing */}
           <div>
-            <label className="mg-subtitle block mb-2">DETAILED BRIEFING</label>
+            <label htmlFor="mission-briefing" className="mg-subtitle block mb-2">DETAILED BRIEFING</label>
             <textarea
+              id="mission-briefing"
               value={formData.briefing || ''}
               onChange={(e) => onInputChange('briefing', e.target.value)}
               className="mg-input w-full h-40 resize-vertical"
@@ -747,8 +757,9 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
 
           {/* Equipment Notes */}
           <div>
-            <label className="mg-subtitle block mb-2">EQUIPMENT RECOMMENDATIONS</label>
+            <label htmlFor="mission-equipment" className="mg-subtitle block mb-2">EQUIPMENT RECOMMENDATIONS</label>
             <textarea
+              id="mission-equipment"
               value={formData.equipmentNotes || ''}
               onChange={(e) => onInputChange('equipmentNotes', e.target.value)}
               className="mg-input w-full h-24 resize-vertical"

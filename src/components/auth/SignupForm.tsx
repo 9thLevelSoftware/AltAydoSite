@@ -133,11 +133,13 @@ export default function SignupForm() {
 
             {/* AydoCorp Handle */}
             <div className="mg-input-group mb-4">
-              <label className="mg-subtitle text-xs mb-1 block tracking-wider">AYDOCORP HANDLE*</label>
+              <label htmlFor="signup-handle" className="mg-subtitle text-xs mb-1 block tracking-wider">AYDOCORP HANDLE*</label>
               <div className="relative">
                 <input
                   type="text"
+                  id="signup-handle"
                   name="aydoHandle"
+                  aria-required={true}
                   value={formData.aydoHandle}
                   onChange={handleChange}
                   className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
@@ -150,11 +152,13 @@ export default function SignupForm() {
 
             {/* Email Address */}
             <div className="mg-input-group mb-4">
-              <label className="mg-subtitle text-xs mb-1 block tracking-wider">EMAIL ADDRESS*</label>
+              <label htmlFor="signup-email" className="mg-subtitle text-xs mb-1 block tracking-wider">EMAIL ADDRESS*</label>
               <div className="relative">
                 <input
                   type="email"
+                  id="signup-email"
                   name="email"
+                  aria-required={true}
                   value={formData.email}
                   onChange={handleChange}
                   className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
@@ -167,10 +171,11 @@ export default function SignupForm() {
 
             {/* Discord Name */}
             <div className="mg-input-group mb-4">
-              <label className="mg-subtitle text-xs mb-1 block tracking-wider">DISCORD NAME</label>
+              <label htmlFor="signup-discord" className="mg-subtitle text-xs mb-1 block tracking-wider">DISCORD NAME</label>
               <div className="relative">
                 <input
                   type="text"
+                  id="signup-discord"
                   name="discordName"
                   value={formData.discordName}
                   onChange={handleChange}
@@ -183,10 +188,11 @@ export default function SignupForm() {
 
             {/* RSI Account Name */}
             <div className="mg-input-group mb-4">
-              <label className="mg-subtitle text-xs mb-1 block tracking-wider">RSI ACCOUNT NAME</label>
+              <label htmlFor="signup-rsi" className="mg-subtitle text-xs mb-1 block tracking-wider">RSI ACCOUNT NAME</label>
               <div className="relative">
                 <input
                   type="text"
+                  id="signup-rsi"
                   name="rsiAccountName"
                   value={formData.rsiAccountName}
                   onChange={handleChange}
@@ -199,11 +205,13 @@ export default function SignupForm() {
 
             {/* Password */}
             <div className="mg-input-group mb-4">
-              <label className="mg-subtitle text-xs mb-1 block tracking-wider">PASSWORD*</label>
+              <label htmlFor="signup-password" className="mg-subtitle text-xs mb-1 block tracking-wider">PASSWORD*</label>
               <div className="relative">
                 <input
                   type="password"
+                  id="signup-password"
                   name="password"
+                  aria-required={true}
                   value={formData.password}
                   onChange={handleChange}
                   className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
@@ -217,11 +225,13 @@ export default function SignupForm() {
 
             {/* Confirm Password */}
             <div className="mg-input-group mb-4">
-              <label className="mg-subtitle text-xs mb-1 block tracking-wider">CONFIRM PASSWORD*</label>
+              <label htmlFor="signup-confirm-password" className="mg-subtitle text-xs mb-1 block tracking-wider">CONFIRM PASSWORD*</label>
               <div className="relative">
                 <input
                   type="password"
+                  id="signup-confirm-password"
                   name="confirmPassword"
+                  aria-required={true}
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   className={`mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:outline-none transition-colors font-quantify tracking-wide
