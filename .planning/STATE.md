@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 14 of 15 (Design System Consolidation)
-Plan: 6 of 7 in current phase (14-05 complete)
+Plan: 7 of 7 in current phase (14-03 complete)
 Status: Executing Phase 14
-Last activity: 2026-02-16 -- Plan 14-05 executed (corner accents + status color migration)
+Last activity: 2026-02-16 -- Plan 14-03 executed (public page button consolidation)
 
 Progress: [██████░░░░] 58%
 
@@ -55,6 +55,7 @@ Progress: [██████░░░░] 58%
 | 14    | 04   | 3min     | 2     | 2     |
 | 14    | 06   | 2min     | 2     | 3     |
 | 14    | 05   | 1min     | 2     | 8     |
+| 14    | 03   | 2min     | 2     | 3     |
 
 ## Accumulated Context
 
@@ -137,6 +138,8 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 14-06: Success messages kept as plain styled div (MobiGlasFormError is error-only)
 14-05: Added danger color option to CornerAccents component for delete button corner accents
 14-05: MissionDetail and OperationCard status colors migrated to MobiGlas palette for consistency
+14-03: HomeContent system status indicator (div with mg-button class) replaced with disabled MobiGlasButton
+14-03: recruitment/page.tsx does not exist -- skipped without error
 
 ### Pending Todos
 
@@ -157,5 +160,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 14-05-PLAN.md
-Resume file: .planning/phases/14-design-system-consolidation/14-05-SUMMARY.md
+Stopped at: Completed 14-03-PLAN.md
+Resume file: .planning/phases/14-design-system-consolidation/14-03-SUMMARY.md
