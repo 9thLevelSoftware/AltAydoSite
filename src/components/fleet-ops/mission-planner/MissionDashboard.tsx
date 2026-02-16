@@ -5,7 +5,7 @@ import { motion, stagger } from 'motion/react';
 import { MissionResponse, MissionStatus, MissionType } from '@/types/Mission';
 import MissionList from './MissionList';
 import MissionFilters from './MissionFilters';
-import HolographicButton from './HolographicButton';
+import { MobiGlasButton } from '@/components/ui/mobiglas';
 
 interface MissionDashboardProps {
   missions: MissionResponse[];
@@ -85,10 +85,13 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
           </p>
         </div>
 
-        <HolographicButton
+        <MobiGlasButton
           onClick={onCreateMission}
           variant="primary"
-          icon={
+          withCorners
+          withScanline
+          withGlow
+          leftIcon={
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-4 w-4"
@@ -106,7 +109,7 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
           }
         >
           CREATE MISSION
-        </HolographicButton>
+        </MobiGlasButton>
       </motion.div>
 
       {/* Filters */}
@@ -180,9 +183,13 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
                   : 'Create your first mission to get started with operations planning'}
               </p>
 
-              <HolographicButton
+              <MobiGlasButton
                 onClick={onCreateMission}
-                icon={
+                variant="primary"
+                withCorners
+                withScanline
+                withGlow
+                leftIcon={
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4"
@@ -200,7 +207,7 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
                 }
               >
                 CREATE NEW MISSION
-              </HolographicButton>
+              </MobiGlasButton>
             </motion.div>
           )}
         </div>
