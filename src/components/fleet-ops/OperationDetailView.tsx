@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Session } from 'next-auth';
 import { OperationResponse, OperationStatus } from '@/types/Operation';
+import { MobiGlasButton } from '@/components/ui/mobiglas';
 
 interface OperationDetailViewProps {
   operation: OperationResponse;
@@ -135,30 +136,32 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
     <div>
       {/* Header with back button and actions */}
       <div className="flex justify-between items-center mb-6">
-        <button 
-          className="mg-button-secondary flex items-center"
+        <MobiGlasButton
+          variant="secondary"
           onClick={onBack}
+          leftIcon={
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          }
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
           Back
-        </button>
-        
+        </MobiGlasButton>
+
         {canModify && (
           <div className="flex gap-2">
-            <button 
-              className="mg-button-secondary"
+            <MobiGlasButton
+              variant="secondary"
               onClick={() => setIsChangingStatus(!isChangingStatus)}
             >
               Change Status
-            </button>
-            <button 
-              className="mg-button-primary"
+            </MobiGlasButton>
+            <MobiGlasButton
+              variant="primary"
               onClick={onEdit}
             >
               Edit Operation
-            </button>
+            </MobiGlasButton>
           </div>
         )}
       </div>
@@ -189,20 +192,20 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
               <option value="Cancelled">Cancelled</option>
             </select>
             <div className="flex gap-2">
-              <button 
-                className="mg-button-primary"
+              <MobiGlasButton
+                variant="primary"
                 onClick={handleStatusChange}
                 disabled={isUpdatingStatus}
               >
                 {isUpdatingStatus ? 'Updating...' : 'Update Status'}
-              </button>
-              <button 
-                className="mg-button-secondary"
+              </MobiGlasButton>
+              <MobiGlasButton
+                variant="secondary"
                 onClick={() => setIsChangingStatus(false)}
                 disabled={isUpdatingStatus}
               >
                 Cancel
-              </button>
+              </MobiGlasButton>
             </div>
           </div>
         </div>
@@ -322,27 +325,27 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
             <div>
               <p className="mg-text-error mb-2">Are you sure you want to delete this operation?</p>
               <div className="flex gap-2">
-                <button 
-                  className="mg-button-danger"
+                <MobiGlasButton
+                  variant="danger"
                   onClick={handleDelete}
                 >
                   Yes, Delete Operation
-                </button>
-                <button 
-                  className="mg-button-secondary"
+                </MobiGlasButton>
+                <MobiGlasButton
+                  variant="secondary"
                   onClick={() => setIsDeleting(false)}
                 >
                   Cancel
-                </button>
+                </MobiGlasButton>
               </div>
             </div>
           ) : (
-            <button 
-              className="mg-button-danger"
+            <MobiGlasButton
+              variant="danger"
               onClick={() => setIsDeleting(true)}
             >
               Delete Operation
-            </button>
+            </MobiGlasButton>
           )}
         </div>
       )}
