@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { connectToDatabase } from '@/lib/mongodb';
 import { apiRateLimiter } from '@/lib/rate-limiter';
 import { Transaction } from '@/types/finance';
@@ -43,7 +44,7 @@ export async function getTransactions(userEmail: string | null | undefined) {
       remainingRequests: apiRateLimiter.getRemainingRequests(userEmail),
     };
   } catch (error) {
-    console.error('Failed to fetch transactions from DB:', error);
+    logger.error('Failed to fetch transactions from DB', error instanceof Error ? error : undefined, { module: 'finance' });
     return { transactions: [], grandTotal: 0, remainingRequests: null, error: 'Failed to fetch transactions' };
   }
 }

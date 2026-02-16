@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { connectToDatabase } from './mongodb';
 
 /**
@@ -7,14 +8,14 @@ import { connectToDatabase } from './mongodb';
  * it throws an error as we no longer support fallback to local storage.
  */
 export async function ensureDatabaseConnection(): Promise<boolean> {
-  console.log('STORAGE: Testing MongoDB connection');
+  logger.info('Testing MongoDB connection', { module: 'storage-utils' });
 
   try {
     await connectToDatabase();
-    console.log('STORAGE: MongoDB connection test successful');
+    logger.info('MongoDB connection test successful', { module: 'storage-utils' });
     return true;
   } catch (error) {
-    console.error('STORAGE: Error testing MongoDB connection:', error);
+    logger.error('Error testing MongoDB connection', error instanceof Error ? error : undefined, { module: 'storage-utils' });
     throw new Error('Database connection failed: Cannot connect to MongoDB');
   }
 }
@@ -26,10 +27,10 @@ export async function shouldUseMongoDb(): Promise<boolean> {
 
 // Force using local storage for testing purposes
 export function forceUseLocalStorage() {
-  console.log('STORAGE: Forced to use local storage for all operations');
+  logger.info('Forced to use local storage for all operations', { module: 'storage-utils' });
 }
 
 // Reset connection status to try MongoDB again
 export function resetConnectionStatus() {
-  console.log('STORAGE: Connection status reset, will try MongoDB on next operation');
+  logger.info('Connection status reset, will try MongoDB on next operation', { module: 'storage-utils' });
 } 

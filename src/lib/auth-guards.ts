@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/app/api/auth/auth';
@@ -48,7 +49,12 @@ export async function requireClearance(minLevel: number): Promise<AuthResult | N
   if (auth instanceof NextResponse) return auth;
 
   if (auth.clearanceLevel < minLevel) {
-    console.log(`RBAC_AUDIT: User ${auth.userId} with clearance ${auth.clearanceLevel} denied access requiring clearance >= ${minLevel}`);
+    logger.info('RBAC access denied: insufficient clearance', {
+      module: 'auth-guards',
+      userId: auth.userId,
+      clearanceLevel: auth.clearanceLevel,
+      requiredLevel: minLevel,
+    });
     return NextResponse.json({ error: 'Insufficient clearance level' }, { status: 403 });
   }
 
@@ -68,7 +74,12 @@ export async function requireLeadership(): Promise<AuthResult | NextResponse> {
   const hasSufficientClearance = auth.clearanceLevel >= 3;
 
   if (!isLeadershipRole && !hasSufficientClearance) {
-    console.log(`RBAC_AUDIT: User ${auth.userId} with clearance ${auth.clearanceLevel} and role ${auth.role} denied leadership access`);
+    logger.info('RBAC access denied: leadership required', {
+      module: 'auth-guards',
+      userId: auth.userId,
+      clearanceLevel: auth.clearanceLevel,
+      role: auth.role,
+    });
     return NextResponse.json({ error: 'Leadership role or clearance level 3+ required' }, { status: 403 });
   }
 

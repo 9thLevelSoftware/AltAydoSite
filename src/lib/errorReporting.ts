@@ -1,5 +1,7 @@
 // Simple error reporting utility for client-side error handling
 
+import { logger } from '@/lib/logger';
+
 // Type for error log entries
 type ErrorLogEntry = {
   type: string;
@@ -19,7 +21,7 @@ const MAX_ERROR_LOG = 20; // Maximum number of errors to store
 export function initErrorMonitoring(): void {
   // This could be extended with external error monitoring services
   if (typeof window !== 'undefined') {
-    console.log('Error monitoring initialized');
+    logger.info('Error monitoring initialized', { module: 'error-reporting' });
   }
 }
 
@@ -59,7 +61,7 @@ export function logError(error: Error | unknown, type: string = 'unknown'): void
     localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(errorLog));
   } catch (e) {
     // Fail silently if localStorage is not available
-    console.error('Failed to log error:', e);
+    logger.error('Failed to log error', e instanceof Error ? e : undefined, { module: 'error-reporting' });
   }
 }
 
@@ -73,7 +75,7 @@ export function getErrorLog(): ErrorLogEntry[] {
     const storedLog = localStorage.getItem(ERROR_LOG_KEY);
     return storedLog ? JSON.parse(storedLog) : [];
   } catch (e) {
-    console.error('Failed to retrieve error log:', e);
+    logger.error('Failed to retrieve error log', e instanceof Error ? e : undefined, { module: 'error-reporting' });
     return [];
   }
 }
@@ -87,6 +89,6 @@ export function clearErrorLog(): void {
   try {
     localStorage.removeItem(ERROR_LOG_KEY);
   } catch (e) {
-    console.error('Failed to clear error log:', e);
+    logger.error('Failed to clear error log', e instanceof Error ? e : undefined, { module: 'error-reporting' });
   }
 } 

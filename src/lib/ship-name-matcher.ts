@@ -16,6 +16,7 @@
  * If no match is found in any pass, returns null.
  */
 
+import { logger } from '@/lib/logger';
 import { connectToDatabase } from '@/lib/mongodb';
 
 // ---------------------------------------------------------------------------
@@ -153,7 +154,7 @@ export async function buildShipsIndex(): Promise<ShipsIndex> {
     byFleetyardsId.set(ref.fleetyardsId, ref);
   }
 
-  console.log(`[ship-name-matcher] Built index with ${ships.length} ships`);
+  logger.info('Built ship name matcher index', { module: 'ship-matcher', shipCount: ships.length });
 
   return { byName, byNameLower, bySlug, byFleetyardsId };
 }

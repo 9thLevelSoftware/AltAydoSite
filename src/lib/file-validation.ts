@@ -6,6 +6,8 @@
  * header spoofing attacks (SEC-13).
  */
 
+import { logger } from '@/lib/logger';
+
 /** Maximum allowed image upload size in bytes (5 MB). */
 export const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
@@ -53,9 +55,11 @@ export async function validateImageBuffer(
 
   // Warn if declared type doesn't match detected type (possible spoofing attempt)
   if (detected.mime !== declaredType) {
-    console.warn(
-      `SECURITY: File type mismatch: declared=${declaredType}, detected=${detected.mime}`
-    );
+    logger.warn('SECURITY: File type mismatch detected', {
+      module: 'file-validation',
+      declaredType,
+      detectedType: detected.mime,
+    });
   }
 
   return { valid: true, detectedType: detected.mime };

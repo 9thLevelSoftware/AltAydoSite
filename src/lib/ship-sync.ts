@@ -12,6 +12,7 @@
  * - startShipSyncCron(): Start the node-cron scheduler for automatic syncs
  */
 
+import { logger } from '@/lib/logger';
 import { fetchAllShips } from '@/lib/fleetyards/client';
 import { transformFleetYardsShip } from '@/lib/fleetyards/transform';
 import {
@@ -50,9 +51,11 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
   // ── Step 2: Determine next sync version ───────────────────────────────
   const syncVersion = previousStatus ? previousStatus.syncVersion + 1 : 1;
 
-  console.log(
-    `[ship-sync] Starting sync v${syncVersion} (previous ship count: ${previousShipCount})`,
-  );
+  logger.info('Starting ship sync', {
+    module: 'ship-sync',
+    syncVersion,
+    previousShipCount,
+  });
 
   // ── Step 3: Fetch all ships from FleetYards API ───────────────────────
   const { ships: rawShips, pagesProcessed, errors: fetchErrors } =
@@ -60,9 +63,9 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
 
   // ── Step 4: Handle empty fetch (SYNC-05) ──────────────────────────────
   if (rawShips.length === 0) {
-    console.error(
-      '[ship-sync] Fetch returned 0 ships -- aborting sync to preserve existing data',
-    );
+    logger.error('Fetch returned 0 ships, aborting sync to preserve existing data', undefined, {
+      module: 'ship-sync',
+    });
 
     const failedStatus: Omit<SyncStatusDocument, '_id'> = {
       type: 'ship-sync',
@@ -85,9 +88,11 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
 
   // ── Step 5: Sanity check -- abort if count drops below 80% ────────────
   if (previousShipCount > 0 && rawShips.length < previousShipCount * 0.8) {
-    console.warn(
-      `[ship-sync] Fetched ${rawShips.length} ships but expected ~${previousShipCount} -- aborting sync`,
-    );
+    logger.warn('Ship count dropped below 80% threshold, aborting sync', {
+      module: 'ship-sync',
+      fetchedCount: rawShips.length,
+      expectedCount: previousShipCount,
+    });
 
     const failedStatus: Omit<SyncStatusDocument, '_id'> = {
       type: 'ship-sync',
@@ -127,9 +132,11 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
     return true;
   });
 
-  console.log(
-    `[ship-sync] Delta filter: ${changedRaw.length} new/changed, ${deltaUnchanged} unchanged (skipped)`,
-  );
+  logger.info('Ship sync delta filter complete', {
+    module: 'ship-sync',
+    newOrChanged: changedRaw.length,
+    unchanged: deltaUnchanged,
+  });
 
   // ── Step 7: Validate and transform changed ships ────────────────────
   const validated: ReturnType<typeof transformFleetYardsShip>[] = [];
@@ -144,7 +151,11 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
         (raw as unknown as Record<string, unknown>)?.name || 'unknown';
       const errorMsg = `Validation failed for "${shipName}": ${result.error.issues.map((i) => i.message).join(', ')}`;
       validationErrors.push(errorMsg);
-      console.warn(`[ship-sync] ${errorMsg}`);
+      logger.warn('Ship validation failed', {
+        module: 'ship-sync',
+        shipName,
+        issues: result.error.issues.map((i) => i.message),
+      });
     }
   }
 
@@ -195,17 +206,15 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
   await saveSyncStatus(syncStatus);
 
   // ── Step 13: Log summary ──────────────────────────────────────────────
-  console.log(
-    '[ship-sync] Sync complete:',
-    JSON.stringify({
-      status: syncStatus.status,
-      shipCount: syncStatus.shipCount,
-      newShips: syncStatus.newShips,
-      updatedShips: syncStatus.updatedShips,
-      skippedShips: syncStatus.skippedShips,
-      durationMs: syncStatus.durationMs,
-    }),
-  );
+  logger.info('Ship sync complete', {
+    module: 'ship-sync',
+    status: syncStatus.status,
+    shipCount: syncStatus.shipCount,
+    newShips: syncStatus.newShips,
+    updatedShips: syncStatus.updatedShips,
+    skippedShips: syncStatus.skippedShips,
+    durationMs: syncStatus.durationMs,
+  });
 
   return syncStatus as SyncStatusDocument;
 }
@@ -224,7 +233,7 @@ async function checkAndRunOverdueSync(): Promise<void> {
   const seventyTwoHoursAgo = new Date(Date.now() - 72 * 60 * 60 * 1000);
 
   if (!lastSync || lastSync.lastSyncAt < seventyTwoHoursAgo) {
-    console.log('[ship-sync] Sync is overdue, running now...');
+    logger.info('Ship sync is overdue, running now', { module: 'ship-sync' });
     await syncShipsFromFleetYards();
   }
 }
@@ -243,7 +252,7 @@ export function startShipSyncCron(): void {
   const enabled = process.env.SHIP_SYNC_ENABLED !== 'false';
 
   if (!enabled) {
-    console.log('[ship-sync] Cron disabled via SHIP_SYNC_ENABLED=false');
+    logger.info('Ship sync cron disabled via SHIP_SYNC_ENABLED=false', { module: 'ship-sync' });
     return;
   }
 
@@ -252,23 +261,26 @@ export function startShipSyncCron(): void {
   const cron = require('node-cron');
 
   if (!cron.validate(schedule)) {
-    console.error(`[ship-sync] Invalid cron schedule: ${schedule}`);
+    logger.error('Invalid cron schedule for ship sync', undefined, { module: 'ship-sync', schedule });
     return;
   }
 
   cron.schedule(schedule, async () => {
-    console.log('[ship-sync] Cron triggered sync');
+    logger.info('Ship sync cron triggered', { module: 'ship-sync' });
     try {
       await syncShipsFromFleetYards();
     } catch (error) {
-      console.error('[ship-sync] Cron sync failed:', error);
+      logger.error('Ship sync cron failed', error instanceof Error ? error : undefined, { module: 'ship-sync' });
     }
   });
 
-  console.log(`[ship-sync] Cron scheduled: ${schedule}`);
+  logger.info('Ship sync cron scheduled', { module: 'ship-sync', schedule });
 
   // Check if sync is overdue (>72h since last) and run immediately
   checkAndRunOverdueSync().catch((err) => {
-    console.warn('[ship-sync] Overdue sync check failed:', err);
+    logger.warn('Overdue sync check failed', {
+      module: 'ship-sync',
+      error: err instanceof Error ? err.message : String(err),
+    });
   });
 }

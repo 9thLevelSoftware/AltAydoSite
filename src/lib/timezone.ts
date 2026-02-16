@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger';
+
 // Common timezone options for user selection
 export const TIMEZONE_OPTIONS = [
   { value: 'UTC', label: 'UTC (Coordinated Universal Time)' },
@@ -37,7 +39,7 @@ export function convertToUserTimezone(utcDate: Date, userTimezone: string): Date
     const userTime = new Date(utcDate.toLocaleString('en-US', { timeZone: userTimezone }));
     return userTime;
   } catch (error) {
-    console.warn(`Invalid timezone: ${userTimezone}, falling back to UTC`);
+    logger.warn('Invalid timezone, falling back to UTC', { module: 'timezone', userTimezone });
     return utcDate;
   }
 }
@@ -59,15 +61,15 @@ export function formatDateInTimezone(
   }
   
   try {
-    return date.toLocaleString('en-US', { 
-      ...options, 
+    return date.toLocaleString('en-US', {
+      ...options,
       timeZone: userTimezone,
       timeZoneName: 'short'
     });
   } catch (error) {
-    console.warn(`Invalid timezone: ${userTimezone}, falling back to UTC`);
-    return date.toLocaleString('en-US', { 
-      ...options, 
+    logger.warn('Invalid timezone, falling back to UTC', { module: 'timezone', userTimezone });
+    return date.toLocaleString('en-US', {
+      ...options,
       timeZone: 'UTC',
       timeZoneName: 'short'
     });
@@ -117,7 +119,7 @@ export function getTimezoneAbbreviation(userTimezone: string): string {
     const parts = timeString.split(' ');
     return parts[parts.length - 1] || userTimezone;
   } catch (error) {
-    console.warn(`Invalid timezone: ${userTimezone}, falling back to UTC`);
+    logger.warn('Invalid timezone, falling back to UTC', { module: 'timezone', userTimezone });
     return 'UTC';
   }
 }
@@ -129,7 +131,7 @@ export function detectUserTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
   } catch (error) {
-    console.warn('Could not detect user timezone, falling back to UTC');
+    logger.warn('Could not detect user timezone, falling back to UTC', { module: 'timezone' });
     return 'UTC';
   }
 } 
