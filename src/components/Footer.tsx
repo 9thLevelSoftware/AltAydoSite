@@ -7,6 +7,7 @@ import { useRandomId } from './UserProviderWrapper';
 import Image from 'next/image';
 import { cdn } from '@/lib/cdn';
 import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
+import CornerAccents from '@/components/ui/mobiglas/CornerAccents';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -55,8 +56,7 @@ export default function Footer() {
         </div>
         
         {/* Minimal corner brackets */}
-        <div className="absolute top-0 left-0 w-5 h-5 border-l border-t border-[rgba(var(--mg-primary),0.3)]"></div>
-        <div className="absolute top-0 right-0 w-5 h-5 border-r border-t border-[rgba(var(--mg-primary),0.3)]"></div>
+        <CornerAccents size="md" color="primary" opacity="low" />
         
         <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
@@ -234,10 +234,7 @@ export default function Footer() {
                     className="w-full h-auto object-contain opacity-70 hover:opacity-100 transition-opacity duration-300"
                   />
                   <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
-                    <div className="absolute top-0 right-0 w-2 h-2 border-r border-t border-[rgba(var(--mg-primary),0.4)]"></div>
-                    <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-[rgba(var(--mg-primary),0.4)]"></div>
-                    <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-[rgba(var(--mg-primary),0.4)]"></div>
+                    <CornerAccents size="xs" color="primary" opacity="low" />
                   </div>
                 </div>
               </motion.div>
