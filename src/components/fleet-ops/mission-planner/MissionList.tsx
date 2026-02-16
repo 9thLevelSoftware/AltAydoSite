@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'motion/react';
+import { motion, stagger } from 'motion/react';
 import { MissionResponse } from '@/types/Mission';
 import MissionCard from './MissionCard';
 
@@ -24,7 +24,7 @@ const MissionList: React.FC<MissionListProps> = ({
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1
+        delayChildren: stagger(0.1)
       }
     }
   };

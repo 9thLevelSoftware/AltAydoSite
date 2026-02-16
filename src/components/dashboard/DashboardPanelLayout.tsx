@@ -1,7 +1,7 @@
 'use client';
 
 import React, { ReactNode } from 'react';
-import { motion } from 'motion/react';
+import { motion, stagger } from 'motion/react';
 
 interface DashboardPanelLayoutProps {
   children: ReactNode;
@@ -14,8 +14,7 @@ const DashboardPanelLayout: React.FC<DashboardPanelLayoutProps> = ({ children })
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.1,
+        delayChildren: stagger(0.1, { startDelay: 0.1 }),
         duration: 0.5
       }
     }

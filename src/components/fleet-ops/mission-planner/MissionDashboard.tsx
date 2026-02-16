@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, stagger } from 'motion/react';
 import { MissionResponse, MissionStatus, MissionType } from '@/types/Mission';
 import MissionList from './MissionList';
 import MissionFilters from './MissionFilters';
@@ -50,7 +50,7 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1
+        delayChildren: stagger(0.1)
       }
     }
   };

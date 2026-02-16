@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, stagger } from 'motion/react';
 import { MissionStatus, MissionType } from '@/types/Mission';
 
 interface MissionFiltersProps {
@@ -33,7 +33,7 @@ const MissionFilters: React.FC<MissionFiltersProps> = ({
       y: 0,
       transition: { 
         duration: 0.4,
-        staggerChildren: 0.1
+        delayChildren: stagger(0.1)
       }
     }
   };

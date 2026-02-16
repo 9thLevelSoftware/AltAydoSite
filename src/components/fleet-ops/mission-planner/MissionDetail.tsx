@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { motion } from 'motion/react';
+import { motion, stagger } from 'motion/react';
 import { MissionResponse } from '@/types/Mission';
 import Image from 'next/image';
 import { useShipBatch } from '@/hooks/useShipBatch';
@@ -50,7 +50,7 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1
+        delayChildren: stagger(0.1)
       }
     }
   };
