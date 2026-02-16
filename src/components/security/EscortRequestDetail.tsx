@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { EscortRequestResponse, EscortRequestStatus, ThreatLevel } from '@/types/EscortRequest';
 
 interface EscortRequestDetailProps {

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'motion/react';
 import MobiGlasToast from './MobiGlasToast';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';

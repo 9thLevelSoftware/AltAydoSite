@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useSession } from 'next-auth/react';
 
 export default function SecureConnectionIndicator() {

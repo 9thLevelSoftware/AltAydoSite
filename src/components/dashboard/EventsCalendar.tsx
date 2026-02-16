@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useEvents } from '@/hooks/useEvents';
 import { useUserTimezone } from '@/hooks/useUserTimezone';
 import { EventData, EventType } from '@/lib/eventMapper';

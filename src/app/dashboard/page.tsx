@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { motion, Variants } from 'framer-motion';
+import { motion, Variants } from 'motion/react';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 import MobileSidebar from '@/components/dashboard/MobileSidebar';
 import EventCarousel from '@/components/dashboard/EventCarousel';

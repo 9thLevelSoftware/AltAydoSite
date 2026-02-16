@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { motion, MotionProps } from 'framer-motion';
+import { motion, MotionProps } from 'motion/react';
 
 export interface MobiGlasButtonProps extends Omit<MotionProps, 'children'> {
   children: React.ReactNode;

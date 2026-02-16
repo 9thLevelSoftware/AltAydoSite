@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
 import { MobiGlasPanel } from '@/components/ui/mobiglas';
 import MobiGlasButton from '../ui/mobiglas/MobiGlasButton';

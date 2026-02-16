@@ -3,7 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { cdn } from '@/lib/cdn';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { MobiGlasPanel, MobiGlasButton, StatusIndicator } from '@/components/ui/mobiglas';
 
 interface AboutHeroProps {

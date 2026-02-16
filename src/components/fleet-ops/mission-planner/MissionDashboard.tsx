@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { MissionResponse, MissionStatus, MissionType } from '@/types/Mission';
 import MissionList from './MissionList';
 import MissionFilters from './MissionFilters';

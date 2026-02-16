@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { FunnelIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import { formatSize, formatProductionStatus } from '@/lib/ships/format';
 

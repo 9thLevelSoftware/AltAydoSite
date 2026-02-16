@@ -3,7 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { cdn } from '@/lib/cdn';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { MobiGlasPanel, MobiGlasButton } from '@/components/ui/mobiglas';
 
 interface ContactHeroProps {

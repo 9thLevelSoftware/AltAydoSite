@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { resolveShipImage } from '@/lib/ships/image';
 import { formatCrew, formatCargo, formatSpeed } from '@/lib/ships/format';
 import type { ShipDocument } from '@/types/ship';

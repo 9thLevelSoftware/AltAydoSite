@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import OrgChart, { ChartNodeData } from '@/components/dashboard/OrgChart';
 
 // Sample organizational data structures - Clean corporate hierarchy for testing

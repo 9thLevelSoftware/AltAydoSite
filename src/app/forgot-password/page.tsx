@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { bgUrl } from '@/lib/cdn';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';

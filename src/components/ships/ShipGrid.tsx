@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import { Squares2X2Icon, ListBulletIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
 import MobiGlasPanel from '@/components/ui/mobiglas/MobiGlasPanel';

@@ -2,7 +2,7 @@
 
 import React, { useReducer, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { useShips } from '@/hooks/useShips';
 import ShipFilterPanel from '@/components/ships/ShipFilterPanel';

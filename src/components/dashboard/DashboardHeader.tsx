@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import Image from 'next/image';
 import { cdn } from '@/lib/cdn';
 import { UserSession } from '@/lib/auth';

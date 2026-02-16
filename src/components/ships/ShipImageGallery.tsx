@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import Image from 'next/image';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import { resolveShipImage, getShipPlaceholder } from '@/lib/ships/image';
 import type { ShipImages, ShipImageView } from '@/lib/ships/image';
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import { XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import { useShipDetail } from '@/hooks/useShipDetail';
 import ShipImageGallery from '@/components/ships/ShipImageGallery';

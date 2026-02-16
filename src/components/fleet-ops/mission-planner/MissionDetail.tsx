@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { MissionResponse } from '@/types/Mission';
 import Image from 'next/image';
 import { useShipBatch } from '@/hooks/useShipBatch';

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useOrgFleet } from '@/hooks/useOrgFleet';
 import { FleetCompositionTabs, type FleetTab } from './FleetCompositionTabs';
 import { FleetBreakdownChart } from './FleetBreakdownChart';

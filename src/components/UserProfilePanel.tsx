@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useUserProfile } from '../hooks/useUserProfile';
 import {
   subsidiaryOptions,

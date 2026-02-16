@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import MobiGlasPanel from './MobiGlasPanel';
 import MobiGlasButton from './MobiGlasButton';
 
