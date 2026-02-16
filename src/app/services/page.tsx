@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
 import { cdn } from '@/lib/cdn';
+import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
 
 export default function Services() {
   const [isScanning, setIsScanning] = useState(false);
@@ -290,21 +291,19 @@ export default function Services() {
             </p>
             
             {!isScanning && !scanComplete ? (
-              <motion.button
+              <MobiGlasButton
                 onClick={startScan}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                className="mg-button group relative overflow-hidden px-10 py-3"
-              >
-                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-[rgba(var(--mg-primary),0.3)] to-transparent opacity-0 group-hover:opacity-30 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></span>
-                <div className="absolute inset-0 overflow-hidden radar-sweep opacity-0 group-hover:opacity-20"></div>
-                <div className="relative z-10 flex items-center justify-center gap-2">
+                variant="primary"
+                size="lg"
+                withScanline
+                leftIcon={
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
                   </svg>
-                  INITIALIZE SERVICE SCAN
-                </div>
-              </motion.button>
+                }
+              >
+                INITIALIZE SERVICE SCAN
+              </MobiGlasButton>
             ) : null}
           </motion.div>
         </div>
@@ -493,17 +492,18 @@ export default function Services() {
                       </svg>
                       <span>SCAN COMPLETE - ALL SERVICES AVAILABLE</span>
                     </div>
-                    <button
+                    <MobiGlasButton
                       onClick={resetScan}
-                      className="px-8 py-3 bg-transparent border-2 border-green-500 text-green-400 font-bold rounded hover:bg-green-900/30 transition-all duration-300"
-                    >
-                      <span className="flex items-center justify-center gap-2">
+                      variant="success"
+                      size="lg"
+                      leftIcon={
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
                         </svg>
-                        RESET SCANNER
-                      </span>
-                    </button>
+                      }
+                    >
+                      RESET SCANNER
+                    </MobiGlasButton>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -626,10 +626,15 @@ export default function Services() {
                 href="https://docs.google.com/forms/d/e/1FAIpQLSekyn2ZhdU9czvQrcLSpo1b0wIzRX__DxLFk89L4Y0NZ8FiwQ/viewform"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center px-8 py-3 border border-cyan-500 text-base font-medium rounded-md text-white bg-transparent hover:bg-cyan-900/30 transition-all duration-300 group relative overflow-hidden"
+                className="inline-block"
               >
-                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-cyan-500 to-blue-500 opacity-30 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></span>
-                <span className="relative z-10">Submit Service Request</span>
+                <MobiGlasButton
+                  variant="accent"
+                  size="lg"
+                  withScanline
+                >
+                  Submit Service Request
+                </MobiGlasButton>
               </a>
             </div>
           </motion.div>

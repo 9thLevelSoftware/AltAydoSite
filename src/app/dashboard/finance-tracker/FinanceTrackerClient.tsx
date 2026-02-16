@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSession } from 'next-auth/react';
 import { Transaction } from '@/types/finance';
 import TransactionModal from '@/components/dashboard/widgets/TransactionModal';
+import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
 
 interface FinanceTrackerClientProps {
   initialTransactions?: Transaction[];
@@ -367,13 +368,19 @@ export default function FinanceTrackerClient({
       {/* Create Transaction Button - Only for clearance level 3+ */}
       {canSubmitTransactions && (
         <motion.div className="flex justify-end" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 2.8 }}>
-          <button onClick={() => setIsModalOpen(true)} className="mg-button relative px-6 py-3 text-lg flex items-center space-x-2 overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[rgba(var(--mg-primary),0.1)] to-transparent transform translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            <span>Create Transaction</span>
-          </button>
+          <MobiGlasButton
+            onClick={() => setIsModalOpen(true)}
+            variant="primary"
+            size="lg"
+            withScanline
+            leftIcon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            }
+          >
+            Create Transaction
+          </MobiGlasButton>
         </motion.div>
       )}
 

@@ -70,6 +70,9 @@ const nextConfig = {
         ];
     },
     async headers() {
+        // In development, webpack needs 'unsafe-eval' for hot reloading
+        const isDev = process.env.NODE_ENV !== 'production';
+
         return [
             {
                 source: '/:all*',
@@ -78,7 +81,7 @@ const nextConfig = {
                         key: 'Content-Security-Policy',
                         value: [
                             "default-src 'self'",
-                            "script-src 'self' 'unsafe-inline'",
+                            `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
                             "style-src 'self' 'unsafe-inline'",
                             "img-src 'self' blob: data: https://cdn.fleetyards.net https://images.aydocorp.space https://aydocorp.space https://cdn.discordapp.com",
                             "font-src 'self'",
