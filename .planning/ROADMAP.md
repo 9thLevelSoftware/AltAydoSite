@@ -107,11 +107,11 @@ Plans:
   2. All 109 files import from "motion/react" instead of "framer-motion"
   3. LazyMotion provider with domMax features wraps the application; bundle size reduced by ~30kb
   4. All animations work correctly -- AnimatePresence transitions, layoutId animations, and hover/tap interactions behave identically to before
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 12-01: TBD
-- [ ] 12-02: TBD
+- [ ] 12-01-PLAN.md -- Package swap (framer-motion -> motion), bulk import replacement (112 files), LazyMotion provider
+- [ ] 12-02-PLAN.md -- Migrate staggerChildren to stagger() in 5 files, full production build validation
 
 ### Phase 13: Accessibility & Performance Foundations
 **Goal**: Forms are screen-reader accessible, modals trap focus and respond to keyboard, performance bottlenecks in caching and pagination are eliminated
@@ -185,7 +185,7 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15
 | 9. Emergency Security & Deps | v1.1 | 4/4 | Complete | 2026-02-15 |
 | 10. Access Control Hardening | v1.1 | Complete    | 2026-02-15 | - |
 | 11. UX Critical Fixes | v1.1 | Complete    | 2026-02-16 | - |
-| 12. Motion v12 Migration | v1.1 | 0/TBD | Not started | - |
+| 12. Motion v12 Migration | v1.1 | 0/2 | Planned | - |
 | 13. Accessibility & Performance | v1.1 | 0/TBD | Not started | - |
 | 14. Design System Consolidation | v1.1 | 0/TBD | Not started | - |
 | 15. Code Quality & Optimization | v1.1 | 0/TBD | Not started | - |
