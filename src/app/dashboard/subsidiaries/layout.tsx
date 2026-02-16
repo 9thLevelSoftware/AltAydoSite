@@ -1,3 +1,9 @@
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Subsidiaries | AydoCorp',
+};
+
 export default function SubsidiariesLayout({
   children,
 }: {

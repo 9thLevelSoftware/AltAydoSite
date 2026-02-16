@@ -1,7 +1,12 @@
+import { Metadata } from 'next';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/auth';
 import { redirect } from 'next/navigation';
 import MissionPlanner from '@/components/dashboard/MissionPlanner';
+
+export const metadata: Metadata = {
+  title: 'Mission Planner | AydoCorp',
+};
 
 export default async function MissionPlannerPage() {
   const session = await getServerSession(authOptions);
