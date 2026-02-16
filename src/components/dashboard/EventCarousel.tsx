@@ -166,7 +166,7 @@ const EventCarousel = () => {
       opacity: 1,
       scale: 1,
       transition: {
-        x: { type: 'spring', stiffness: 300, damping: 30 },
+        x: { type: 'spring' as const, stiffness: 300, damping: 30 },
         opacity: { duration: 0.3 },
         scale: { duration: 0.4 }
       }
@@ -176,7 +176,7 @@ const EventCarousel = () => {
       opacity: 0,
       scale: 0.95,
       transition: {
-        x: { type: 'spring', stiffness: 300, damping: 30 },
+        x: { type: 'spring' as const, stiffness: 300, damping: 30 },
         opacity: { duration: 0.3 },
         scale: { duration: 0.4 }
       }

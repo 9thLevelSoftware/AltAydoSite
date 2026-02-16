@@ -131,7 +131,7 @@ export default function StatusIndicator({
     if (status === 'loading') {
       return {
         animate: { rotate: 360 },
-        transition: { duration: 2, repeat: Infinity, ease: "linear" }
+        transition: { duration: 2, repeat: Infinity, ease: "linear" as const }
       };
     }
 
@@ -144,7 +144,7 @@ export default function StatusIndicator({
         transition: {
           duration: 2,
           repeat: Infinity,
-          ease: "easeInOut"
+          ease: "easeInOut" as const
         }
       };
     }

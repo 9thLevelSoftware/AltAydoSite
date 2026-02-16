@@ -128,8 +128,8 @@ export default function AboutHero({ time, scrollPosition, onInitializeDataFeed }
               transition={{
                 duration: 3,
                 repeat: Infinity,
-                ease: "linear",
-                direction: "reverse"
+                ease: "linear" as const,
+                repeatType: "reverse" as const
               }}
             />
             <motion.div
@@ -144,8 +144,8 @@ export default function AboutHero({ time, scrollPosition, onInitializeDataFeed }
               transition={{
                 duration: 3,
                 repeat: Infinity,
-                ease: "linear",
-                direction: "reverse"
+                ease: "linear" as const,
+                repeatType: "reverse" as const
               }}
             />
           </div>

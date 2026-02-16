@@ -89,9 +89,9 @@ const HoloModal: React.FC<HoloModalProps> = ({
       opacity: 1,
       scale: 1,
       y: 0,
-      transition: { 
+      transition: {
         duration: 0.5,
-        type: "spring",
+        type: "spring" as const,
         stiffness: 100,
         damping: 15
       }
