@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { shouldUseMongoDb } from './storage-utils';
 import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';
+import { StaleDocumentError } from './storage-errors';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -205,27 +206,28 @@ export async function createEscortRequest(requestData: Omit<EscortRequestRespons
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
-    // Create a complete request object with timestamps
+
+    // Create a complete request object with timestamps and version
     const request = {
       ...requestData,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      __v: 0
     };
-    
+
     // Insert request into database
     const result = await db.collection('escort_requests').insertOne(request);
-    
+
     if (!result.insertedId) {
       throw new Error('Failed to insert escort request: No insertedId returned');
     }
-    
+
     // Create the final request response with the MongoDB _id
     const createdRequest: EscortRequestResponse = {
       ...request,
       id: result.insertedId.toString()
     } as EscortRequestResponse;
-    
+
     console.log(`ESCORT STORAGE: Escort request created in MongoDB: ${createdRequest.id}`);
     return createdRequest;
   } catch (error) {
@@ -234,47 +236,87 @@ export async function createEscortRequest(requestData: Omit<EscortRequestRespons
   }
 }
 
-export async function updateEscortRequest(id: string, requestData: Partial<EscortRequestResponse>): Promise<EscortRequestResponse | null> {
+export async function updateEscortRequest(id: string, requestData: Partial<EscortRequestResponse>, expectedVersion?: number): Promise<EscortRequestResponse | null> {
   console.log(`ESCORT STORAGE: Updating escort request: ${id}`);
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
     console.log(`ESCORT STORAGE: Using filter for update:`, filter);
-    
-    // Create a MongoDB update document without 'id' field
-    const updateData = { ...requestData };
-    delete (updateData as any).id; // Remove 'id' as it shouldn't be in the $set
-    
-    // If _id exists in the data, also delete it to prevent update errors
-    if ((updateData as any)._id) {
-      delete (updateData as any)._id;
-    }
-    
-    // Update request in database
-    const result = await db.collection('escort_requests').updateOne(
-      filter,
-      { 
-        $set: { 
-          ...updateData,
-          updatedAt: new Date().toISOString()
-        } 
+
+    // Build version filter for optimistic locking
+    const versionFilter: Record<string, unknown> = {};
+    if (expectedVersion !== undefined) {
+      if (expectedVersion === 0) {
+        versionFilter.$or = [{ __v: 0 }, { __v: { $exists: false } }];
+      } else {
+        versionFilter.__v = expectedVersion;
       }
+    }
+
+    // Strip id, _id, and __v from update data to prevent conflicts
+    const { id: _id, _id: _mongoId, __v: _v, ...updateFields } = requestData as any;
+
+    // Update request in database with optimistic locking
+    const result = await db.collection('escort_requests').findOneAndUpdate(
+      { ...filter, ...versionFilter },
+      {
+        $set: {
+          ...updateFields,
+          updatedAt: new Date().toISOString()
+        },
+        $inc: { __v: 1 }
+      },
+      { returnDocument: 'after' }
     );
-    
-    if (result.matchedCount === 0) {
+
+    if (!result) {
+      // Distinguish "not found" from "version mismatch"
+      if (expectedVersion !== undefined) {
+        const exists = await db.collection('escort_requests').findOne(filter, { projection: { __v: 1 } });
+        if (exists) {
+          throw new StaleDocumentError('escort_requests', id);
+        }
+      }
       console.log(`ESCORT STORAGE: Escort request not found in MongoDB: ${id}`);
       return null;
     }
-    
-    // Get updated request
-    const updatedRequest = await getEscortRequestById(id);
+
+    // Transform to EscortRequestResponse
+    const updatedRequest: EscortRequestResponse = {
+      id: result._id.toString(),
+      requestedBy: result.requestedBy,
+      requestedByUserId: result.requestedByUserId,
+      threatAssessment: result.threatAssessment,
+      threatLevel: result.threatLevel,
+      shipsToEscort: result.shipsToEscort,
+      startLocation: result.startLocation,
+      endLocation: result.endLocation,
+      secondaryLocations: result.secondaryLocations || '',
+      plannedRoute: result.plannedRoute,
+      assetsRequested: result.assetsRequested || [],
+      additionalNotes: result.additionalNotes || '',
+      status: result.status,
+      priority: result.priority,
+      estimatedDuration: result.estimatedDuration,
+      preferredDateTime: result.preferredDateTime,
+      assignedPersonnel: result.assignedPersonnel || [],
+      assignedSecurityOfficer: result.assignedSecurityOfficer,
+      securityOfficerUserId: result.securityOfficerUserId,
+      completionNotes: result.completionNotes,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt
+    };
+
     console.log(`ESCORT STORAGE: Escort request updated in MongoDB: ${updatedRequest?.id}`);
     return updatedRequest;
   } catch (error) {
+    if (error instanceof StaleDocumentError) {
+      throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
+    }
     console.error('ESCORT STORAGE: MongoDB updateEscortRequest failed:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Database connection failed: Cannot update escort request - ${errorMessage}`);

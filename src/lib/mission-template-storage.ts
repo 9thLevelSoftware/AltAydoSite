@@ -4,6 +4,7 @@ import path from 'path';
 import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';
 import * as userStorage from '@/lib/user-storage';
+import { StaleDocumentError } from './storage-errors';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -212,18 +213,19 @@ export async function createMissionTemplate(templateData: Omit<MissionTemplateRe
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
-    // Create a complete template object with timestamps
+
+    // Create a complete template object with timestamps and version
     const nowIso = new Date().toISOString();
     const template = {
       ...templateData,
       createdAt: nowIso,
-      updatedAt: nowIso
+      updatedAt: nowIso,
+      __v: 0
     };
-    
+
     // Insert template into database
     const result = await db.collection('mission-templates').insertOne(template);
-    
+
     const insertedId = (result as any)?.insertedId?.toString?.();
     if (!insertedId) {
       console.warn('STORAGE: No insertedId returned by MongoDB insert, falling back to local');
@@ -235,13 +237,13 @@ export async function createMissionTemplate(templateData: Omit<MissionTemplateRe
       saveLocalMissionTemplate(localTemplate);
       return localTemplate;
     }
-    
+
     // Create the final template response with the MongoDB _id
     const createdTemplate: MissionTemplateResponse = {
       ...template,
       id: insertedId
     } as MissionTemplateResponse;
-    
+
     console.log(`STORAGE: Mission template created in MongoDB: ${createdTemplate.name} with ID: ${createdTemplate.id}`);
     return createdTemplate;
   } catch (error) {
@@ -258,50 +260,66 @@ export async function createMissionTemplate(templateData: Omit<MissionTemplateRe
   }
 }
 
-export async function updateMissionTemplate(id: string, templateData: Partial<MissionTemplateResponse>): Promise<MissionTemplateResponse | null> {
+export async function updateMissionTemplate(id: string, templateData: Partial<MissionTemplateResponse>, expectedVersion?: number): Promise<MissionTemplateResponse | null> {
   console.log(`STORAGE: Updating mission template: ${id}`);
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
     console.log(`STORAGE: Using filter for update:`, filter);
-    
-    // Create a MongoDB update document without 'id' field
-    const updateData = { ...templateData };
-    delete (updateData as any).id; // Remove 'id' as it shouldn't be in the $set
-    
-    // If _id exists in the data, also delete it to prevent update errors
-    if ((updateData as any)._id) {
-      delete (updateData as any)._id;
+
+    // Build version filter for optimistic locking
+    const versionFilter: Record<string, unknown> = {};
+    if (expectedVersion !== undefined) {
+      if (expectedVersion === 0) {
+        versionFilter.$or = [{ __v: 0 }, { __v: { $exists: false } }];
+      } else {
+        versionFilter.__v = expectedVersion;
+      }
     }
-    
+
+    // Strip id, _id, and __v from update data to prevent conflicts
+    const { id: _id, _id: _mongoId, __v: _v, ...updateFields } = templateData as any;
+
     // Log the update data for debugging
-    console.log(`STORAGE: Update data prepared:`, JSON.stringify(updateData, null, 2).substring(0, 200) + '...');
-    
-    // Update template in database
-    const result = await db.collection('mission-templates').updateOne(
-      filter,
+    console.log(`STORAGE: Update data prepared:`, JSON.stringify(updateFields, null, 2).substring(0, 200) + '...');
+
+    // Update template in database with optimistic locking
+    const result = await db.collection('mission-templates').findOneAndUpdate(
+      { ...filter, ...versionFilter },
       {
         $set: {
-          ...updateData,
+          ...updateFields,
           updatedAt: new Date().toISOString()
-        }
-      }
+        },
+        $inc: { __v: 1 }
+      },
+      { returnDocument: 'after' }
     );
 
-    if (result.matchedCount === 0) {
+    if (!result) {
+      // Distinguish "not found" from "version mismatch"
+      if (expectedVersion !== undefined) {
+        const exists = await db.collection('mission-templates').findOne(filter, { projection: { __v: 1 } });
+        if (exists) {
+          throw new StaleDocumentError('mission-templates', id);
+        }
+      }
       console.log(`STORAGE: Mission template not found in MongoDB: ${id}`);
       return null;
     }
 
-    // Get updated template
-    const updatedTemplate = await getMissionTemplateById(id);
+    // Transform to MissionTemplateResponse
+    const updatedTemplate = transformDbToResponse(result);
     console.log(`STORAGE: Mission template updated in MongoDB: ${updatedTemplate?.name}`);
     return updatedTemplate;
   } catch (error: unknown) {
+    if (error instanceof StaleDocumentError) {
+      throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
+    }
     console.error('STORAGE: MongoDB updateMissionTemplate failed, falling back to local:', error);
     usingFallbackStorage = true;
     const templates = getLocalMissionTemplates();

@@ -3,6 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { shouldUseMongoDb } from './storage-utils';
+import { connectToDatabase } from './mongodb';
+import { StaleDocumentError } from './storage-errors';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -153,60 +155,105 @@ export async function getResourceById(id: string): Promise<Resource | null> {
 
 export async function createResource(resourceData: Omit<Resource, 'id' | 'createdAt' | 'updatedAt'>): Promise<Resource> {
   console.log(`STORAGE: Creating resource: ${resourceData.name}`);
-  
+
   // Create a complete resource object with ID and timestamps
-  const resource: Resource = {
+  const resource: Resource & { __v?: number } = {
     ...resourceData,
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    __v: 0
   };
-  
+
   if (await shouldUseMongoDb()) {
     try {
-      // MongoDB implementation would go here
-      usingFallbackStorage = true;
+      const { db } = await connectToDatabase();
+      await db.collection('resources').insertOne(resource);
+      console.log(`STORAGE: Resource created in MongoDB: ${resource.name}`);
+      return resource;
     } catch (error) {
       console.error('STORAGE: MongoDB createResource failed, falling back to local storage:', error);
       usingFallbackStorage = true;
     }
   }
-  
+
   // Fallback to local storage
   console.log(`STORAGE: Creating resource in local storage: ${resource.name}`);
   saveLocalResource(resource);
   return resource;
 }
 
-export async function updateResource(id: string, resourceData: Partial<Resource>): Promise<Resource | null> {
+export async function updateResource(id: string, resourceData: Partial<Resource>, expectedVersion?: number): Promise<Resource | null> {
   console.log(`STORAGE: Updating resource: ${id}`);
-  
+
   if (await shouldUseMongoDb()) {
     try {
-      // MongoDB implementation would go here
-      usingFallbackStorage = true;
+      const { db } = await connectToDatabase();
+
+      // Build version filter for optimistic locking
+      const versionFilter: Record<string, unknown> = {};
+      if (expectedVersion !== undefined) {
+        if (expectedVersion === 0) {
+          versionFilter.$or = [{ __v: 0 }, { __v: { $exists: false } }];
+        } else {
+          versionFilter.__v = expectedVersion;
+        }
+      }
+
+      // Strip id and __v from update data to prevent conflicts
+      const { id: _id, __v: _v, ...updateFields } = resourceData as any;
+
+      const result = await db.collection('resources').findOneAndUpdate(
+        { id, ...versionFilter },
+        {
+          $set: {
+            ...updateFields,
+            updatedAt: new Date().toISOString()
+          },
+          $inc: { __v: 1 }
+        },
+        { returnDocument: 'after', projection: { _id: 0 } }
+      );
+
+      if (!result) {
+        // Distinguish "not found" from "version mismatch"
+        if (expectedVersion !== undefined) {
+          const exists = await db.collection('resources').findOne({ id }, { projection: { __v: 1 } });
+          if (exists) {
+            throw new StaleDocumentError('resources', id);
+          }
+        }
+        console.log(`STORAGE: Resource not found for update: ${id}`);
+        return null;
+      }
+
+      console.log(`STORAGE: Successfully updated resource in MongoDB: ${id}`);
+      return result as unknown as Resource;
     } catch (error) {
+      if (error instanceof StaleDocumentError) {
+        throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
+      }
       console.error('STORAGE: MongoDB updateResource failed, falling back to local storage:', error);
       usingFallbackStorage = true;
     }
   }
-  
+
   // Fallback to local storage
   console.log(`STORAGE: Updating resource in local storage: ${id}`);
   const resources = getLocalResources();
   const resourceIndex = resources.findIndex(r => r.id === id);
-  
+
   if (resourceIndex === -1) {
     console.log(`STORAGE: Resource not found for update: ${id}`);
     return null;
   }
-  
+
   const updatedResource = {
     ...resources[resourceIndex],
     ...resourceData,
     updatedAt: new Date().toISOString()
   };
-  
+
   saveLocalResource(updatedResource);
   return updatedResource;
 }

@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';
+import { StaleDocumentError } from './storage-errors';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -327,7 +328,8 @@ export async function createPlannedMission(missionData: Omit<PlannedMissionRespo
     const mission = {
       ...missionData,
       createdAt: nowIso,
-      updatedAt: nowIso
+      updatedAt: nowIso,
+      __v: 0
     };
 
     const result = await db.collection('planned-missions').insertOne(mission);
@@ -365,7 +367,7 @@ export async function createPlannedMission(missionData: Omit<PlannedMissionRespo
   }
 }
 
-export async function updatePlannedMission(id: string, missionData: Partial<PlannedMissionResponse>): Promise<PlannedMissionResponse | null> {
+export async function updatePlannedMission(id: string, missionData: Partial<PlannedMissionResponse>, expectedVersion?: number): Promise<PlannedMissionResponse | null> {
   console.log(`STORAGE: Updating planned mission: ${id}`);
 
   try {
@@ -373,31 +375,50 @@ export async function updatePlannedMission(id: string, missionData: Partial<Plan
 
     const filter = createIdFilter(id);
 
-    const updateData = { ...missionData };
-    delete (updateData as any).id;
-    if ((updateData as any)._id) {
-      delete (updateData as any)._id;
+    // Build version filter for optimistic locking
+    const versionFilter: Record<string, unknown> = {};
+    if (expectedVersion !== undefined) {
+      if (expectedVersion === 0) {
+        versionFilter.$or = [{ __v: 0 }, { __v: { $exists: false } }];
+      } else {
+        versionFilter.__v = expectedVersion;
+      }
     }
 
-    const result = await db.collection('planned-missions').updateOne(
-      filter,
+    // Strip id, _id, and __v from update data to prevent conflicts
+    const { id: _id, _id: _mongoId, __v: _v, ...updateFields } = missionData as any;
+
+    const result = await db.collection('planned-missions').findOneAndUpdate(
+      { ...filter, ...versionFilter },
       {
         $set: {
-          ...updateData,
+          ...updateFields,
           updatedAt: new Date().toISOString()
-        }
-      }
+        },
+        $inc: { __v: 1 }
+      },
+      { returnDocument: 'after' }
     );
 
-    if (result.matchedCount === 0) {
+    if (!result) {
+      // Distinguish "not found" from "version mismatch"
+      if (expectedVersion !== undefined) {
+        const exists = await db.collection('planned-missions').findOne(filter, { projection: { __v: 1 } });
+        if (exists) {
+          throw new StaleDocumentError('planned-missions', id);
+        }
+      }
       console.log(`STORAGE: Planned mission not found in MongoDB: ${id}`);
       return null;
     }
 
-    const updatedMission = await getPlannedMissionById(id);
+    const updatedMission = transformDbToResponse(result);
     console.log(`STORAGE: Planned mission updated in MongoDB: ${updatedMission?.name}`);
     return updatedMission;
   } catch (error: unknown) {
+    if (error instanceof StaleDocumentError) {
+      throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
+    }
     console.error('STORAGE: MongoDB updatePlannedMission failed, falling back to local:', error);
     usingFallbackStorage = true;
     const missions = getLocalPlannedMissions();

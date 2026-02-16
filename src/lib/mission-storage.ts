@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { shouldUseMongoDb } from './storage-utils';
 import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';
+import { StaleDocumentError } from './storage-errors';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -208,27 +209,28 @@ export async function createMission(missionData: Omit<MissionResponse, 'id' | 'c
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
-    // Create a complete mission object with timestamps
+
+    // Create a complete mission object with timestamps and version
     const mission = {
       ...missionData,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      __v: 0
     };
-    
+
     // Insert mission into database
     const result = await db.collection('missions').insertOne(mission);
-    
+
     if (!result.insertedId) {
       throw new Error('Failed to insert mission: No insertedId returned');
     }
-    
+
     // Create the final mission response with the MongoDB _id
     const createdMission: MissionResponse = {
       ...mission,
       id: result.insertedId.toString()
     } as MissionResponse;
-    
+
     console.log(`STORAGE: Mission created in MongoDB: ${createdMission.name} with ID: ${createdMission.id}`);
     return createdMission;
   } catch (error) {
@@ -237,64 +239,99 @@ export async function createMission(missionData: Omit<MissionResponse, 'id' | 'c
   }
 }
 
-export async function updateMission(id: string, missionData: Partial<MissionResponse>): Promise<MissionResponse | null> {
+export async function updateMission(id: string, missionData: Partial<MissionResponse>, expectedVersion?: number): Promise<MissionResponse | null> {
   console.log(`STORAGE: Updating mission: ${id}`);
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
     console.log(`STORAGE: Using filter for update:`, filter);
-    
-    // Create a MongoDB update document without 'id' field
-    const updateData = { ...missionData };
-    delete (updateData as any).id; // Remove 'id' as it shouldn't be in the $set
-    
-    // If _id exists in the data, also delete it to prevent update errors
-    if ((updateData as any)._id) {
-      delete (updateData as any)._id;
+
+    // Build version filter for optimistic locking
+    const versionFilter: Record<string, unknown> = {};
+    if (expectedVersion !== undefined) {
+      if (expectedVersion === 0) {
+        versionFilter.$or = [{ __v: 0 }, { __v: { $exists: false } }];
+      } else {
+        versionFilter.__v = expectedVersion;
+      }
     }
-    
+
+    // Strip id, _id, and __v from update data to prevent conflicts
+    const { id: _id, _id: _mongoId, __v: _v, ...updateFields } = missionData as any;
+
     // Log the update data for debugging
-    console.log(`STORAGE: Update data prepared:`, JSON.stringify(updateData, null, 2).substring(0, 200) + '...');
-    
+    console.log(`STORAGE: Update data prepared:`, JSON.stringify(updateFields, null, 2).substring(0, 200) + '...');
+
     try {
-      // Update mission in database
-      const result = await db.collection('missions').updateOne(
-        filter,
-        { 
-          $set: { 
-            ...updateData,
+      // Update mission in database with optimistic locking
+      const result = await db.collection('missions').findOneAndUpdate(
+        { ...filter, ...versionFilter },
+        {
+          $set: {
+            ...updateFields,
             updatedAt: new Date().toISOString()
-          } 
-        }
+          },
+          $inc: { __v: 1 }
+        },
+        { returnDocument: 'after' }
       );
-      
-      if (result.matchedCount === 0) {
+
+      if (!result) {
+        // Distinguish "not found" from "version mismatch"
+        if (expectedVersion !== undefined) {
+          const exists = await db.collection('missions').findOne(filter, { projection: { __v: 1 } });
+          if (exists) {
+            throw new StaleDocumentError('missions', id);
+          }
+        }
         console.log(`STORAGE: Mission not found in MongoDB: ${id}`);
         return null;
       }
-      
-      // Get updated mission
-      const updatedMission = await getMissionById(id);
+
+      // Transform to MissionResponse
+      const updatedMission: MissionResponse = {
+        id: result._id.toString(),
+        name: result.name,
+        type: result.type,
+        scheduledDateTime: result.scheduledDateTime,
+        status: result.status,
+        briefSummary: result.briefSummary || '',
+        details: result.details || '',
+        location: result.location || '',
+        leaderId: result.leaderId,
+        leaderName: result.leaderName || '',
+        images: result.images || [],
+        participants: result.participants || [],
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt
+      };
+
       console.log(`STORAGE: Mission updated in MongoDB: ${updatedMission?.name}`);
       return updatedMission;
     } catch (updateError: unknown) {
+      if (updateError instanceof StaleDocumentError) {
+        throw updateError;
+      }
       console.error('STORAGE: MongoDB update operation failed:', updateError);
       const errorMsg = updateError instanceof Error ? updateError.message : 'Unknown update error';
       throw new Error(`Database update operation failed: ${errorMsg}`);
     }
   } catch (error: unknown) {
+    if (error instanceof StaleDocumentError) {
+      throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
+    }
     console.error('STORAGE: MongoDB updateMission failed:', error);
-    
+
     // Try to provide more specific error messages
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.log(`STORAGE: Falling back to local storage due to error: ${errorMessage}`);
-    
+
     // Optional: Implement fallback to local storage here if needed
-    
+
     throw new Error(`Database connection failed: Cannot update mission - ${errorMessage}`);
   }
 }
