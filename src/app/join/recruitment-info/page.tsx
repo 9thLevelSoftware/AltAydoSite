@@ -157,7 +157,7 @@ export default function RecruitmentInfo() {
                         href="https://discord.gg/aydocorp"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mg-button inline-block px-8 py-3 text-base relative overflow-hidden group"
+                        className="inline-block px-8 py-3 text-base relative overflow-hidden group bg-[rgba(var(--mg-dark),0.5)] border border-[rgba(var(--mg-primary),0.5)] text-[rgba(var(--mg-primary),1)] hover:bg-[rgba(var(--mg-primary),0.2)] hover:border-[rgba(var(--mg-primary),0.8)] tracking-wider transition-all duration-200 rounded-[1px]"
                       >
                         <div className="absolute inset-0 overflow-hidden radar-sweep opacity-0 group-hover:opacity-20"></div>
                         <span className="relative z-10 flex items-center">

@@ -6,6 +6,7 @@ import { bgUrl } from '@/lib/cdn';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CornerAccents } from '@/components/ui/mobiglas';
+import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
@@ -169,23 +170,16 @@ export default function ResetPasswordPage() {
                 </div>
               </div>
 
-              <motion.button
+              <MobiGlasButton
                 type="submit"
-                className={`mg-button w-full py-2 px-4 relative overflow-hidden ${isLoading || !token ? 'opacity-80' : 'hover:bg-[rgba(var(--mg-primary),0.1)]'}`}
+                variant="primary"
+                fullWidth
                 disabled={isLoading || !token}
-                whileTap={{ scale: 0.98 }}
+                isLoading={isLoading}
+                className="py-2 px-4 text-sm"
               >
-                <div className="relative z-10 font-quantify tracking-wider text-sm">
-                  {isLoading ? 'PROCESSING...' : 'RESET PASSWORD'}
-                </div>
-
-                {/* Loading indicator */}
-                {isLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="scanner-line"></div>
-                  </div>
-                )}
-              </motion.button>
+                {isLoading ? 'PROCESSING...' : 'RESET PASSWORD'}
+              </MobiGlasButton>
             </form>
           )}
 
