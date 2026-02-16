@@ -5,7 +5,7 @@ import { motion, MotionProps } from 'motion/react';
 
 export interface MobiGlasButtonProps extends Omit<MotionProps, 'children'> {
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'accent' | 'danger' | 'ghost' | 'outline';
+  variant?: 'primary' | 'secondary' | 'accent' | 'danger' | 'ghost' | 'outline' | 'success';
   size?: 'sm' | 'md' | 'lg' | 'xl';
   disabled?: boolean;
   isLoading?: boolean;
@@ -16,8 +16,14 @@ export interface MobiGlasButtonProps extends Omit<MotionProps, 'children'> {
   withGlow?: boolean;
   withCorners?: boolean;
   className?: string;
-  onClick?: () => void;
+  onClick?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
   type?: 'button' | 'submit' | 'reset';
+  id?: string;
+  name?: string;
+  form?: string;
+  ariaLabel?: string;
+  tabIndex?: number;
+  title?: string;
 }
 
 export default function MobiGlasButton({
@@ -35,6 +41,12 @@ export default function MobiGlasButton({
   className = '',
   onClick,
   type = 'button',
+  id,
+  name,
+  form,
+  ariaLabel,
+  tabIndex,
+  title,
   ...motionProps
 }: MobiGlasButtonProps) {
   const variantStyles = {
@@ -42,6 +54,7 @@ export default function MobiGlasButton({
     secondary: 'mg-button border border-[rgba(var(--mg-secondary),0.5)] text-[rgba(var(--mg-secondary),1)] hover:bg-[rgba(var(--mg-secondary),0.2)] hover:border-[rgba(var(--mg-secondary),0.8)]',
     accent: 'mg-button border border-[rgba(var(--mg-accent),0.5)] text-[rgba(var(--mg-accent),1)] hover:bg-[rgba(var(--mg-accent),0.2)] hover:border-[rgba(var(--mg-accent),0.8)]',
     danger: 'mg-button border border-[rgba(var(--mg-danger),0.5)] text-[rgba(var(--mg-danger),1)] hover:bg-[rgba(var(--mg-danger),0.2)] hover:border-[rgba(var(--mg-danger),0.8)]',
+    success: 'mg-button border border-[rgba(var(--mg-success),0.5)] text-[rgba(var(--mg-success),1)] hover:bg-[rgba(var(--mg-success),0.2)] hover:border-[rgba(var(--mg-success),0.8)]',
     ghost: 'bg-transparent border-none text-[rgba(var(--mg-text),0.8)] hover:text-[rgba(var(--mg-primary),1)] hover:bg-[rgba(var(--mg-primary),0.1)]',
     outline: 'bg-transparent border border-[rgba(var(--mg-primary),0.3)] text-[rgba(var(--mg-primary),0.9)] hover:bg-[rgba(var(--mg-primary),0.1)] hover:border-[rgba(var(--mg-primary),0.6)]'
   };
@@ -78,6 +91,12 @@ export default function MobiGlasButton({
       style={buttonStyle}
       whileHover={{ scale: disabled ? 1 : 1.02 }}
       whileTap={{ scale: disabled ? 1 : 0.98 }}
+      id={id}
+      name={name}
+      form={form}
+      aria-label={ariaLabel}
+      tabIndex={tabIndex}
+      title={title}
       {...motionProps}
     >
       {/* Background effects */}
