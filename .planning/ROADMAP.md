@@ -123,12 +123,13 @@ Plans:
   3. Keyboard-focused elements show a visible cyan glow indicator; mouse clicks do not trigger focus outlines
   4. Mission and user lists paginate at the database level (MongoDB skip/limit) -- pages with 100+ items load in under 2 seconds
   5. Static assets under /_next/static return Cache-Control: immutable with max-age=31536000 (1 year)
-**Plans**: TBD
+**Plans**: 4 plans in 1 wave
 
 Plans:
-- [ ] 13-01: TBD
-- [ ] 13-02: TBD
-- [ ] 13-03: TBD
+- [ ] 13-01-PLAN.md — Focus-visible CSS, skip-to-content, mobile menu close, auth delay removal, cache headers
+- [ ] 13-02-PLAN.md — Form label audit (htmlFor/id associations across 14 files)
+- [ ] 13-03-PLAN.md — useFocusTrap hook + modal keyboard behavior (5 modals)
+- [ ] 13-04-PLAN.md — DB-level pagination for users and missions APIs + MobiGlasPagination component
 
 ### Phase 14: Design System Consolidation
 **Goal**: MobiGlas design system is the single source of truth for buttons, corners, auth forms, error display, and loading states
