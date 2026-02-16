@@ -8,7 +8,7 @@ import Image from 'next/image';
 import UserFleetBuilderWrapper from '../UserFleetBuilderWrapper';
 import { UserShip } from '@/types/user';
 import { TIMEZONE_OPTIONS, detectUserTimezone } from '@/lib/timezone';
-import { MobiGlasButton } from '@/components/ui/mobiglas';
+import { MobiGlasButton, MobiGlasFormError } from '@/components/ui/mobiglas';
 import { useShipBatch } from '@/hooks/useShipBatch';
 import ProfileShipCard from '@/components/ships/ProfileShipCard';
 
@@ -389,9 +389,11 @@ export default function UserProfileContent() {
           </div>
 
           {errorMessage && (
-            <div className="mb-4 p-3 bg-[rgba(var(--mg-warning),0.1)] border border-[rgba(var(--mg-warning),0.3)] text-[rgba(var(--mg-warning),0.9)] text-sm">
-              {errorMessage}
-            </div>
+            <MobiGlasFormError
+              message={errorMessage}
+              onDismiss={() => setErrorMessage(null)}
+              className="mb-4"
+            />
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -1,3 +1,9 @@
+/**
+ * @deprecated Use useToast() for system-level notifications or MobiGlasFormError for form-level errors.
+ * This component is kept for backward compatibility but should not be used in new code.
+ * Planned for removal in Phase 15.
+ */
+
 import React from 'react';
 import { motion } from 'motion/react';
 
