@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 11 of 15 (UX Critical Fixes)
-Plan: 1 of 5 in current phase (11-01 complete)
+Plan: 3 of 5 in current phase (11-01, 11-03 complete)
 Status: In Progress
-Last activity: 2026-02-15 -- Plan 11-01 executed (toast & confirmation dialog)
+Last activity: 2026-02-15 -- Plan 11-03 executed (replace browser dialogs)
 
-Progress: [████░░░░░░] 38%
+Progress: [████░░░░░░] 42%
 
 ## Performance Metrics
 
@@ -42,6 +42,7 @@ Progress: [████░░░░░░] 38%
 | 10    | 02   | 4min     | 3     | 2     |
 | 10    | 05   | 4min     | 2     | 4     |
 | 11    | 01   | 2min     | 2     | 7     |
+| 11    | 03   | 3min     | 2     | 3     |
 
 ## Accumulated Context
 
@@ -90,6 +91,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 11-01: crypto.randomUUID() for toast IDs instead of Math.random for collision safety
 11-01: React.createElement in ConfirmDialogProvider to keep hook as .ts file
 11-01: Toast provider outside ConfirmDialog provider so confirms can trigger toasts
+11-03: Confirmation in UserFleetBuilder (child) wrapping onRemoveShip prop, not in parent wrapper
+11-03: ResetProfileComponent prompts confirmation before executing, redirects to profile on cancel
+11-03: ResetProfileComponent also resets server-side profile via API PUT (not just localStorage)
 
 ### Pending Todos
 
@@ -108,5 +112,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 11-01-PLAN.md (toast & confirmation dialog)
-Resume file: .planning/phases/11-ux-critical-fixes/11-01-SUMMARY.md
+Stopped at: Completed 11-03-PLAN.md (replace browser dialogs)
+Resume file: .planning/phases/11-ux-critical-fixes/11-03-SUMMARY.md
