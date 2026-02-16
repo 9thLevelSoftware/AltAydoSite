@@ -57,6 +57,7 @@ Progress: [████████░░] 80%
 | 14    | 05   | 1min     | 2     | 8     |
 | 14    | 03   | 2min     | 2     | 3     |
 | 14    | 07   | 2min     | 2     | 4     |
+| 14    | 08   | 2min     | 2     | 6     |
 | 14    | 09   | 1min     | 1     | 1     |
 
 ## Accumulated Context
@@ -144,6 +145,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 14-03: recruitment/page.tsx does not exist -- skipped without error
 14-07: Recruitment-info Discord link kept as <a> with Tailwind classes (MobiGlasButton renders <button>, not <a>)
 14-07: mg-button-small CSS preserved (still used by UserProfilePanel)
+14-08: Confirm password input kept as custom element per 14-04 decision; only corner accents replaced with CornerAccents
+14-08: AboutSection w-6 corners mapped to size=md (w-5) as safer default over size=lg (w-8)
+14-08: Footer main container originally had only 2 top corners; CornerAccents renders all 4 adding bottom corners
 
 ### Pending Todos
 
