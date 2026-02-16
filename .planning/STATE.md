@@ -123,5 +123,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 12-02-PLAN.md (stagger migration + full build validation -- Phase 12 complete)
-Resume file: .planning/phases/12-motion-v12-migration/12-02-SUMMARY.md
+Stopped at: Phase 13 context gathered
+Resume file: .planning/phases/13-accessibility-performance-foundations/13-CONTEXT.md
