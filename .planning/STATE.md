@@ -24,7 +24,7 @@ Progress: [██████░░░░] 55%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 18
+- Total plans completed: 19
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -47,6 +47,7 @@ Progress: [██████░░░░] 55%
 | 12    | 01   | 3min     | 2     | 117   |
 | 12    | 02   | 2min     | 2     | 5     |
 | 13    | 01   | 3min     | 2     | 6     |
+| 13    | 03   | 6min     | 2     | 6     |
 | 13    | 04   | 4min     | 2     | 6     |
 
 ## Accumulated Context
@@ -110,6 +111,8 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 13-01: Inputs retain :focus (not :focus-visible) -- form inputs should show focus on mouse click
 13-01: UX-08 hierarchy page uses hardcoded sample data -- added DEMO DATA badge label
 13-01: Build fails due to pre-existing Next.js manifest issue (not caused by Phase 13 changes)
+13-03: useFocusTrap hook is single source of truth for modal Escape/focus -- all manual handlers removed
+13-03: ref on outermost persistent div inside portal content (not animated wrappers that unmount)
 13-04: Default pageSize changed to 25 (from 50), max to 100 (from 200) for consistency with ships API
 13-04: Paginated functions added alongside non-paginated for backward compat (dashboard counts etc.)
 13-04: passwordHash excluded from paginated user queries via MongoDB projection
