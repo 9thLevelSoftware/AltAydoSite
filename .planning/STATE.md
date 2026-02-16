@@ -64,6 +64,7 @@ Progress: [██████████] 100%
 | 15    | 04   | 4min     | 2     | 19    |
 | 15    | 01   | 5min     | 2     | 8     |
 | 15    | 07   | 9min     | 2     | 16    |
+| Phase 15 P05 | 9min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -168,6 +169,8 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 15-07: Module context added to all log entries for filtering (e.g., module: 'discord-sync')
 15-07: Error objects passed as second parameter to logger.error for stack trace preservation
 15-07: RBAC audit logging uses logger.info (not warn) for access denied events
+- [Phase 15]: 15-05: Error objects wrapped with instanceof check for stack trace preservation
+- [Phase 15]: 15-05: Password reset tokens only log prefix (first 8 chars) for security
 
 ### Pending Todos
 
