@@ -262,6 +262,54 @@ export async function getAllUsers(): Promise<User[]> {
   }
 }
 
+export interface PaginatedUsersResult {
+  users: User[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export async function getUsersPaginated(page: number = 1, pageSize: number = 25): Promise<PaginatedUsersResult> {
+  if (await shouldUseFallback()) {
+    console.log('STORAGE: [Local] Getting paginated users');
+    const allUsers = await localStorage.getAllUsers();
+    allUsers.sort((a, b) => (a.aydoHandle || '').localeCompare(b.aydoHandle || ''));
+    const total = allUsers.length;
+    const start = (page - 1) * pageSize;
+    const users = allUsers.slice(start, start + pageSize);
+    return { users, total, page, pageSize };
+  }
+
+  console.log(`STORAGE: [MongoDB] Getting paginated users (page=${page}, pageSize=${pageSize})`);
+  try {
+    const db = await getDb();
+    const query = {};
+    const total = await db.collection('users').countDocuments(query);
+    const docs = await db.collection('users')
+      .find(query, { projection: { _id: 0, passwordHash: 0 } })
+      .sort({ aydoHandle: 1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .toArray();
+
+    const users = docs.map(doc => {
+      if ((doc as any).__v === undefined) (doc as any).__v = 0;
+      return doc as unknown as User;
+    });
+
+    return { users, total, page, pageSize };
+  } catch (error) {
+    console.error('STORAGE: [MongoDB] getUsersPaginated failed, trying fallback:', error);
+    usingFallback = true;
+    const allUsers = await localStorage.getAllUsers();
+    allUsers.sort((a, b) => (a.aydoHandle || '').localeCompare(b.aydoHandle || ''));
+    const total = allUsers.length;
+    const start = (page - 1) * pageSize;
+    const users = allUsers.slice(start, start + pageSize);
+    return { users, total, page, pageSize };
+  }
+}
+
 export function isUsingFallbackStorage(): boolean {
   return usingFallback;
 }

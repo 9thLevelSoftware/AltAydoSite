@@ -212,6 +212,77 @@ export async function getAllPlannedMissions(filters?: {
   }
 }
 
+export interface PaginatedMissionsResult {
+  missions: PlannedMissionResponse[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export async function getAllPlannedMissionsPaginated(
+  page: number = 1,
+  pageSize: number = 25,
+  filters?: {
+    createdBy?: string;
+    status?: PlannedMissionStatus;
+    operationType?: string;
+    primaryActivity?: string;
+    fromDate?: string;
+    toDate?: string;
+  }
+): Promise<PaginatedMissionsResult> {
+  console.log(`STORAGE: Getting paginated planned missions (page=${page}, pageSize=${pageSize})`);
+
+  try {
+    const { db } = await connectToDatabase();
+
+    const query: any = {};
+
+    if (filters) {
+      if (filters.createdBy) query.createdBy = filters.createdBy;
+      if (filters.status) query.status = filters.status;
+      if (filters.operationType && filters.operationType !== 'all') query.operationType = filters.operationType;
+      if (filters.primaryActivity && filters.primaryActivity !== 'all') query.primaryActivity = filters.primaryActivity;
+      if (filters.fromDate || filters.toDate) {
+        query.scheduledDateTime = {};
+        if (filters.fromDate) query.scheduledDateTime.$gte = filters.fromDate;
+        if (filters.toDate) query.scheduledDateTime.$lte = filters.toDate;
+      }
+    }
+
+    const total = await db.collection('planned-missions').countDocuments(query);
+    const docs = await db.collection('planned-missions')
+      .find(query)
+      .sort({ scheduledDateTime: 1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .toArray();
+
+    const missions = docs.map(doc => transformDbToResponse(doc));
+
+    console.log(`STORAGE: Found ${missions.length} of ${total} planned missions (page ${page})`);
+    return { missions, total, page, pageSize };
+  } catch (error) {
+    console.error('STORAGE: MongoDB getAllPlannedMissionsPaginated failed, falling back to local:', error);
+    usingFallbackStorage = true;
+
+    let locals = getLocalPlannedMissions();
+    if (filters) {
+      if (filters.createdBy) locals = locals.filter(m => m.createdBy === filters.createdBy);
+      if (filters.status) locals = locals.filter(m => m.status === filters.status);
+      if (filters.operationType && filters.operationType !== 'all') locals = locals.filter(m => m.operationType === filters.operationType);
+      if (filters.primaryActivity && filters.primaryActivity !== 'all') locals = locals.filter(m => m.primaryActivity === filters.primaryActivity);
+      if (filters.fromDate) locals = locals.filter(m => m.scheduledDateTime >= filters.fromDate!);
+      if (filters.toDate) locals = locals.filter(m => m.scheduledDateTime <= filters.toDate!);
+    }
+    locals.sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime());
+    const total = locals.length;
+    const start = (page - 1) * pageSize;
+    const missions = locals.slice(start, start + pageSize);
+    return { missions, total, page, pageSize };
+  }
+}
+
 export async function getUpcomingPlannedMissions(limit: number = 10): Promise<PlannedMissionResponse[]> {
   console.log(`STORAGE: Getting upcoming planned missions (limit: ${limit})`);
 
