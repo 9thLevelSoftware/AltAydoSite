@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import MobiGlasPanel from './MobiGlasPanel';
 import MobiGlasButton from './MobiGlasButton';
 
@@ -38,28 +39,16 @@ export default function MobiGlasConfirmDialog({
   onConfirm,
   onCancel,
 }: MobiGlasConfirmDialogProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  // Focus overlay for keyboard events
-  useEffect(() => {
-    if (open && overlayRef.current) {
-      overlayRef.current.focus();
-    }
-  }, [open]);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onCancel();
-    }
-  };
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open, onCancel);
 
   return (
     <AnimatePresence>
       {open && (
         <motion.div
-          ref={overlayRef}
-          tabIndex={-1}
-          onKeyDown={handleKeyDown}
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

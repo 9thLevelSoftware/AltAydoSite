@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, useRef, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface HoloModalProps {
   isOpen: boolean;
@@ -22,6 +23,9 @@ const HoloModal: React.FC<HoloModalProps> = ({
   height = 'h-auto',
   showCloseButton = true
 }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, isOpen, onClose);
+
   const [showBinaryData, setShowBinaryData] = useState(false);
   const [scanPosition, setScanPosition] = useState(0);
   const [bootSequence, setBootSequence] = useState(false);
@@ -128,7 +132,10 @@ const HoloModal: React.FC<HoloModalProps> = ({
     <AnimatePresence>
       {isOpen && (
         <motion.div
+          ref={modalRef}
           key="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
           className="fixed inset-0 z-50 overflow-auto flex items-center justify-center p-4"
           variants={backdropVariants}
           initial="hidden"
@@ -479,6 +486,7 @@ const HoloModal: React.FC<HoloModalProps> = ({
                 {/* Close button */}
                 {showCloseButton && (
                   <motion.button
+                    aria-label="Close modal"
                     className="w-8 h-8 rounded-sm flex items-center justify-center border border-[rgba(var(--mg-primary),0.3)] bg-[rgba(var(--mg-panel-dark),0.7)] text-[rgba(var(--mg-primary),0.7)] relative overflow-hidden group"
                     onClick={onClose}
                     initial={{ opacity: 0, scale: 0 }}
