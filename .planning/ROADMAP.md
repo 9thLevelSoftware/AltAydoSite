@@ -164,12 +164,16 @@ Plans:
   3. When two users edit the same resource concurrently, the second save detects the conflict and warns the user instead of silently overwriting
   4. Home page renders as a Server Component (no "use client" at page level); dashboard authentication check has no artificial delay
   5. Each page has a unique metadata title visible in browser tabs for multi-tab distinction
-**Plans**: TBD
+**Plans**: 7 plans in 2 waves
 
 Plans:
-- [ ] 15-01: TBD
-- [ ] 15-02: TBD
-- [ ] 15-03: TBD
+- [ ] 15-01-PLAN.md — Optimistic locking: extract StaleDocumentError + add __v to 6 storage modules (QUAL-03)
+- [ ] 15-02-PLAN.md — Mission state machine: extract + enforce in fleet-ops missions route (QUAL-02)
+- [ ] 15-03-PLAN.md — Performance: home SSR, starfield 30fps cap, carousel preload, About timer isolation (PERF-04/05/06/08)
+- [ ] 15-04-PLAN.md — Page metadata titles for ~28 pages (QUAL-05)
+- [ ] 15-05-PLAN.md — Logger migration: storage modules (10 files, ~306 calls) (QUAL-01 part 1)
+- [ ] 15-06-PLAN.md — Logger migration: API routes (~31 files, ~152 calls) (QUAL-01 part 2)
+- [ ] 15-07-PLAN.md — Logger migration: remaining lib modules (~16 files, ~135 calls) (QUAL-01 part 3)
 
 ## Progress
 
