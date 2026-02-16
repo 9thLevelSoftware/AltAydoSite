@@ -7,6 +7,7 @@ import { resolveShipImage } from '@/lib/ships/image';
 import { shipDocumentToUserShip } from '@/lib/ships/mappers';
 import { MobiGlasButton } from '@/components/ui/mobiglas';
 import FleetShipPickerModal from '@/components/ships/FleetShipPickerModal';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import type { ShipDocument } from '@/types/ship';
 
 interface UserFleetBuilderProps {
@@ -24,6 +25,7 @@ const UserFleetBuilder: React.FC<UserFleetBuilderProps> = ({
   onAddShip,
   onRemoveShip
 }) => {
+  const { confirm } = useConfirmDialog();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
@@ -32,6 +34,20 @@ const UserFleetBuilder: React.FC<UserFleetBuilderProps> = ({
   const handleSelectShip = (shipDoc: ShipDocument) => {
     const userShip = shipDocumentToUserShip(shipDoc);
     onAddShip(userShip);
+  };
+
+  // Handle ship removal with confirmation
+  const handleRemoveShip = async (index: number) => {
+    const ship = userShips[index];
+    const confirmed = await confirm({
+      title: 'Remove Ship',
+      message: `Are you sure you want to remove ${ship?.name || 'this ship'} from your fleet?`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Keep',
+      variant: 'warning'
+    });
+    if (!confirmed) return;
+    onRemoveShip(index);
   };
 
   // Handle image load error
@@ -98,7 +114,7 @@ const UserFleetBuilder: React.FC<UserFleetBuilderProps> = ({
                     <div key={`${shipId}-${index}`} className="relative border border-[rgba(var(--mg-primary),0.1)] bg-[rgba(var(--mg-panel-dark),0.6)] p-4 rounded-sm">
                       {isEditing && (
                         <button
-                          onClick={() => onRemoveShip(shipIndex)}
+                          onClick={() => handleRemoveShip(shipIndex)}
                           className="absolute top-2 right-2 text-[rgba(var(--mg-error),0.8)] hover:text-[rgba(var(--mg-error),1)] p-1 bg-[rgba(var(--mg-panel-dark),0.7)] rounded-sm"
                           title="Remove Ship"
                         >
