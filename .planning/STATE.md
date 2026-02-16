@@ -60,7 +60,9 @@ Progress: [████████░░] 88%
 | 14    | 08   | 2min     | 2     | 6     |
 | 14    | 09   | 1min     | 1     | 1     |
 | 15    | 02   | 2min     | 2     | 2     |
+| 15    | 03   | 5min     | 2     | 5     |
 | 15    | 04   | 4min     | 2     | 19    |
+| Phase 15 P01 | 5min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -156,6 +158,12 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 15-04: Server component pages get direct metadata export; client component pages use layout.tsx
 15-04: Parent layouts (archives, operations, subsidiaries) get generic titles; child layouts override
 15-04: Task 1 files (public/auth pages) already committed in prior execution (1fbad39)
+15-03: Home page converted to Server Component using getServerSession (no loading flash)
+15-03: Starfield capped at 30fps using timestamp-based frame skipping (~50% CPU reduction)
+15-03: Hidden img element used for carousel preload (simpler than link element in JSX)
+15-03: Timer and scroll state moved into AboutHero (prevents 6 sibling component re-renders per second)
+15-01: StaleDocumentError extracted to shared module, user-storage re-exports for backward compat
+15-01: expectedVersion optional on all update functions for backward compat with existing callers
 
 ### Pending Todos
 
@@ -176,5 +184,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 15-04-PLAN.md (Page metadata titles)
-Resume file: .planning/phases/15-code-quality-optimization/15-04-SUMMARY.md
+Stopped at: Completed 15-03-PLAN.md (Performance optimizations)
+Resume file: .planning/phases/15-code-quality-optimization/15-03-SUMMARY.md
