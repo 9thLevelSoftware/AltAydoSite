@@ -2,27 +2,17 @@
 
 ## What This Is
 
-AydoCorp's organizational website built with Next.js, featuring a dynamic ship database powered by FleetYards.net API, fleet operations management, mission planning, Discord integration, and a MobiGlas-themed UI. The site serves Star Citizen org members with tools for fleet coordination, mission briefings, escort requests, and financial tracking.
+AydoCorp's organizational website built with Next.js 15.5.12, featuring a dynamic ship database powered by FleetYards.net API, fleet operations management, mission planning, Discord integration, and a MobiGlas-themed UI. The site serves Star Citizen org members with secure, polished tools for fleet coordination, mission briefings, escort requests, and financial tracking.
 
 ## Core Value
 
 AydoCorp members have a secure, polished, and performant hub for managing fleet operations, missions, and org coordination.
 
-## Current Milestone: v1.1 Project Hardening & Polish
-
-**Goal:** Address 100+ findings from comprehensive project review — security vulnerabilities, UX pain points, performance bottlenecks, dependency debt, and UI inconsistencies.
-
-**Target features:**
-- Security hardening (unauthenticated endpoints, RBAC, input sanitization, XSS prevention)
-- Dependency remediation (Next.js 15.5.12+, framer-motion v12, remove 8 unused packages)
-- UX improvements (profile server persistence, confirmations, accessibility, keyboard nav)
-- Performance optimization (cache headers, SSR conversion, bundle reduction, DB pagination)
-- UI consistency (MobiGlas design system consolidation, missing CSS variables, button/corner unification)
-
 ## Requirements
 
 ### Validated
 
+**v1.0 Dynamic Ship Database:**
 - ✓ Static ship database with 500+ ships — existing
 - ✓ Ship images served via CDN (images.aydocorp.space) — existing
 - ✓ Ship selection in user fleet builder — existing
@@ -44,14 +34,21 @@ AydoCorp members have a secure, polished, and performant hub for managing fleet 
 - ✓ Mission planner ship picker refreshed with improved UX — v1.0
 - ✓ Old static ships.json and R2 image pipeline decommissioned — v1.0
 
+**v1.1 Project Hardening & Polish:**
+- ✓ INFRA-01: MongoDB consolidation (single client, unified pool) — v1.1
+- ✓ INFRA-02: Removed 8 unused npm packages — v1.1
+- ✓ INFRA-03: @types/* packages moved to devDependencies — v1.1
+- ✓ INFRA-04: Next.js upgraded to 15.5.12 — v1.1
+- ✓ INFRA-05: Motion v12 migration across 112 files — v1.1
+- ✓ SEC-01 through SEC-15: All 15 security requirements satisfied — v1.1
+- ✓ UX-01 through UX-10: All 10 UX requirements satisfied — v1.1
+- ✓ PERF-01 through PERF-08: All 8 performance requirements satisfied — v1.1
+- ✓ DS-01 through DS-08: All 8 design system requirements satisfied — v1.1
+- ✓ QUAL-01 through QUAL-05: All 5 code quality requirements satisfied — v1.1
+
 ### Active
 
-<!-- v1.1 — Project Hardening & Polish -->
-- [ ] Security hardening across all API routes and auth flows
-- [ ] Dependency updates (Next.js, framer-motion) and unused package removal
-- [ ] UX remediation (profile persistence, accessibility, confirmations)
-- [ ] Performance optimization (caching, SSR, bundle size, DB queries)
-- [ ] UI design system consolidation (MobiGlas component adoption, CSS fixes)
+(No active requirements — define with `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -64,29 +61,37 @@ AydoCorp members have a secure, polished, and performant hub for managing fleet 
 - Ship comparison tools — deferred to v2 requirements (CMP-01, CMP-02)
 - Smart ship suggestions / fleet gap analysis — deferred to v2 (SMART-01, SMART-02, SMART-03)
 - Loaner ship awareness / purchase locations — deferred to v2 (EXT-01, EXT-02, EXT-03)
+- Full test suite — high effort, separate testing milestone
+- NextAuth to Auth.js v5 — different cookies, logs everyone out, separate migration
+- Monolithic component refactoring — MissionPlanner, HomeContent are large but functional
+- WCAG AAA compliance — MobiGlas dark theme may not meet AAA contrast, target AA
+- Redis infrastructure — MongoDB-backed rate limiting sufficient for current scale
 
 ## Context
 
-Shipped v1.0 (Dynamic Ship Database) with 19,464 net new lines across 168 files. Comprehensive project review (Feb 2026) identified 100+ findings:
-- 6 critical security vulnerabilities (unauthenticated endpoints, ReDoS, XSS)
-- 8 high-priority auth bypass / RBAC issues
-- 29 npm audit vulnerabilities (1 critical Next.js RCE)
-- 8 completely unused npm packages
-- 3 critical UX issues (profile data loss, no undo, no delete confirmation)
-- 18 performance bottlenecks (cache headers, SSR, bundle size)
-- MobiGlas design system underutilized (3 button implementations, 4 corner accent patterns)
-- `--mg-error` CSS variable undefined affecting error display in 13 files
+**Current state:** v1.1 shipped with 51 requirements satisfied across 8 phases. The codebase is now:
+- **Secure**: 15 security vulnerabilities patched, RBAC enforced, rate limiting active, CSP headers, magic byte validation
+- **Accessible**: Form labels, focus trapping, keyboard navigation, skip-to-content link
+- **Performant**: SSR home page, 30fps animation cap, DB pagination, immutable cache headers
+- **Consistent**: MobiGlas design system unified, 3-tier error display, loading states
+- **Maintainable**: Structured logging, state machines, optimistic locking
 
-**Tech stack:** Next.js 15.3.3 (upgrading to 15.5.12+), TypeScript, Azure Cosmos DB for MongoDB vCore, Tailwind CSS 3.4, framer-motion 10 (upgrading to 12), Recharts.
+**Tech stack:** Next.js 15.5.12, TypeScript, Azure Cosmos DB for MongoDB vCore, Tailwind CSS 3.4, motion 12.34.0, Recharts.
 
 **Build status:** 69/69 pages, 0 TypeScript errors, 0 ESLint errors.
+
+**Known tech debt:**
+- npm audit: 2 high (build-time only tar/bcrypt), 4 moderate (discord.js/undici)
+- MobiGlasPagination component created but not wired to frontend
+- UserProfilePanel.tsx line 169 uses legacy `.mg-button-small` CSS
+- Bundle size reduction from LazyMotion needs human verification
 
 ## Constraints
 
 - **Tech stack**: Next.js 15 / TypeScript / MongoDB (Cosmos DB) — must use existing stack
 - **API dependency**: FleetYards API has no SLA — sync must be resilient to downtime
-- **Data shape**: FleetYards response structure is fixed — our types adapt to theirs, not vice versa
-- **Image dependency**: FleetYards CDN uptime required for ship images — CSS empty state fallback when missing
+- **Data shape**: FleetYards response structure is fixed — our types adapt to theirs
+- **Image dependency**: FleetYards CDN uptime required for ship images — CSS empty state fallback
 - **Migration**: All existing ship references migrated — 116/116 at 100% match rate
 
 ## Key Decisions
@@ -103,8 +108,12 @@ Shipped v1.0 (Dynamic Ship Database) with 19,464 net new lines across 168 files.
 | 80% count-drop threshold for sync safety | Prevents data loss from partial API responses | ✓ Good — safety net in place |
 | CSS-only empty states (no placeholder images) | Eliminates placeholder PNG dependency, cleaner fallback | ✓ Good — works consistently across all ship display contexts |
 | useReducer for ship browse state | Centralized filter state, avoids stale closures | ✓ Good — clean state management in ShipBrowsePage |
-
-| Address all project review findings in v1.1 | Review surfaced 100+ issues across security/UX/perf/UI; systematic remediation | — Pending |
+| Address all project review findings in v1.1 | Review surfaced 100+ issues across security/UX/perf/UI | ✓ Good — 51/51 requirements satisfied, site hardened |
+| Optimistic locking with `__v` field | Detect concurrent edit conflicts without pessimistic locks | ✓ Good — StaleDocumentError propagated to API routes |
+| MongoDB-backed rate limiting | No Redis infrastructure needed at current scale | ✓ Good — atomic $inc operations with TTL cleanup |
+| Server-first profile with localStorage cache | Prevents data loss on browser clear, cross-device sync | ✓ Good — one-time migration, write-through cache |
+| Motion v12 with LazyMotion | Modern animation library, bundle size reduction | ✓ Good — domMax provider, ~30kb savings expected |
+| Structured Logger over console.* | Production-grade logging with severity, filtering | ✓ Good — zero console.log in production code |
 
 ---
-*Last updated: 2026-02-15 after v1.1 milestone start*
+*Last updated: 2026-02-16 after v1.1 milestone*

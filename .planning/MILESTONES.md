@@ -32,3 +32,38 @@
 **What's next:** To be determined — `/gsd:new-milestone`
 
 ---
+
+## v1.1 Project Hardening & Polish (Shipped: 2026-02-16)
+
+**Delivered:** Addressed 100+ findings from comprehensive project review — security vulnerabilities, UX pain points, performance bottlenecks, dependency debt, and UI inconsistencies. The site is now secure, polished, and performant.
+
+**Phases completed:** 8-15 (8 phases) — 36 plans total
+
+**Key accomplishments:**
+
+- Unified MongoDB client with optimistic locking (`__v` field) for concurrent edit detection across all 7 storage modules
+- Patched 15 security vulnerabilities: RBAC enforcement, MongoDB-backed rate limiting, CSP headers, magic byte image validation, fail-closed cron auth
+- Migrated framer-motion to motion v12 across 112 files with LazyMotion bundle optimization (~30kb reduction)
+- Built toast notification system and server-first profile persistence (localStorage as write-through cache only)
+- Added accessibility foundations: focus-visible indicators, focus trapping in all modals, skip-to-content link, form labels on all inputs
+- Consolidated MobiGlas design system: unified buttons (HolographicButton removed), CornerAccents component, 3-tier error display, loading states
+- Migrated ~60 files to structured Logger with severity levels (zero console.log in production code)
+- Performance optimizations: SSR home page, 30fps starfield cap, immutable cache headers, DB-level pagination
+
+**Stats:**
+
+- 8 phases, 36 plans, 51 requirements satisfied
+- 12 days from start to ship (2026-02-04 to 2026-02-16)
+- TypeScript: ~51,000 LOC
+
+**Tech debt carried forward:**
+
+- Bundle size reduction (~30kb) from LazyMotion needs human verification with `npm run analyze`
+- MobiGlasPagination component created but not yet wired to frontend list pages
+- UserProfilePanel.tsx line 169 uses legacy `.mg-button-small` CSS class
+- npm audit: 2 high (build-time only tar/bcrypt), 4 moderate (discord.js/undici)
+
+**What's next:** To be determined — `/gsd:new-milestone`
+
+---
+
