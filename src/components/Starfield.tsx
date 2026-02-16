@@ -551,7 +551,19 @@ const MobiGlassStarfield = () => {
     // Main animation loop with proper cleanup
     let animationFrameId: number;
 
-    const animate = () => {
+    // FPS cap constants for performance optimization
+    const TARGET_FPS = 30;
+    const FRAME_INTERVAL = 1000 / TARGET_FPS; // ~33.33ms
+    let lastFrameTime = 0;
+
+    const animate = (timestamp: number) => {
+      animationFrameId = requestAnimationFrame(animate);
+
+      const elapsed = timestamp - lastFrameTime;
+      if (elapsed < FRAME_INTERVAL) return; // Skip this frame
+
+      lastFrameTime = timestamp - (elapsed % FRAME_INTERVAL); // Prevent drift
+
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -562,12 +574,10 @@ const MobiGlassStarfield = () => {
       drawHexGlows();
       drawHologramCircles();
       drawFocusPoints();
-
-      animationFrameId = requestAnimationFrame(animate);
     };
 
     // Start animation
-    animate();
+    requestAnimationFrame(animate);
 
     // Cleanup function to cancel animation frame
     return () => {

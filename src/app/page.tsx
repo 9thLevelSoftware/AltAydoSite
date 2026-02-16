@@ -1,16 +1,11 @@
-"use client";
-
-import React, { Suspense } from 'react';
+import React from 'react';
 import HomeContent from '../components/HomeContent';
-import { useSession } from 'next-auth/react';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/auth';
 
-export default function Home() {
-  const { data: session, status } = useSession();
+export default async function Home() {
+  const session = await getServerSession(authOptions);
 
-  // Show loading state while session is being determined
-  if (status === 'loading') {
-    return <div className="min-h-screen flex items-center justify-center">Loading home content...</div>;
-  }
   return (
     <div className="container mx-auto px-4 py-12">
       <HomeContent isLoggedIn={!!session} userName={session?.user?.name || ''} />
