@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useReducer, useState, useCallback } from 'react';
+import React, { useReducer, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
 import { useShips, type ShipFilters } from '@/hooks/useShips';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import ShipFilterPanel from '@/components/ships/ShipFilterPanel';
 import ShipSearchBar from '@/components/ships/ShipSearchBar';
 import ShipPagination from '@/components/ships/ShipPagination';
@@ -93,6 +94,7 @@ export default function MissionShipPickerModal({
 }: MissionShipPickerModalProps) {
   const [state, dispatch] = useReducer(pickerReducer, initialState);
   const [pendingSelections, setPendingSelections] = useState<Map<string, ShipDocument>>(new Map());
+  const modalRef = useRef<HTMLDivElement>(null);
 
   // Build filter params for useShips hook
   const filters: ShipFilters = {
@@ -154,6 +156,8 @@ export default function MissionShipPickerModal({
     onClose();
   }, [onClose]);
 
+  useFocusTrap(modalRef, isOpen, handleClose);
+
   const isShipAlreadyAdded = useCallback(
     (name: string) => existingShipNames.includes(name),
     [existingShipNames],
@@ -194,6 +198,9 @@ export default function MissionShipPickerModal({
             className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none"
           >
             <div
+              ref={modalRef}
+              role="dialog"
+              aria-modal="true"
               className="w-full max-w-4xl max-h-[85vh] flex flex-col bg-[rgba(var(--mg-panel-dark),0.98)] border border-[rgba(var(--mg-primary),0.3)] rounded-lg shadow-2xl pointer-events-auto overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >

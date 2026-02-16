@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useReducer, useCallback, useEffect } from 'react';
+import React, { useReducer, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { useShips } from '@/hooks/useShips';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import ShipFilterPanel from '@/components/ships/ShipFilterPanel';
 import ShipSearchBar from '@/components/ships/ShipSearchBar';
 import ShipCard from '@/components/ships/ShipCard';
@@ -112,6 +113,8 @@ export default function FleetShipPickerModal({
   onSelect,
 }: FleetShipPickerModalProps) {
   const [state, dispatch] = useReducer(pickerReducer, initialState);
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, isOpen, onClose);
 
   // Fetch ships with current filter state
   const { data, isLoading } = useShips({
@@ -196,12 +199,15 @@ export default function FleetShipPickerModal({
           onClick={handleBackdropClick}
         >
           <motion.div
+            ref={modalRef}
             key="fleet-picker-modal"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.2 }}
             className="w-full max-w-4xl max-h-[85vh] flex flex-col rounded-sm border border-[rgba(var(--mg-primary),0.3)] bg-[rgba(var(--mg-panel-dark),0.95)] shadow-2xl"
+            role="dialog"
+            aria-modal="true"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
