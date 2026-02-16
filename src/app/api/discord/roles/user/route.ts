@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../auth/auth';
 import { getDiscordRoleMonitor } from '@/lib/discord-role-monitor';
 import * as userStorage from '@/lib/user-storage';
+import { logger } from '@/lib/logger';
 
 // Force this API route to use Node.js runtime for discord.js compatibility
 export const runtime = 'nodejs';
@@ -84,8 +85,8 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error checking user Discord roles:', error);
-    
+    logger.error('Error checking user Discord roles', error instanceof Error ? error : new Error(String(error)), { route: '/api/discord/roles/user' });
+
     return NextResponse.json(
       { error: 'Failed to check user roles' },
       { status: 500 }

@@ -7,6 +7,7 @@ import * as operationStorage from '@/lib/operation-storage';
 import { ResourceAllocation } from '@/types/Resource';
 import { z } from 'zod';
 import { requireAuth, requireLeadership } from '@/lib/auth-guards';
+import { logger } from '@/lib/logger';
 
 // Validation schema for resource allocation
 const allocationSchema = z.object({
@@ -73,7 +74,7 @@ export async function GET(req: NextRequest) {
     
     return NextResponse.json(enhancedAllocations);
   } catch (error) {
-    console.error('Error getting resource allocations:', error);
+    logger.error('Error getting resource allocations', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources/allocations' });
     return NextResponse.json(
       { error: 'Failed to get resource allocations' },
       { status: 500 }
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Error allocating resource:', error);
+    logger.error('Error allocating resource', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources/allocations' });
     return NextResponse.json(
       { error: 'Failed to allocate resource' },
       { status: 500 }
@@ -195,7 +196,7 @@ export async function DELETE(req: NextRequest) {
     
     return NextResponse.json({ message: 'Resource deallocated successfully' });
   } catch (error) {
-    console.error('Error deallocating resource:', error);
+    logger.error('Error deallocating resource', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources/allocations' });
     return NextResponse.json(
       { error: 'Failed to deallocate resource' },
       { status: 500 }

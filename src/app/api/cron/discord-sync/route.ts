@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncAllUsersWithDiscord } from '@/lib/discord-user-sync';
+import { logger } from '@/lib/logger';
 
 // Force this API route to use Node.js runtime for discord.js compatibility
 export const runtime = 'nodejs';
@@ -10,24 +11,25 @@ export const runtime = 'nodejs';
  */
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔄 Automated Discord user sync started');
+    logger.info('Automated Discord user sync started', { route: '/api/cron/discord-sync' });
     
     // Fail-closed cron auth: reject if CRON_SECRET not configured
     const cronSecret = process.env.CRON_SECRET;
     if (!cronSecret) {
-      console.error('[cron] CRON_SECRET not configured - rejecting request');
+      logger.error('CRON_SECRET not configured - rejecting request', undefined, { route: '/api/cron/discord-sync' });
       return NextResponse.json({ error: 'Server misconfigured' }, { status: 503 });
     }
     const authHeader = request.headers.get('authorization');
     if (authHeader !== `Bearer ${cronSecret}`) {
-      console.log('❌ Unauthorized cron request');
+      logger.warn('Unauthorized cron request', { route: '/api/cron/discord-sync' });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Run the sync
     const syncResult = await syncAllUsersWithDiscord();
     
-    console.log('✅ Automated Discord sync completed:', {
+    logger.info('Automated Discord sync completed', {
+      route: '/api/cron/discord-sync',
       totalUsers: syncResult.totalUsers,
       matchedUsers: syncResult.matchedUsers,
       updatedUsers: syncResult.updatedUsers,
@@ -36,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     // Log any errors but don't fail the request
     if (syncResult.errors.length > 0) {
-      console.warn('⚠️ Discord sync completed with errors:', syncResult.errors);
+      logger.warn('Discord sync completed with errors', { route: '/api/cron/discord-sync', errors: syncResult.errors });
     }
 
     return NextResponse.json({
@@ -54,7 +56,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Automated Discord sync failed:', error);
+    logger.error('Automated Discord sync failed', error instanceof Error ? error : new Error(String(error)), { route: '/api/cron/discord-sync' });
     
     return NextResponse.json({
       success: false,

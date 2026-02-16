@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth';
 import { forceUseLocalStorage, resetConnectionStatus } from '@/lib/storage-utils';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
   } catch (error) {
-    console.error('Error in force-fallback route:', error);
+    logger.error('Error in force-fallback route', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/force-fallback' });
     return NextResponse.json({
       error: 'Internal server error'
     }, { status: 500 });

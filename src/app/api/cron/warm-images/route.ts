@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     // Fail-closed cron auth: reject if CRON_SECRET not configured
     const cronSecret = process.env.CRON_SECRET;
     if (!cronSecret) {
-      console.error('[cron] CRON_SECRET not configured - rejecting request');
+      logger.error('CRON_SECRET not configured - rejecting request', undefined, { route: '/api/cron/warm-images' });
       return NextResponse.json({ error: 'Server misconfigured' }, { status: 503 });
     }
     const authHeader = request.headers.get('authorization');
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('[warm-images] Starting image cache warm-up...');
+    logger.info('Starting image cache warm-up', { route: '/api/cron/warm-images' });
 
     // Get all ship image URLs (lightweight projection)
     const { db } = await connectToDatabase();
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log(`[warm-images] Found ${imageUrls.length} ship images to warm`);
+    logger.info('Found ship images to warm', { route: '/api/cron/warm-images', count: imageUrls.length });
 
     // Build the origin from the incoming request
     const origin = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
       await Promise.all(requests);
     }
 
-    console.log(`[warm-images] Complete: ${warmed} warmed, ${failed} failed`);
+    logger.info('Image cache warm-up complete', { route: '/api/cron/warm-images', warmed, failed });
 
     return NextResponse.json({
       success: true,
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[warm-images] Failed:', error);
+    logger.error('Image cache warm-up failed', error instanceof Error ? error : new Error(String(error)), { route: '/api/cron/warm-images' });
     return NextResponse.json(
       {
         success: false,

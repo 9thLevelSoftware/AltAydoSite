@@ -6,6 +6,7 @@ import * as userStorage from '@/lib/user-storage';
 import { ResourceType, ResourceStatus } from '@/types/Resource';
 import { z } from 'zod';
 import { requireLeadership } from '@/lib/auth-guards';
+import { logger } from '@/lib/logger';
 
 // Validation schema for creating a resource
 const resourceSchema = z.object({
@@ -91,7 +92,7 @@ export async function GET(req: NextRequest) {
     res.headers.set('Cache-Control', 'no-store');
     return res;
   } catch (error) {
-    console.error('Error getting resources:', error);
+    logger.error('Error getting resources', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources' });
     return NextResponse.json(
       { error: 'Failed to get resources' },
       { status: 500 }
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Error creating resource:', error);
+    logger.error('Error creating resource', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources' });
     return NextResponse.json(
       { error: 'Failed to create resource' },
       { status: 500 }

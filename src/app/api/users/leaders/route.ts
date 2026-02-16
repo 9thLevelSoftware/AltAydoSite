@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth';
 import * as userStorage from '@/lib/user-storage';
+import { logger } from '@/lib/logger';
 
 // GET - Fetch users with leadership clearance (level 3+)
 export async function GET(request: NextRequest) {
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
         return a.aydoHandle.localeCompare(b.aydoHandle);
       });
 
-    console.log(`Found ${leaders.length} users with leadership clearance`);
+    logger.info('Found users with leadership clearance', { route: '/api/users/leaders', count: leaders.length });
 
     const res = NextResponse.json({
       leaders,
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
     return res;
 
   } catch (error) {
-    console.error('Error fetching leaders:', error);
+    logger.error('Error fetching leaders', error instanceof Error ? error : new Error(String(error)), { route: '/api/users/leaders' });
     return NextResponse.json(
       { error: 'Failed to fetch leaders' },
       { status: 500 }

@@ -6,6 +6,7 @@ import * as userStorage from '@/lib/user-storage';
 import { Resource } from '@/types/Resource';
 import { z } from 'zod';
 import { requireAuth, requireLeadership } from '@/lib/auth-guards';
+import { logger } from '@/lib/logger';
 
 // GET /api/fleet-ops/resources/[id] - Get a specific resource
 export async function GET(
@@ -42,7 +43,7 @@ export async function GET(
       assignedToName
     });
   } catch (error) {
-    console.error('Error getting resource:', error);
+    logger.error('Error getting resource', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources/[id]' });
     return NextResponse.json(
       { error: 'Failed to get resource' },
       { status: 500 }
@@ -156,7 +157,7 @@ export async function PUT(
       );
     }
   } catch (error) {
-    console.error('Error updating resource:', error);
+    logger.error('Error updating resource', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources/[id]' });
     return NextResponse.json(
       { error: 'Failed to update resource' },
       { status: 500 }
@@ -197,7 +198,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'Resource deleted successfully' });
   } catch (error) {
-    console.error('Error deleting resource:', error);
+    logger.error('Error deleting resource', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources/[id]' });
     return NextResponse.json(
       { error: 'Failed to delete resource' },
       { status: 500 }

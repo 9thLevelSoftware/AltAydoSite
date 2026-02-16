@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getLatestSyncStatus } from '@/lib/ship-storage';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/ships/sync-status
@@ -36,7 +37,7 @@ export async function GET() {
     );
     return response;
   } catch (error) {
-    console.error('[sync-status] Error fetching sync status:', error);
+    logger.error('Error fetching sync status', error instanceof Error ? error : new Error(String(error)), { route: '/api/ships/sync-status' });
     return NextResponse.json(
       { error: 'Failed to fetch sync status' },
       { status: 500 }

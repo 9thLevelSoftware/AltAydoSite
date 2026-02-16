@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncShipsFromFleetYards } from '@/lib/ship-sync';
+import { logger } from '@/lib/logger';
 
 // Force this API route to use Node.js runtime (not Edge)
 export const runtime = 'nodejs';
@@ -12,23 +13,24 @@ export const runtime = 'nodejs';
  */
 export async function GET(request: NextRequest) {
   try {
-    console.log('[ship-sync] API sync triggered');
+    logger.info('API sync triggered', { route: '/api/cron/ship-sync' });
 
     // Fail-closed cron auth: reject if CRON_SECRET not configured
     const cronSecret = process.env.CRON_SECRET;
     if (!cronSecret) {
-      console.error('[cron] CRON_SECRET not configured - rejecting request');
+      logger.error('CRON_SECRET not configured - rejecting request', undefined, { route: '/api/cron/ship-sync' });
       return NextResponse.json({ error: 'Server misconfigured' }, { status: 503 });
     }
     const authHeader = request.headers.get('authorization');
     if (authHeader !== `Bearer ${cronSecret}`) {
-      console.log('[ship-sync] Unauthorized cron request');
+      logger.warn('Unauthorized cron request', { route: '/api/cron/ship-sync' });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const result = await syncShipsFromFleetYards();
 
-    console.log('[ship-sync] API sync completed:', {
+    logger.info('API sync completed', {
+      route: '/api/cron/ship-sync',
       status: result.status,
       shipCount: result.shipCount,
       newShips: result.newShips,
@@ -37,10 +39,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (result.errors.length > 0) {
-      console.warn(
-        '[ship-sync] Sync completed with errors:',
-        result.errors.slice(0, 10),
-      );
+      logger.warn('Sync completed with errors', {
+        route: '/api/cron/ship-sync',
+        errorCount: result.errors.length,
+        errors: result.errors.slice(0, 10),
+      });
     }
 
     return NextResponse.json({
@@ -60,7 +63,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[ship-sync] API sync failed:', error);
+    logger.error('API sync failed', error instanceof Error ? error : new Error(String(error)), { route: '/api/cron/ship-sync' });
     return NextResponse.json(
       {
         success: false,

@@ -5,6 +5,7 @@ import { getTransactions } from '@/lib/finance';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Transaction, TransactionType, TransactionCategory } from '@/types/finance';
 import { apiRateLimiter } from '@/lib/rate-limiter';
+import { logger } from '@/lib/logger';
 
 // Validate transaction type
 const isValidTransactionType = (type: string): type is TransactionType => {
@@ -128,7 +129,7 @@ export async function POST(request: Request) {
       remainingRequests: apiRateLimiter.getRemainingRequests(session.user.email)
     });
   } catch (error) {
-    console.error('Failed to create transaction:', error);
+    logger.error('Failed to create transaction', error instanceof Error ? error : new Error(String(error)), { route: '/api/finance/transactions' });
     return NextResponse.json(
       { error: 'Failed to create transaction' },
       { status: 500 }

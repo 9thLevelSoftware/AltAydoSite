@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as shipStorage from '@/lib/ship-storage';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/ships/[id]
@@ -40,7 +41,7 @@ export async function GET(
     );
     return response;
   } catch (error) {
-    console.error('[ships] Error fetching ship by ID/slug:', error);
+    logger.error('Error fetching ship by ID/slug', error instanceof Error ? error : new Error(String(error)), { route: '/api/ships/[id]' });
     return NextResponse.json(
       { error: 'Failed to fetch ship' },
       { status: 500 }

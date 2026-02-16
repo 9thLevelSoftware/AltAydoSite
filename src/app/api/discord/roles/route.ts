@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/auth';
 import { getDiscordRoleMonitor } from '@/lib/discord-role-monitor';
+import { logger } from '@/lib/logger';
 
 // Force this API route to use Node.js runtime for discord.js compatibility
 export const runtime = 'nodejs';
@@ -38,8 +39,8 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error getting Discord role monitor status:', error);
-    
+    logger.error('Error getting Discord role monitor status', error instanceof Error ? error : new Error(String(error)), { route: '/api/discord/roles' });
+
     return NextResponse.json(
       { error: 'Failed to get monitor status' },
       { status: 500 }
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
 
       case 'check':
         // Manual role check for all users
-        console.log('Manual role check triggered by user:', session.user.aydoHandle);
+        logger.info('Manual role check triggered', { route: '/api/discord/roles', triggeredBy: session.user.aydoHandle });
         const results = await monitor.checkAllUserRoles();
         
         return NextResponse.json({
@@ -111,8 +112,8 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Error in Discord role monitor POST:', error);
-    
+    logger.error('Error in Discord role monitor POST', error instanceof Error ? error : new Error(String(error)), { route: '/api/discord/roles' });
+
     return NextResponse.json(
       { error: 'Failed to process request' },
       { status: 500 }

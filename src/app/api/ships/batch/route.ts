@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import * as shipStorage from '@/lib/ship-storage';
+import { logger } from '@/lib/logger';
 
 /**
  * Zod schema for POST /api/ships/batch request body.
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     );
     return response;
   } catch (error) {
-    console.error('[ships/batch] Error resolving batch ships:', error);
+    logger.error('Error resolving batch ships', error instanceof Error ? error : new Error(String(error)), { route: '/api/ships/batch' });
     return NextResponse.json(
       { error: 'Failed to resolve ships' },
       { status: 500 }

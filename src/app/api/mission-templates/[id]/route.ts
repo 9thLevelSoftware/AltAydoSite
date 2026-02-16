@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth';
 import * as missionTemplateStorage from '@/lib/mission-template-storage';
+import { logger } from '@/lib/logger';
 
 // GET handler - Get a specific mission template by ID
 export async function GET(
@@ -32,7 +33,7 @@ export async function GET(
       );
     }
 
-    console.log('Fetching mission template:', templateId);
+    logger.info('Fetching mission template', { route: '/api/mission-templates/[id]', templateId });
 
     // Get mission template using the mission-template-storage module
     const template = await missionTemplateStorage.getMissionTemplateById(templateId);
@@ -41,14 +42,14 @@ export async function GET(
       return NextResponse.json({ error: 'Mission template not found' }, { status: 404 });
     }
 
-    console.log('Mission template found:', template.name);
+    logger.info('Mission template found', { route: '/api/mission-templates/[id]', templateName: template.name });
 
     const res = NextResponse.json(template);
     res.headers.set('Cache-Control', 'no-store');
     return res;
 
   } catch (error) {
-    console.error('Error fetching mission template:', error);
+    logger.error('Error fetching mission template', error instanceof Error ? error : new Error(String(error)), { route: '/api/mission-templates/[id]' });
     return NextResponse.json(
       { error: 'Failed to fetch mission template' },
       { status: 500 }
@@ -88,7 +89,7 @@ export async function PUT(
     // Parse request body
     const templateData = await request.json();
 
-    console.log('Updating mission template:', templateId);
+    logger.info('Updating mission template', { route: '/api/mission-templates/[id]', templateId });
 
     // Update mission template using the mission-template-storage module
     const template = await missionTemplateStorage.updateMissionTemplate(templateId, templateData);
@@ -97,12 +98,12 @@ export async function PUT(
       return NextResponse.json({ error: 'Mission template not found' }, { status: 404 });
     }
 
-    console.log('Mission template updated successfully:', template.name);
+    logger.info('Mission template updated successfully', { route: '/api/mission-templates/[id]', templateName: template.name });
 
     return NextResponse.json(template, { status: 200 });
 
   } catch (error) {
-    console.error('Error updating mission template:', error);
+    logger.error('Error updating mission template', error instanceof Error ? error : new Error(String(error)), { route: '/api/mission-templates/[id]' });
     return NextResponse.json(
       { error: 'Failed to update mission template' },
       { status: 500 }
@@ -139,7 +140,7 @@ export async function DELETE(
       );
     }
 
-    console.log('Deleting mission template:', templateId);
+    logger.info('Deleting mission template', { route: '/api/mission-templates/[id]', templateId });
 
     // Delete mission template using the mission-template-storage module
     const success = await missionTemplateStorage.deleteMissionTemplate(templateId);
@@ -148,12 +149,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Mission template not found' }, { status: 404 });
     }
 
-    console.log('Mission template deleted successfully:', templateId);
+    logger.info('Mission template deleted successfully', { route: '/api/mission-templates/[id]', templateId });
 
     return NextResponse.json({ success: true });
 
   } catch (error) {
-    console.error('Error deleting mission template:', error);
+    logger.error('Error deleting mission template', error instanceof Error ? error : new Error(String(error)), { route: '/api/mission-templates/[id]' });
     return NextResponse.json(
       { error: 'Failed to delete mission template' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import * as shipStorage from '@/lib/ship-storage';
+import { logger } from '@/lib/logger';
 
 /**
  * Zod schema for GET /api/ships query parameters.
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
     );
     return response;
   } catch (error) {
-    console.error('[ships] Error fetching ship list:', error);
+    logger.error('Error fetching ship list', error instanceof Error ? error : new Error(String(error)), { route: '/api/ships' });
     return NextResponse.json(
       { error: 'Failed to fetch ships' },
       { status: 500 }

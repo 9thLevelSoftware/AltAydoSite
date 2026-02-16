@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/auth';
 import { syncAllUsersWithDiscord, syncSingleUserWithDiscord } from '@/lib/discord-user-sync';
+import { logger } from '@/lib/logger';
 
 // Force this API route to use Node.js runtime for discord.js compatibility
 export const runtime = 'nodejs';
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    console.log(`Discord sync initiated by admin: ${session.user.aydoHandle}`);
+    logger.info('Discord sync initiated', { route: '/api/admin/discord-sync', initiatedBy: session.user.aydoHandle });
 
     // Check if this is a single user sync
     const url = new URL(request.url);
@@ -32,10 +33,10 @@ export async function GET(request: NextRequest) {
 
     let syncResult;
     if (userId) {
-      console.log(`Syncing single user: ${userId}`);
+      logger.info('Syncing single user', { route: '/api/admin/discord-sync', userId });
       syncResult = await syncSingleUserWithDiscord(userId);
     } else {
-      console.log('Syncing all users with Discord');
+      logger.info('Syncing all users with Discord', { route: '/api/admin/discord-sync' });
       syncResult = await syncAllUsersWithDiscord();
     }
 
@@ -48,8 +49,8 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Discord sync API error:', error);
-    
+    logger.error('Discord sync API error', error instanceof Error ? error : new Error(String(error)), { route: '/api/admin/discord-sync', method: 'GET' });
+
     return NextResponse.json({
       success: false,
       error: 'Discord sync failed',
@@ -79,10 +80,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { userId, dryRun = false } = body;
 
-    console.log(`Discord sync POST initiated by admin: ${session.user.aydoHandle}`, {
-      userId,
-      dryRun
-    });
+    logger.info('Discord sync POST initiated', { route: '/api/admin/discord-sync', initiatedBy: session.user.aydoHandle, userId, dryRun });
 
     if (dryRun) {
       // For dry run, we could implement a preview mode
@@ -110,8 +108,8 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Discord sync POST API error:', error);
-    
+    logger.error('Discord sync POST API error', error instanceof Error ? error : new Error(String(error)), { route: '/api/admin/discord-sync', method: 'POST' });
+
     return NextResponse.json({
       success: false,
       error: 'Discord sync failed',

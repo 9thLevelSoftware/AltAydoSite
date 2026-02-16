@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeDiscordRoleMonitor } from '@/lib/discord-role-monitor-init';
+import { logger } from '@/lib/logger';
 
 // Force this API route to use Node.js runtime for discord.js compatibility
 export const runtime = 'nodejs';
@@ -26,8 +27,8 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error initializing Discord role monitor via API:', error);
-    
+    logger.error('Error initializing Discord role monitor via API', error instanceof Error ? error : new Error(String(error)), { route: '/api/discord/init' });
+
     return NextResponse.json(
       { error: 'Failed to initialize' },
       { status: 500 }

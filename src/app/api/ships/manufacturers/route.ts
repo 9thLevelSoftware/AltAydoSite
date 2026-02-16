@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as shipStorage from '@/lib/ship-storage';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/ships/manufacturers
@@ -22,7 +23,7 @@ export async function GET() {
     response.headers.set('Cache-Control', 'public, max-age=3600');
     return response;
   } catch (error) {
-    console.error('[ships/manufacturers] Error fetching manufacturers:', error);
+    logger.error('Error fetching manufacturers', error instanceof Error ? error : new Error(String(error)), { route: '/api/ships/manufacturers' });
     return NextResponse.json(
       { error: 'Failed to fetch manufacturers' },
       { status: 500 }

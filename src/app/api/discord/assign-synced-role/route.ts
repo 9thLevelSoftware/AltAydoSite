@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/auth';
 import { getDiscordService } from '@/lib/discord';
 import * as userStorage from '@/lib/user-storage';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -120,7 +121,7 @@ async function handler(request: NextRequest) {
         }
       } catch (err) {
         summary.errors++;
-        console.error(`Error assigning role to user ${user.id}:`, err);
+        logger.error('Error assigning role to user', err instanceof Error ? err : new Error(String(err)), { route: '/api/discord/assign-synced-role', userId: user.id });
         perUserResults.push({ userId: user.id, aydoHandle: user.aydoHandle, status: 'error' });
       }
       if (delayMs > 0) {
@@ -141,7 +142,7 @@ async function handler(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error assigning synced role:', error);
+    logger.error('Error assigning synced role', error instanceof Error ? error : new Error(String(error)), { route: '/api/discord/assign-synced-role' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
