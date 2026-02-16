@@ -52,6 +52,7 @@ Progress: [██████░░░░] 58%
 | 13    | 04   | 4min     | 2     | 6     |
 | 14    | 01   | 2min     | 2     | 3     |
 | 14    | 02   | 2min     | 2     | 3     |
+| 14    | 04   | 3min     | 2     | 2     |
 | 14    | 06   | 2min     | 2     | 3     |
 
 ## Accumulated Context
@@ -130,6 +131,8 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 14-02: mg-button-secondary CSS in globals.css left in place (dead CSS cleanup out of scope)
 14-06: MissionDetail has no form-level errors (read-only view) -- no changes needed
 14-06: Escort submit uses variant=danger matching security page red theme
+14-04: Confirm password input kept as custom element (not MobiGlasInput) to preserve dynamic border color for password match states
+14-04: Discord OAuth button migrated to MobiGlasButton variant=secondary with leftIcon prop for Discord SVG
 14-06: Success messages kept as plain styled div (MobiGlasFormError is error-only)
 
 ### Pending Todos
