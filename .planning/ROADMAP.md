@@ -25,7 +25,7 @@ See `.planning/MILESTONES.md` for v1.0 details. 26 plans across 8 phases (includ
 - [x] **Phase 10: Access Control Hardening** - RBAC enforcement, rate limiting, CSP headers, ownership checks, image validation (completed 2026-02-15)
 - [x] **Phase 11: UX Critical Fixes** - Profile server migration, toast notifications, confirmation dialogs (completed 2026-02-16)
 - [x] **Phase 12: Motion v12 Migration** - Atomic framer-motion to motion package migration across 109 files with LazyMotion (completed 2026-02-16)
-- [ ] **Phase 13: Accessibility & Performance Foundations** - Form labels, keyboard nav, focus indicators, cache headers, DB pagination
+- [x] **Phase 13: Accessibility & Performance Foundations** - Form labels, keyboard nav, focus indicators, cache headers, DB pagination (completed 2026-02-16)
 - [ ] **Phase 14: Design System Consolidation** - Button unification, corner accents, auth form migration, error tiers, loading states
 - [ ] **Phase 15: Code Quality & Optimization** - Structured logging, state machine, optimistic locking, SSR conversion, bundle cleanup
 
@@ -187,6 +187,6 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15
 | 10. Access Control Hardening | v1.1 | Complete    | 2026-02-15 | - |
 | 11. UX Critical Fixes | v1.1 | Complete    | 2026-02-16 | - |
 | 12. Motion v12 Migration | v1.1 | Complete    | 2026-02-16 | - |
-| 13. Accessibility & Performance | v1.1 | 0/TBD | Not started | - |
+| 13. Accessibility & Performance | v1.1 | Complete    | 2026-02-16 | - |
 | 14. Design System Consolidation | v1.1 | 0/TBD | Not started | - |
 | 15. Code Quality & Optimization | v1.1 | 0/TBD | Not started | - |
