@@ -141,12 +141,16 @@ Plans:
   3. LoginForm and SignupForm use MobiGlas design system components and match the site's visual language
   4. Error messages display consistently in 3 tiers: field-level inline, form-level banner, system-level toast notification
   5. High-frequency async actions (mission create, profile save, escort submit) show loading spinners in their trigger buttons
-**Plans**: TBD
+**Plans**: 7 plans in 3 waves
 
 Plans:
-- [ ] 14-01: TBD
-- [ ] 14-02: TBD
-- [ ] 14-03: TBD
+- [ ] 14-01-PLAN.md — MobiGlasButton enhancements (success variant, onClick type, HTML attrs) + MobiGlasFormError component
+- [ ] 14-02-PLAN.md — Button consolidation: fleet-ops (HolographicButton + raw mg-button in OperationDetailView/OperationCard)
+- [ ] 14-03-PLAN.md — Button consolidation: public pages (Footer, HomeContent, HeroSection, services, recruitment, ContactForm, etc.)
+- [ ] 14-04-PLAN.md — Auth form migration: LoginForm + SignupForm to MobiGlas components
+- [ ] 14-05-PLAN.md — Corner accent consolidation + MissionCard status colors (DS-03, DS-06)
+- [ ] 14-06-PLAN.md — Loading states + error display unification (UX-07, DS-05)
+- [ ] 14-07-PLAN.md — Remove !important from .mg-button + final sweep verification (DS-08)
 
 ### Phase 15: Code Quality & Optimization
 **Goal**: Production-grade logging, state validation, conflict detection, and remaining performance optimizations for a maintainable codebase
