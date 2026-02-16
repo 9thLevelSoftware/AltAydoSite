@@ -17,6 +17,7 @@
 import { connectToDatabase } from '@/lib/mongodb';
 import type { Sort } from 'mongodb';
 import type { ShipDocument, SyncStatusDocument } from '@/types/ship';
+import { logger } from '@/lib/logger';
 
 /** UUID v4 pattern for distinguishing FleetYards UUIDs from slugs */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -59,7 +60,7 @@ export async function upsertShips(
     return { newShips: 0, updatedShips: 0, unchangedShips: 0 };
   }
 
-  console.log(`[ship-storage] Upserting ${ships.length} ships...`);
+  logger.info('Upserting ships', { collection: 'ships', operation: 'upsert', count: ships.length });
 
   const shipsCollection = await getShipsCollection();
 
@@ -83,16 +84,11 @@ export async function upsertShips(
     const updatedShips = result.modifiedCount;
     const unchangedShips = result.matchedCount - result.modifiedCount;
 
-    console.log(
-      `[ship-storage] Bulk upsert complete: ${newShips} new, ${updatedShips} updated, ${unchangedShips} unchanged`
-    );
+    logger.info('Bulk upsert complete', { storage: 'MongoDB', collection: 'ships', newShips, updatedShips, unchangedShips });
 
     return { newShips, updatedShips, unchangedShips };
   } catch (bulkError) {
-    console.error(
-      '[ship-storage] bulkWrite failed, falling back to individual upserts:',
-      bulkError
-    );
+    logger.error('bulkWrite failed, falling back to individual upserts', bulkError instanceof Error ? bulkError : new Error(String(bulkError)), { collection: 'ships' });
 
     // Fallback: individual upserts with per-document error handling
     let newShips = 0;
@@ -120,22 +116,15 @@ export async function upsertShips(
         }
       } catch (docError) {
         errorCount++;
-        console.error(
-          `[ship-storage] Error upserting ship ${ship.fleetyardsId} (${ship.name}):`,
-          docError
-        );
+        logger.error('Error upserting ship', docError instanceof Error ? docError : new Error(String(docError)), { collection: 'ships', fleetyardsId: ship.fleetyardsId, shipName: ship.name });
       }
     }
 
     if (errorCount > 0) {
-      console.error(
-        `[ship-storage] Individual upsert completed with ${errorCount} errors out of ${ships.length} ships`
-      );
+      logger.error('Individual upsert completed with errors', undefined, { collection: 'ships', errorCount, totalShips: ships.length });
     }
 
-    console.log(
-      `[ship-storage] Individual upsert complete: ${newShips} new, ${updatedShips} updated, ${unchangedShips} unchanged`
-    );
+    logger.info('Individual upsert complete', { storage: 'MongoDB', collection: 'ships', newShips, updatedShips, unchangedShips });
 
     return { newShips, updatedShips, unchangedShips };
   }
@@ -161,7 +150,7 @@ export async function getShipTimestamps(): Promise<Map<string, string>> {
     }
     return map;
   } catch (error) {
-    console.error('[ship-storage] Error in getShipTimestamps:', error);
+    logger.error('Error in getShipTimestamps', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
     return new Map();
   }
 }
@@ -175,7 +164,7 @@ export async function getShipCount(): Promise<number> {
     const shipsCollection = await getShipsCollection();
     return await shipsCollection.countDocuments({});
   } catch (error) {
-    console.error('[ship-storage] Error in getShipCount:', error);
+    logger.error('Error in getShipCount', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
     return 0;
   }
 }
@@ -194,7 +183,7 @@ export async function getShipByFleetyardsId(
     );
     return doc as ShipDocument | null;
   } catch (error) {
-    console.error('[ship-storage] Error in getShipByFleetyardsId:', error);
+    logger.error('Error in getShipByFleetyardsId', error instanceof Error ? error : new Error(String(error)), { collection: 'ships', fleetyardsId });
     return null;
   }
 }
@@ -211,7 +200,7 @@ export async function getShipBySlug(slug: string): Promise<ShipDocument | null> 
     );
     return doc as ShipDocument | null;
   } catch (error) {
-    console.error('[ship-storage] Error in getShipBySlug:', error);
+    logger.error('Error in getShipBySlug', error instanceof Error ? error : new Error(String(error)), { collection: 'ships', slug });
     return null;
   }
 }
@@ -230,11 +219,9 @@ export async function saveSyncStatus(
   try {
     const syncStatusCollection = await getSyncStatusCollection();
     await syncStatusCollection.insertOne(status);
-    console.log(
-      `[ship-storage] Sync status saved: ${status.status}, version ${status.syncVersion}`
-    );
+    logger.info('Sync status saved', { storage: 'MongoDB', collection: 'sync-status', status: status.status, syncVersion: status.syncVersion });
   } catch (error) {
-    console.error('[ship-storage] Error in saveSyncStatus:', error);
+    logger.error('Error in saveSyncStatus', error instanceof Error ? error : new Error(String(error)), { collection: 'sync-status' });
     throw error;
   }
 }
@@ -252,7 +239,7 @@ export async function getLatestSyncStatus(): Promise<SyncStatusDocument | null> 
     );
     return doc as SyncStatusDocument | null;
   } catch (error) {
-    console.error('[ship-storage] Error in getLatestSyncStatus:', error);
+    logger.error('Error in getLatestSyncStatus', error instanceof Error ? error : new Error(String(error)), { collection: 'sync-status' });
     return null;
   }
 }
@@ -359,10 +346,7 @@ export async function findShips(options: ShipQueryOptions): Promise<ShipQueryRes
     // If the $text index is missing, the $text query will fail.
     // Fall back to a $regex search on the name field.
     if (search) {
-      console.error(
-        '[ship-storage] $text query failed, falling back to $regex:',
-        error
-      );
+      logger.error('$text query failed, falling back to $regex', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
 
       // Rebuild filter replacing $text with $regex on name
       delete filter.$text;
@@ -391,7 +375,7 @@ export async function findShips(options: ShipQueryOptions): Promise<ShipQueryRes
     }
 
     // Non-search query failure -- rethrow
-    console.error('[ship-storage] Error in findShips:', error);
+    logger.error('Error in findShips', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
     throw error;
   }
 }
@@ -430,7 +414,7 @@ export async function getShipsByFleetyardsIds(ids: string[]): Promise<ShipDocume
       .toArray();
     return docs as ShipDocument[];
   } catch (error) {
-    console.error('[ship-storage] Error in getShipsByFleetyardsIds:', error);
+    logger.error('Error in getShipsByFleetyardsIds', error instanceof Error ? error : new Error(String(error)), { collection: 'ships', idCount: ids.length });
     return [];
   }
 }
@@ -471,7 +455,7 @@ export async function getManufacturers(): Promise<ManufacturerInfo[]> {
       .toArray();
     return results as ManufacturerInfo[];
   } catch (error) {
-    console.error('[ship-storage] Error in getManufacturers:', error);
+    logger.error('Error in getManufacturers', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
     return [];
   }
 }

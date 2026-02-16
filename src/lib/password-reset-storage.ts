@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { PasswordResetToken } from '@/types/password-reset';
 import { getDb } from './mongodb';
+import { logger } from '@/lib/logger';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -11,51 +12,51 @@ const tokensFilePath = path.join(dataDir, 'reset-tokens.json');
 // Helper functions for local file storage
 function ensureDataDir() {
   if (!fs.existsSync(dataDir)) {
-    console.log(`STORAGE: Creating data directory: ${dataDir}`);
+    logger.info('Creating data directory', { storage: 'Fallback', collection: 'resetTokens', path: dataDir });
     fs.mkdirSync(dataDir, { recursive: true });
   }
-  
+
   if (!fs.existsSync(tokensFilePath)) {
-    console.log(`STORAGE: Creating empty tokens file: ${tokensFilePath}`);
+    logger.info('Creating empty tokens file', { storage: 'Fallback', collection: 'resetTokens', path: tokensFilePath });
     fs.writeFileSync(tokensFilePath, JSON.stringify([]), 'utf8');
   }
 }
 
 function getLocalTokens(): PasswordResetToken[] {
-  console.log('STORAGE: Reading tokens from local storage');
+  logger.info('Reading tokens from local storage', { storage: 'Fallback', collection: 'resetTokens', operation: 'read' });
   ensureDataDir();
-  
+
   try {
     const data = fs.readFileSync(tokensFilePath, 'utf8');
     const tokens = JSON.parse(data) as PasswordResetToken[];
-    console.log(`STORAGE: Found ${tokens.length} tokens in local storage`);
+    logger.info('Found tokens in local storage', { storage: 'Fallback', collection: 'resetTokens', count: tokens.length });
     return tokens;
   } catch (error) {
-    console.error('STORAGE: Error reading tokens file:', error);
+    logger.error('Error reading tokens file', error instanceof Error ? error : new Error(String(error)), { storage: 'Fallback', collection: 'resetTokens' });
     return [];
   }
 }
 
 function saveLocalToken(token: PasswordResetToken): void {
-  console.log(`STORAGE: Saving token to local storage: ${token.id}`);
+  logger.info('Saving token to local storage', { storage: 'Fallback', collection: 'resetTokens', operation: 'save', tokenId: token.id });
   ensureDataDir();
-  
+
   const tokens = getLocalTokens();
-  
+
   // Check if token already exists
   const existingTokenIndex = tokens.findIndex(t => t.id === token.id);
   if (existingTokenIndex >= 0) {
     // Update existing token
-    console.log(`STORAGE: Updating existing token: ${token.id}`);
+    logger.info('Updating existing token', { storage: 'Fallback', collection: 'resetTokens', operation: 'update', tokenId: token.id });
     tokens[existingTokenIndex] = token;
   } else {
     // Add new token
-    console.log(`STORAGE: Adding new token: ${token.id}`);
+    logger.info('Adding new token', { storage: 'Fallback', collection: 'resetTokens', operation: 'insert', tokenId: token.id });
     tokens.push(token);
   }
-  
+
   fs.writeFileSync(tokensFilePath, JSON.stringify(tokens, null, 2), 'utf8');
-  console.log(`STORAGE: Successfully saved tokens to file, total count: ${tokens.length}`);
+  logger.info('Successfully saved tokens to file', { storage: 'Fallback', collection: 'resetTokens', totalCount: tokens.length });
 }
 
 // Check if we should use MongoDB
@@ -64,7 +65,7 @@ async function shouldUseMongoDb(): Promise<boolean> {
     await getDb();
     return true;
   } catch (error) {
-    console.error('STORAGE: MongoDB connection failed:', error);
+    logger.error('MongoDB connection failed', error instanceof Error ? error : new Error(String(error)), { collection: 'resetTokens' });
     return false;
   }
 }
@@ -76,8 +77,8 @@ export function generateResetToken(): string {
 
 // Create a new password reset token
 export async function createResetToken(userId: string, email: string): Promise<PasswordResetToken> {
-  console.log(`STORAGE: Creating reset token for user: ${userId}`);
-  
+  logger.info('Creating reset token for user', { collection: 'resetTokens', operation: 'create', userId, hasEmail: !!email });
+
   const token: PasswordResetToken = {
     id: crypto.randomUUID(),
     userId,
@@ -89,19 +90,19 @@ export async function createResetToken(userId: string, email: string): Promise<P
   };
   // Add TTL-compatible Date field alongside the string for compatibility
   (token as any).expiresAtDate = new Date(Date.now() + 3600000);
-  
+
   if (await shouldUseMongoDb()) {
     try {
       // Store in MongoDB
       const db = await getDb();
       await db.collection('resetTokens').insertOne(token);
-      console.log('Reset token created successfully:', token.id);
+      logger.info('Reset token created successfully', { storage: 'MongoDB', collection: 'resetTokens', tokenId: token.id });
       return token;
     } catch (error) {
-      console.error('STORAGE: MongoDB createResetToken failed, falling back to local storage:', error);
+      logger.error('MongoDB createResetToken failed, falling back to local storage', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'resetTokens' });
     }
   }
-  
+
   // Fallback to local storage
   saveLocalToken(token);
   return token;
@@ -109,8 +110,9 @@ export async function createResetToken(userId: string, email: string): Promise<P
 
 // Get a token by its token string
 export async function getResetTokenByToken(tokenString: string): Promise<PasswordResetToken | null> {
-  console.log(`STORAGE: Getting reset token: ${tokenString.substring(0, 8)}...`);
-  
+  // Log only first 8 chars of token for security (existence check, not full token)
+  logger.info('Getting reset token', { collection: 'resetTokens', operation: 'getByToken', tokenPrefix: tokenString.substring(0, 8) });
+
   if (await shouldUseMongoDb()) {
     try {
       const db = await getDb();
@@ -119,10 +121,10 @@ export async function getResetTokenByToken(tokenString: string): Promise<Passwor
       const { _id, ...tokenData } = doc;
       return tokenData as PasswordResetToken;
     } catch (error) {
-      console.error('STORAGE: MongoDB getResetTokenByToken failed, falling back to local storage:', error);
+      logger.error('MongoDB getResetTokenByToken failed, falling back to local storage', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'resetTokens' });
     }
   }
-  
+
   // Fallback to local storage
   const tokens = getLocalTokens();
   return tokens.find(t => t.token === tokenString) || null;
@@ -130,8 +132,8 @@ export async function getResetTokenByToken(tokenString: string): Promise<Passwor
 
 // Mark a token as used
 export async function markTokenAsUsed(tokenId: string): Promise<boolean> {
-  console.log(`STORAGE: Marking token as used: ${tokenId}`);
-  
+  logger.info('Marking token as used', { collection: 'resetTokens', operation: 'markUsed', tokenId });
+
   if (await shouldUseMongoDb()) {
     try {
       const db = await getDb();
@@ -141,19 +143,19 @@ export async function markTokenAsUsed(tokenId: string): Promise<boolean> {
       );
       return result.modifiedCount > 0;
     } catch (error) {
-      console.error('STORAGE: MongoDB markResetTokenAsUsed failed, falling back to local storage:', error);
+      logger.error('MongoDB markResetTokenAsUsed failed, falling back to local storage', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'resetTokens' });
     }
   }
-  
+
   // Fallback to local storage
   const tokens = getLocalTokens();
   const tokenIndex = tokens.findIndex(t => t.id === tokenId);
-  
+
   if (tokenIndex === -1) {
-    console.log(`STORAGE: Token not found: ${tokenId}`);
+    logger.info('Token not found', { storage: 'Fallback', collection: 'resetTokens', tokenId });
     return false;
   }
-  
+
   tokens[tokenIndex].used = true;
   fs.writeFileSync(tokensFilePath, JSON.stringify(tokens, null, 2), 'utf8');
   return true;
@@ -161,8 +163,8 @@ export async function markTokenAsUsed(tokenId: string): Promise<boolean> {
 
 // Clean up expired tokens
 export async function cleanupExpiredTokens(): Promise<void> {
-  console.log('STORAGE: Cleaning up expired tokens');
-  
+  logger.info('Cleaning up expired tokens', { collection: 'resetTokens', operation: 'cleanup' });
+
   if (await shouldUseMongoDb()) {
     try {
       const db = await getDb();
@@ -173,22 +175,22 @@ export async function cleanupExpiredTokens(): Promise<void> {
           { used: true }
         ]
       });
-      console.log(`Cleaned up ${result.deletedCount} expired or used tokens`);
+      logger.info('Cleaned up expired or used tokens', { storage: 'MongoDB', collection: 'resetTokens', deletedCount: result.deletedCount });
       return;
     } catch (error) {
-      console.error('STORAGE: MongoDB cleanupExpiredTokens failed, falling back to local storage:', error);
+      logger.error('MongoDB cleanupExpiredTokens failed, falling back to local storage', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'resetTokens' });
     }
   }
-  
+
   // Fallback to local storage
   const tokens = getLocalTokens();
   const now = new Date().toISOString();
   const validTokens = tokens.filter(t => t.expiresAt > now);
-  
+
   if (validTokens.length !== tokens.length) {
-    console.log(`STORAGE: Removed ${tokens.length - validTokens.length} expired tokens`);
+    logger.info('Removed expired tokens', { storage: 'Fallback', collection: 'resetTokens', removedCount: tokens.length - validTokens.length });
     fs.writeFileSync(tokensFilePath, JSON.stringify(validTokens, null, 2), 'utf8');
   } else {
-    console.log('STORAGE: No expired tokens found');
+    logger.info('No expired tokens found', { storage: 'Fallback', collection: 'resetTokens' });
   }
-} 
+}

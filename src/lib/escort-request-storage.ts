@@ -6,6 +6,7 @@ import { shouldUseMongoDb } from './storage-utils';
 import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';
 import { StaleDocumentError } from './storage-errors';
+import { logger } from '@/lib/logger';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -14,33 +15,33 @@ const escortRequestsFilePath = path.join(dataDir, 'escort-requests.json');
 // Helper functions for local file storage
 function ensureDataDir() {
   if (!fs.existsSync(dataDir)) {
-    console.log(`ESCORT STORAGE: Creating data directory: ${dataDir}`);
+    logger.info('Creating data directory', { storage: 'Fallback', collection: 'escort_requests', path: dataDir });
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
   if (!fs.existsSync(escortRequestsFilePath)) {
-    console.log(`ESCORT STORAGE: Creating empty escort requests file: ${escortRequestsFilePath}`);
+    logger.info('Creating empty escort requests file', { storage: 'Fallback', collection: 'escort_requests', path: escortRequestsFilePath });
     fs.writeFileSync(escortRequestsFilePath, JSON.stringify([]), 'utf8');
   }
 }
 
 function getLocalEscortRequests(): EscortRequestResponse[] {
-  console.log('ESCORT STORAGE: Reading escort requests from local storage');
+  logger.info('Reading escort requests from local storage', { storage: 'Fallback', collection: 'escort_requests', operation: 'read' });
   ensureDataDir();
 
   try {
     const data = fs.readFileSync(escortRequestsFilePath, 'utf8');
     const requests = JSON.parse(data) as EscortRequestResponse[];
-    console.log(`ESCORT STORAGE: Found ${requests.length} escort requests in local storage`);
+    logger.info('Found escort requests in local storage', { storage: 'Fallback', collection: 'escort_requests', count: requests.length });
     return requests;
   } catch (error) {
-    console.error('ESCORT STORAGE: Error reading escort requests file:', error);
+    logger.error('Error reading escort requests file', error instanceof Error ? error : new Error(String(error)), { storage: 'Fallback', collection: 'escort_requests' });
     return [];
   }
 }
 
 function saveLocalEscortRequest(request: EscortRequestResponse): void {
-  console.log(`ESCORT STORAGE: Saving escort request to local storage: ${request.id}`);
+  logger.info('Saving escort request to local storage', { storage: 'Fallback', collection: 'escort_requests', operation: 'save', requestId: request.id });
   ensureDataDir();
 
   const requests = getLocalEscortRequests();
@@ -49,16 +50,16 @@ function saveLocalEscortRequest(request: EscortRequestResponse): void {
   const existingRequestIndex = requests.findIndex(r => r.id === request.id);
   if (existingRequestIndex >= 0) {
     // Update existing request
-    console.log(`ESCORT STORAGE: Updating existing escort request: ${request.id}`);
+    logger.info('Updating existing escort request', { storage: 'Fallback', collection: 'escort_requests', operation: 'update', requestId: request.id });
     requests[existingRequestIndex] = request;
   } else {
     // Add new request
-    console.log(`ESCORT STORAGE: Adding new escort request: ${request.id}`);
+    logger.info('Adding new escort request', { storage: 'Fallback', collection: 'escort_requests', operation: 'insert', requestId: request.id });
     requests.push(request);
   }
 
   fs.writeFileSync(escortRequestsFilePath, JSON.stringify(requests, null, 2), 'utf8');
-  console.log(`ESCORT STORAGE: Successfully saved escort requests to file, total count: ${requests.length}`);
+  logger.info('Successfully saved escort requests to file', { storage: 'Fallback', collection: 'escort_requests', totalCount: requests.length });
 }
 
 // Helper function to create appropriate ID filter for MongoDB queries
@@ -79,18 +80,18 @@ function createIdFilter(id: string) {
 
 // Escort Request storage API
 export async function getEscortRequestById(id: string): Promise<EscortRequestResponse | null> {
-  console.log(`ESCORT STORAGE: Getting escort request by ID: ${id}`);
+  logger.info('Getting escort request by ID', { collection: 'escort_requests', operation: 'getById', requestId: id });
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
     const request = await db.collection('escort_requests').findOne(filter);
 
     if (!request) {
-      console.log(`ESCORT STORAGE: Escort request not found in MongoDB: ${id}`);
+      logger.info('Escort request not found in MongoDB', { storage: 'MongoDB', collection: 'escort_requests', requestId: id });
       return null;
     }
 
@@ -120,45 +121,45 @@ export async function getEscortRequestById(id: string): Promise<EscortRequestRes
       updatedAt: request.updatedAt
     };
 
-    console.log(`ESCORT STORAGE: Found escort request in MongoDB: ${transformedRequest.id}`);
+    logger.info('Found escort request in MongoDB', { storage: 'MongoDB', collection: 'escort_requests', requestId: transformedRequest.id });
     return transformedRequest;
   } catch (error) {
-    console.error('ESCORT STORAGE: MongoDB getEscortRequestById failed:', error);
+    logger.error('MongoDB getEscortRequestById failed', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'escort_requests', requestId: id });
     throw new Error('Database connection failed: Cannot retrieve escort request data');
   }
 }
 
 export async function getAllEscortRequests(filters?: EscortRequestFilters): Promise<EscortRequestResponse[]> {
-  console.log('ESCORT STORAGE: Getting all escort requests');
+  logger.info('Getting all escort requests', { collection: 'escort_requests', operation: 'getAll' });
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Prepare query filter
     let query: any = {};
-    
+
     if (filters) {
       if (filters.status && filters.status !== 'all') {
         query.status = filters.status;
       }
-      
+
       if (filters.priority && filters.priority !== 'all') {
         query.priority = filters.priority;
       }
-      
+
       if (filters.assignedTo) {
         query.securityOfficerUserId = filters.assignedTo;
       }
-      
+
       if (filters.requestedBy) {
         query.requestedByUserId = filters.requestedBy;
       }
     }
-    
+
     // Get requests from MongoDB
     const requests = await db.collection('escort_requests').find(query).toArray();
-    
+
     // Transform to EscortRequestResponse objects
     const transformedRequests: EscortRequestResponse[] = requests.map(request => ({
       id: request._id.toString(),
@@ -184,24 +185,24 @@ export async function getAllEscortRequests(filters?: EscortRequestFilters): Prom
       createdAt: request.createdAt,
       updatedAt: request.updatedAt
     }));
-    
+
     // Sort by createdAt in descending order (newest first)
     transformedRequests.sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
       return dateB - dateA;
     });
-    
-    console.log(`ESCORT STORAGE: Found ${transformedRequests.length} escort requests after applying filters`);
+
+    logger.info('Found escort requests after applying filters', { storage: 'MongoDB', collection: 'escort_requests', count: transformedRequests.length });
     return transformedRequests;
   } catch (error) {
-    console.error('ESCORT STORAGE: MongoDB getAllEscortRequests failed:', error);
+    logger.error('MongoDB getAllEscortRequests failed', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'escort_requests' });
     throw new Error('Database connection failed: Cannot retrieve escort request data');
   }
 }
 
 export async function createEscortRequest(requestData: Omit<EscortRequestResponse, 'id' | 'createdAt' | 'updatedAt'>): Promise<EscortRequestResponse> {
-  console.log(`ESCORT STORAGE: Creating escort request for: ${requestData.requestedBy}`);
+  logger.info('Creating escort request', { collection: 'escort_requests', operation: 'create', requestedBy: requestData.requestedBy });
 
   try {
     // Connect to MongoDB
@@ -228,16 +229,16 @@ export async function createEscortRequest(requestData: Omit<EscortRequestRespons
       id: result.insertedId.toString()
     } as EscortRequestResponse;
 
-    console.log(`ESCORT STORAGE: Escort request created in MongoDB: ${createdRequest.id}`);
+    logger.info('Escort request created in MongoDB', { storage: 'MongoDB', collection: 'escort_requests', requestId: createdRequest.id });
     return createdRequest;
   } catch (error) {
-    console.error('ESCORT STORAGE: MongoDB createEscortRequest failed:', error);
+    logger.error('MongoDB createEscortRequest failed', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'escort_requests', requestedBy: requestData.requestedBy });
     throw new Error('Database connection failed: Cannot create escort request');
   }
 }
 
 export async function updateEscortRequest(id: string, requestData: Partial<EscortRequestResponse>, expectedVersion?: number): Promise<EscortRequestResponse | null> {
-  console.log(`ESCORT STORAGE: Updating escort request: ${id}`);
+  logger.info('Updating escort request', { collection: 'escort_requests', operation: 'update', requestId: id });
 
   try {
     // Connect to MongoDB
@@ -245,7 +246,7 @@ export async function updateEscortRequest(id: string, requestData: Partial<Escor
 
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
-    console.log(`ESCORT STORAGE: Using filter for update:`, filter);
+    logger.info('Using filter for update', { storage: 'MongoDB', collection: 'escort_requests', filter: JSON.stringify(filter) });
 
     // Build version filter for optimistic locking
     const versionFilter: Record<string, unknown> = {};
@@ -281,7 +282,7 @@ export async function updateEscortRequest(id: string, requestData: Partial<Escor
           throw new StaleDocumentError('escort_requests', id);
         }
       }
-      console.log(`ESCORT STORAGE: Escort request not found in MongoDB: ${id}`);
+      logger.info('Escort request not found in MongoDB', { storage: 'MongoDB', collection: 'escort_requests', requestId: id });
       return null;
     }
 
@@ -311,40 +312,40 @@ export async function updateEscortRequest(id: string, requestData: Partial<Escor
       updatedAt: result.updatedAt
     };
 
-    console.log(`ESCORT STORAGE: Escort request updated in MongoDB: ${updatedRequest?.id}`);
+    logger.info('Escort request updated in MongoDB', { storage: 'MongoDB', collection: 'escort_requests', requestId: updatedRequest?.id });
     return updatedRequest;
   } catch (error) {
     if (error instanceof StaleDocumentError) {
       throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
     }
-    console.error('ESCORT STORAGE: MongoDB updateEscortRequest failed:', error);
+    logger.error('MongoDB updateEscortRequest failed', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'escort_requests', requestId: id });
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Database connection failed: Cannot update escort request - ${errorMessage}`);
   }
 }
 
 export async function deleteEscortRequest(id: string): Promise<boolean> {
-  console.log(`ESCORT STORAGE: Deleting escort request: ${id}`);
+  logger.info('Deleting escort request', { collection: 'escort_requests', operation: 'delete', requestId: id });
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
-    
+
     // Delete request from database
     const result = await db.collection('escort_requests').deleteOne(filter);
-    
+
     if (result.deletedCount === 0) {
-      console.log(`ESCORT STORAGE: Escort request not found in MongoDB: ${id}`);
+      logger.info('Escort request not found in MongoDB', { storage: 'MongoDB', collection: 'escort_requests', requestId: id });
       return false;
     }
-    
-    console.log(`ESCORT STORAGE: Escort request deleted from MongoDB: ${id}`);
+
+    logger.info('Escort request deleted from MongoDB', { storage: 'MongoDB', collection: 'escort_requests', requestId: id });
     return true;
   } catch (error) {
-    console.error('ESCORT STORAGE: MongoDB deleteEscortRequest failed:', error);
+    logger.error('MongoDB deleteEscortRequest failed', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'escort_requests', requestId: id });
     throw new Error('Database connection failed: Cannot delete escort request');
   }
-} 
+}

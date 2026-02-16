@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { User } from '@/types/user';
+import { logger } from '@/lib/logger';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
@@ -19,7 +20,7 @@ function readUsers(): User[] {
     const data = fs.readFileSync(USERS_FILE, 'utf8');
     return JSON.parse(data);
   } catch (error) {
-    console.error('LOCAL_STORAGE: Error reading users file:', error);
+    logger.error('Error reading users file', error instanceof Error ? error : new Error(String(error)), { storage: 'LocalStorage', collection: 'users' });
     return [];
   }
 }
@@ -29,7 +30,7 @@ function writeUsers(users: User[]): void {
     ensureDataDir();
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
   } catch (error) {
-    console.error('LOCAL_STORAGE: Error writing users file:', error);
+    logger.error('Error writing users file', error instanceof Error ? error : new Error(String(error)), { storage: 'LocalStorage', collection: 'users' });
   }
 }
 
