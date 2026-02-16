@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import CornerAccents from '@/components/ui/mobiglas/CornerAccents';
 
 interface ShipSearchBarProps {
   value: string;
@@ -88,10 +89,7 @@ export default function ShipSearchBar({ value, onChange }: ShipSearchBarProps) {
       )}
 
       {/* Corner accents */}
-      <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)] pointer-events-none" />
-      <div className="absolute top-0 right-0 w-[6px] h-[6px] border-r border-t border-[rgba(var(--mg-primary),0.4)] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[6px] h-[6px] border-l border-b border-[rgba(var(--mg-primary),0.4)] pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-[6px] h-[6px] border-r border-b border-[rgba(var(--mg-primary),0.4)] pointer-events-none" />
+      <CornerAccents size="xs" color="primary" opacity="low" className="pointer-events-none" />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import UserFleetBuilderWrapper from '../UserFleetBuilderWrapper';
 import { UserShip } from '@/types/user';
 import { TIMEZONE_OPTIONS, detectUserTimezone } from '@/lib/timezone';
 import { MobiGlasButton, MobiGlasFormError } from '@/components/ui/mobiglas';
+import CornerAccents from '@/components/ui/mobiglas/CornerAccents';
 import { useShipBatch } from '@/hooks/useShipBatch';
 import ProfileShipCard from '@/components/ships/ProfileShipCard';
 
@@ -350,10 +351,7 @@ export default function UserProfileContent() {
           transition={{ duration: 0.5, delay: 0.1 }}
         >
           {/* Corner brackets */}
-          <div className="absolute top-0 left-0 w-5 h-5 border-l border-t border-[rgba(var(--mg-primary),0.5)]"></div>
-          <div className="absolute top-0 right-0 w-5 h-5 border-r border-t border-[rgba(var(--mg-primary),0.5)]"></div>
-          <div className="absolute bottom-0 left-0 w-5 h-5 border-l border-b border-[rgba(var(--mg-primary),0.5)]"></div>
-          <div className="absolute bottom-0 right-0 w-5 h-5 border-r border-b border-[rgba(var(--mg-primary),0.5)]"></div>
+          <CornerAccents size="md" color="primary" opacity="medium" />
 
           {/* Edit/Save Buttons */}
           <div className="flex justify-end mb-4">

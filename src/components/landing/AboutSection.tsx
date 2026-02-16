@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
 import { cdn } from '@/lib/cdn';
+import CornerAccents from '@/components/ui/mobiglas/CornerAccents';
 
 const aboutTabs = [
   {
@@ -103,10 +104,7 @@ export default function AboutSection() {
                     <div className="absolute inset-0 bg-gradient-to-t from-[rgba(0,0,0,0.7)] to-transparent"></div>
                     
                     {/* Corner decorations */}
-                    <div className="absolute top-0 left-0 w-6 h-6 border-l border-t border-[rgba(var(--mg-primary),0.6)]"></div>
-                    <div className="absolute top-0 right-0 w-6 h-6 border-r border-t border-[rgba(var(--mg-primary),0.6)]"></div>
-                    <div className="absolute bottom-0 left-0 w-6 h-6 border-l border-b border-[rgba(var(--mg-primary),0.6)]"></div>
-                    <div className="absolute bottom-0 right-0 w-6 h-6 border-r border-b border-[rgba(var(--mg-primary),0.6)]"></div>
+                    <CornerAccents size="md" color="primary" opacity="medium" />
                   </div>
                 </div>
                 
