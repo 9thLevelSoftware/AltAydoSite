@@ -5,6 +5,7 @@ import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';
 import * as userStorage from '@/lib/user-storage';
 import { StaleDocumentError } from './storage-errors';
+import { logger } from '@/lib/logger';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -16,33 +17,33 @@ let usingFallbackStorage = false;
 // Helper functions for local file storage
 export function ensureDataDir() {
   if (!fs.existsSync(dataDir)) {
-    console.log(`STORAGE: Creating data directory: ${dataDir}`);
+    logger.info('Creating data directory', { storage: 'Fallback', collection: 'mission-templates', path: dataDir });
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
   if (!fs.existsSync(missionTemplatesFilePath)) {
-    console.log(`STORAGE: Creating empty mission templates file: ${missionTemplatesFilePath}`);
+    logger.info('Creating empty mission templates file', { storage: 'Fallback', collection: 'mission-templates', path: missionTemplatesFilePath });
     fs.writeFileSync(missionTemplatesFilePath, JSON.stringify([]), 'utf8');
   }
 }
 
 export function getLocalMissionTemplates(): MissionTemplateResponse[] {
-  console.log('STORAGE: Reading mission templates from local storage');
+  logger.info('Reading mission templates from local storage', { storage: 'Fallback', collection: 'mission-templates', operation: 'read' });
   ensureDataDir();
 
   try {
     const data = fs.readFileSync(missionTemplatesFilePath, 'utf8');
     const templates = JSON.parse(data) as MissionTemplateResponse[];
-    console.log(`STORAGE: Found ${templates.length} mission templates in local storage`);
+    logger.info('Found mission templates in local storage', { storage: 'Fallback', collection: 'mission-templates', count: templates.length });
     return templates;
   } catch (error) {
-    console.error('STORAGE: Error reading mission templates file:', error);
+    logger.error('Error reading mission templates file', error instanceof Error ? error : new Error(String(error)), { storage: 'Fallback', collection: 'mission-templates' });
     return [];
   }
 }
 
 export function saveLocalMissionTemplate(template: MissionTemplateResponse): void {
-  console.log(`STORAGE: Saving mission template to local storage: ${template.name}`);
+  logger.info('Saving mission template to local storage', { storage: 'Fallback', collection: 'mission-templates', operation: 'save', templateName: template.name });
   ensureDataDir();
 
   const templates = getLocalMissionTemplates();
@@ -51,27 +52,27 @@ export function saveLocalMissionTemplate(template: MissionTemplateResponse): voi
   const existingTemplateIndex = templates.findIndex(t => t.id === template.id);
   if (existingTemplateIndex >= 0) {
     // Update existing template
-    console.log(`STORAGE: Updating existing mission template: ${template.name}`);
+    logger.info('Updating existing mission template', { storage: 'Fallback', collection: 'mission-templates', operation: 'update', templateName: template.name });
     templates[existingTemplateIndex] = template;
   } else {
     // Add new template
-    console.log(`STORAGE: Adding new mission template: ${template.name}`);
+    logger.info('Adding new mission template', { storage: 'Fallback', collection: 'mission-templates', operation: 'insert', templateName: template.name });
     templates.push(template);
   }
 
   fs.writeFileSync(missionTemplatesFilePath, JSON.stringify(templates, null, 2), 'utf8');
-  console.log(`STORAGE: Successfully saved mission templates to file, total count: ${templates.length}`);
+  logger.info('Successfully saved mission templates to file', { storage: 'Fallback', collection: 'mission-templates', totalCount: templates.length });
 }
 
 export function deleteLocalMissionTemplate(id: string): void {
-  console.log(`STORAGE: Deleting mission template from local storage: ${id}`);
+  logger.info('Deleting mission template from local storage', { storage: 'Fallback', collection: 'mission-templates', operation: 'delete', templateId: id });
   ensureDataDir();
 
   const templates = getLocalMissionTemplates();
   const filteredTemplates = templates.filter(t => t.id !== id);
 
   fs.writeFileSync(missionTemplatesFilePath, JSON.stringify(filteredTemplates, null, 2), 'utf8');
-  console.log(`STORAGE: Mission template deleted from local storage, remaining templates: ${filteredTemplates.length}`);
+  logger.info('Mission template deleted from local storage', { storage: 'Fallback', collection: 'mission-templates', remainingCount: filteredTemplates.length });
 }
 
 // MongoDB helper functions
@@ -81,7 +82,7 @@ function createIdFilter(id: string): any {
     return { _id: new ObjectId(id) };
   } catch (error) {
     // If conversion fails, it's not a valid ObjectId format
-    console.log(`ID ${id} is not a valid MongoDB ObjectId, using string ID filter`);
+    logger.info('ID is not a valid MongoDB ObjectId, using string ID filter', { collection: 'mission-templates', id });
     return { id: id };
   }
 }
@@ -107,61 +108,61 @@ function transformDbToResponse(dbTemplate: any): MissionTemplateResponse {
 
 // Mission Template storage API
 export async function getMissionTemplateById(id: string): Promise<MissionTemplateResponse | null> {
-  console.log(`STORAGE: Getting mission template by ID: ${id}`);
+  logger.info('Getting mission template by ID', { collection: 'mission-templates', operation: 'getById', templateId: id });
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
     const template = await db.collection('mission-templates').findOne(filter);
 
     if (!template) {
-      console.log(`STORAGE: Mission template not found in MongoDB: ${id}`);
+      logger.info('Mission template not found in MongoDB', { storage: 'MongoDB', collection: 'mission-templates', templateId: id });
       return null;
     }
 
     // Transform MongoDB document to MissionTemplateResponse
     const transformedTemplate = transformDbToResponse(template);
 
-    console.log(`STORAGE: Found mission template in MongoDB: ${transformedTemplate.name}`);
+    logger.info('Found mission template in MongoDB', { storage: 'MongoDB', collection: 'mission-templates', templateName: transformedTemplate.name });
     return transformedTemplate;
   } catch (error) {
-    console.error('STORAGE: MongoDB getMissionTemplateById failed, falling back to local:', error);
+    logger.error('MongoDB getMissionTemplateById failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'mission-templates', templateId: id });
     usingFallbackStorage = true;
     return getLocalMissionTemplates().find(t => t.id === id) || null;
   }
 }
 
-export async function getAllMissionTemplates(filters?: { 
-  createdBy?: string; 
-  operationType?: string; 
+export async function getAllMissionTemplates(filters?: {
+  createdBy?: string;
+  operationType?: string;
   primaryActivity?: string;
   userId?: string;
 }): Promise<MissionTemplateResponse[]> {
-  console.log('STORAGE: Getting all mission templates');
+  logger.info('Getting all mission templates', { collection: 'mission-templates', operation: 'getAll' });
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Prepare query filter
     let query: any = {};
-    
+
     if (filters) {
       if (filters.createdBy) {
         query.createdBy = filters.createdBy;
       }
-      
+
       if (filters.operationType && filters.operationType !== 'all') {
         query.operationType = filters.operationType;
       }
-      
+
       if (filters.primaryActivity && filters.primaryActivity !== 'all') {
         query.primaryActivity = filters.primaryActivity;
       }
-      
+
       // For userId filter, we'll show templates created by the user or public templates
       if (filters.userId) {
         query = {
@@ -172,26 +173,26 @@ export async function getAllMissionTemplates(filters?: {
         };
       }
     }
-    
+
     // Get mission templates from MongoDB
     const templates = await db.collection('mission-templates').find(query).toArray();
-    
+
     // Transform to MissionTemplateResponse objects
-    const transformedTemplates: MissionTemplateResponse[] = templates.map(template => 
+    const transformedTemplates: MissionTemplateResponse[] = templates.map(template =>
       transformDbToResponse(template)
     );
-    
+
     // Sort by createdAt in descending order (newest first)
     transformedTemplates.sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
       return dateB - dateA;
     });
-    
-    console.log(`STORAGE: Found ${transformedTemplates.length} mission templates after applying filters`);
+
+    logger.info('Found mission templates after applying filters', { storage: 'MongoDB', collection: 'mission-templates', count: transformedTemplates.length });
     return transformedTemplates;
   } catch (error) {
-    console.error('STORAGE: MongoDB getAllMissionTemplates failed, falling back to local:', error);
+    logger.error('MongoDB getAllMissionTemplates failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'mission-templates' });
     usingFallbackStorage = true;
     // Fallback: filter local templates
     let locals = getLocalMissionTemplates();
@@ -208,7 +209,7 @@ export async function getAllMissionTemplates(filters?: {
 }
 
 export async function createMissionTemplate(templateData: Omit<MissionTemplateResponse, 'id' | 'createdAt' | 'updatedAt'>): Promise<MissionTemplateResponse> {
-  console.log(`STORAGE: Creating mission template: ${templateData.name}`);
+  logger.info('Creating mission template', { collection: 'mission-templates', operation: 'create', templateName: templateData.name });
 
   try {
     // Connect to MongoDB
@@ -228,7 +229,7 @@ export async function createMissionTemplate(templateData: Omit<MissionTemplateRe
 
     const insertedId = (result as any)?.insertedId?.toString?.();
     if (!insertedId) {
-      console.warn('STORAGE: No insertedId returned by MongoDB insert, falling back to local');
+      logger.warn('No insertedId returned by MongoDB insert, falling back to local', { storage: 'MongoDB', collection: 'mission-templates' });
       usingFallbackStorage = true;
       const localTemplate: MissionTemplateResponse = {
         ...template,
@@ -244,10 +245,10 @@ export async function createMissionTemplate(templateData: Omit<MissionTemplateRe
       id: insertedId
     } as MissionTemplateResponse;
 
-    console.log(`STORAGE: Mission template created in MongoDB: ${createdTemplate.name} with ID: ${createdTemplate.id}`);
+    logger.info('Mission template created in MongoDB', { storage: 'MongoDB', collection: 'mission-templates', templateName: createdTemplate.name, templateId: createdTemplate.id });
     return createdTemplate;
   } catch (error) {
-    console.error('STORAGE: MongoDB createMissionTemplate failed, falling back to local:', error);
+    logger.error('MongoDB createMissionTemplate failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'mission-templates', templateName: templateData.name });
     usingFallbackStorage = true;
     const localTemplate: MissionTemplateResponse = {
       ...templateData,
@@ -261,7 +262,7 @@ export async function createMissionTemplate(templateData: Omit<MissionTemplateRe
 }
 
 export async function updateMissionTemplate(id: string, templateData: Partial<MissionTemplateResponse>, expectedVersion?: number): Promise<MissionTemplateResponse | null> {
-  console.log(`STORAGE: Updating mission template: ${id}`);
+  logger.info('Updating mission template', { collection: 'mission-templates', operation: 'update', templateId: id });
 
   try {
     // Connect to MongoDB
@@ -269,7 +270,7 @@ export async function updateMissionTemplate(id: string, templateData: Partial<Mi
 
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
-    console.log(`STORAGE: Using filter for update:`, filter);
+    logger.info('Using filter for update', { storage: 'MongoDB', collection: 'mission-templates', filter: JSON.stringify(filter) });
 
     // Build version filter for optimistic locking
     const versionFilter: Record<string, unknown> = {};
@@ -285,7 +286,7 @@ export async function updateMissionTemplate(id: string, templateData: Partial<Mi
     const { id: _id, _id: _mongoId, __v: _v, ...updateFields } = templateData as any;
 
     // Log the update data for debugging
-    console.log(`STORAGE: Update data prepared:`, JSON.stringify(updateFields, null, 2).substring(0, 200) + '...');
+    logger.info('Update data prepared', { storage: 'MongoDB', collection: 'mission-templates', updateDataPreview: JSON.stringify(updateFields).substring(0, 200) + '...' });
 
     // Update template in database with optimistic locking
     const result = await db.collection('mission-templates').findOneAndUpdate(
@@ -308,19 +309,19 @@ export async function updateMissionTemplate(id: string, templateData: Partial<Mi
           throw new StaleDocumentError('mission-templates', id);
         }
       }
-      console.log(`STORAGE: Mission template not found in MongoDB: ${id}`);
+      logger.info('Mission template not found in MongoDB', { storage: 'MongoDB', collection: 'mission-templates', templateId: id });
       return null;
     }
 
     // Transform to MissionTemplateResponse
     const updatedTemplate = transformDbToResponse(result);
-    console.log(`STORAGE: Mission template updated in MongoDB: ${updatedTemplate?.name}`);
+    logger.info('Mission template updated in MongoDB', { storage: 'MongoDB', collection: 'mission-templates', templateName: updatedTemplate?.name });
     return updatedTemplate;
   } catch (error: unknown) {
     if (error instanceof StaleDocumentError) {
       throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
     }
-    console.error('STORAGE: MongoDB updateMissionTemplate failed, falling back to local:', error);
+    logger.error('MongoDB updateMissionTemplate failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'mission-templates', templateId: id });
     usingFallbackStorage = true;
     const templates = getLocalMissionTemplates();
     const existing = templates.find(t => t.id === id);
@@ -337,27 +338,27 @@ export async function updateMissionTemplate(id: string, templateData: Partial<Mi
 }
 
 export async function deleteMissionTemplate(id: string): Promise<boolean> {
-  console.log(`STORAGE: Deleting mission template: ${id}`);
+  logger.info('Deleting mission template', { collection: 'mission-templates', operation: 'delete', templateId: id });
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
-    
+
     // Delete template from database
     const result = await db.collection('mission-templates').deleteOne(filter);
-    
+
     if (result.deletedCount === 0) {
-      console.log(`STORAGE: Mission template not found in MongoDB: ${id}`);
+      logger.info('Mission template not found in MongoDB', { storage: 'MongoDB', collection: 'mission-templates', templateId: id });
       return false;
     }
-    
-    console.log(`STORAGE: Mission template deleted from MongoDB: ${id}`);
+
+    logger.info('Mission template deleted from MongoDB', { storage: 'MongoDB', collection: 'mission-templates', templateId: id });
     return true;
   } catch (error) {
-    console.error('STORAGE: MongoDB deleteMissionTemplate failed, falling back to local:', error);
+    logger.error('MongoDB deleteMissionTemplate failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'mission-templates', templateId: id });
     usingFallbackStorage = true;
     const before = getLocalMissionTemplates();
     const existed = before.some(t => t.id === id);
@@ -373,18 +374,18 @@ export async function canUserAccessTemplate(userId: string, templateId: string):
     if (!template) {
       return false;
     }
-    
+
     // Users can access their own templates
     if (template.createdBy === userId) {
       return true;
     }
-    
+
     // Users with clearance >= 2 can access all templates; others can only access their own
     const user = await userStorage.getUserById(userId);
     if (!user) return false;
     return user.clearanceLevel >= 2;
   } catch (error) {
-    console.error('STORAGE: Error checking template access:', error);
+    logger.error('Error checking template access', error instanceof Error ? error : new Error(String(error)), { collection: 'mission-templates', userId, templateId });
     return false;
   }
 }
@@ -395,11 +396,11 @@ export async function canUserModifyTemplate(userId: string, templateId: string):
     if (!template) {
       return false;
     }
-    
+
     // Users can only modify their own templates
     return template.createdBy === userId;
   } catch (error) {
-    console.error('STORAGE: Error checking template modification access:', error);
+    logger.error('Error checking template modification access', error instanceof Error ? error : new Error(String(error)), { collection: 'mission-templates', userId, templateId });
     return false;
   }
 }
@@ -410,11 +411,11 @@ export async function canUserDeleteTemplate(userId: string, templateId: string):
     if (!template) {
       return false;
     }
-    
+
     // Users can only delete their own templates
     return template.createdBy === userId;
   } catch (error) {
-    console.error('STORAGE: Error checking template deletion access:', error);
+    logger.error('Error checking template deletion access', error instanceof Error ? error : new Error(String(error)), { collection: 'mission-templates', userId, templateId });
     return false;
   }
 }

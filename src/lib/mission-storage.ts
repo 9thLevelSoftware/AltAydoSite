@@ -6,6 +6,7 @@ import { shouldUseMongoDb } from './storage-utils';
 import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';
 import { StaleDocumentError } from './storage-errors';
+import { logger } from '@/lib/logger';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -17,33 +18,33 @@ let usingFallbackStorage = false;
 // Helper functions for local file storage
 function ensureDataDir() {
   if (!fs.existsSync(dataDir)) {
-    console.log(`STORAGE: Creating data directory: ${dataDir}`);
+    logger.info('Creating data directory', { storage: 'Fallback', collection: 'missions', path: dataDir });
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
   if (!fs.existsSync(missionsFilePath)) {
-    console.log(`STORAGE: Creating empty missions file: ${missionsFilePath}`);
+    logger.info('Creating empty missions file', { storage: 'Fallback', collection: 'missions', path: missionsFilePath });
     fs.writeFileSync(missionsFilePath, JSON.stringify([]), 'utf8');
   }
 }
 
 function getLocalMissions(): MissionResponse[] {
-  console.log('STORAGE: Reading missions from local storage');
+  logger.info('Reading missions from local storage', { storage: 'Fallback', collection: 'missions', operation: 'read' });
   ensureDataDir();
 
   try {
     const data = fs.readFileSync(missionsFilePath, 'utf8');
     const missions = JSON.parse(data) as MissionResponse[];
-    console.log(`STORAGE: Found ${missions.length} missions in local storage`);
+    logger.info('Found missions in local storage', { storage: 'Fallback', collection: 'missions', count: missions.length });
     return missions;
   } catch (error) {
-    console.error('STORAGE: Error reading missions file:', error);
+    logger.error('Error reading missions file', error instanceof Error ? error : new Error(String(error)), { storage: 'Fallback', collection: 'missions' });
     return [];
   }
 }
 
 function saveLocalMission(mission: MissionResponse): void {
-  console.log(`STORAGE: Saving mission to local storage: ${mission.name}`);
+  logger.info('Saving mission to local storage', { storage: 'Fallback', collection: 'missions', operation: 'save', missionName: mission.name });
   ensureDataDir();
 
   const missions = getLocalMissions();
@@ -52,27 +53,27 @@ function saveLocalMission(mission: MissionResponse): void {
   const existingMissionIndex = missions.findIndex(m => m.id === mission.id);
   if (existingMissionIndex >= 0) {
     // Update existing mission
-    console.log(`STORAGE: Updating existing mission: ${mission.name}`);
+    logger.info('Updating existing mission', { storage: 'Fallback', collection: 'missions', operation: 'update', missionName: mission.name });
     missions[existingMissionIndex] = mission;
   } else {
     // Add new mission
-    console.log(`STORAGE: Adding new mission: ${mission.name}`);
+    logger.info('Adding new mission', { storage: 'Fallback', collection: 'missions', operation: 'insert', missionName: mission.name });
     missions.push(mission);
   }
 
   fs.writeFileSync(missionsFilePath, JSON.stringify(missions, null, 2), 'utf8');
-  console.log(`STORAGE: Successfully saved missions to file, total count: ${missions.length}`);
+  logger.info('Successfully saved missions to file', { storage: 'Fallback', collection: 'missions', totalCount: missions.length });
 }
 
 function deleteLocalMission(id: string): void {
-  console.log(`STORAGE: Deleting mission from local storage: ${id}`);
+  logger.info('Deleting mission from local storage', { storage: 'Fallback', collection: 'missions', operation: 'delete', missionId: id });
   ensureDataDir();
 
   const missions = getLocalMissions();
   const filteredMissions = missions.filter(m => m.id !== id);
 
   fs.writeFileSync(missionsFilePath, JSON.stringify(filteredMissions, null, 2), 'utf8');
-  console.log(`STORAGE: Mission deleted from local storage, remaining missions: ${filteredMissions.length}`);
+  logger.info('Mission deleted from local storage', { storage: 'Fallback', collection: 'missions', remainingCount: filteredMissions.length });
 }
 
 // MongoDB helper functions
@@ -90,25 +91,25 @@ function createIdFilter(id: string): any {
     return { _id: new ObjectId(id) };
   } catch (error) {
     // If conversion fails, it's not a valid ObjectId format
-    console.log(`ID ${id} is not a valid MongoDB ObjectId, using string ID filter`);
+    logger.info('ID is not a valid MongoDB ObjectId, using string ID filter', { collection: 'missions', id });
     return { id: id };
   }
 }
 
 // Mission storage API
 export async function getMissionById(id: string): Promise<MissionResponse | null> {
-  console.log(`STORAGE: Getting mission by ID: ${id}`);
+  logger.info('Getting mission by ID', { collection: 'missions', operation: 'getById', missionId: id });
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
     const mission = await db.collection('missions').findOne(filter);
 
     if (!mission) {
-      console.log(`STORAGE: Mission not found in MongoDB: ${id}`);
+      logger.info('Mission not found in MongoDB', { storage: 'MongoDB', collection: 'missions', missionId: id });
       return null;
     }
 
@@ -130,33 +131,33 @@ export async function getMissionById(id: string): Promise<MissionResponse | null
       updatedAt: mission.updatedAt
     };
 
-    console.log(`STORAGE: Found mission in MongoDB: ${transformedMission.name}`);
+    logger.info('Found mission in MongoDB', { storage: 'MongoDB', collection: 'missions', missionName: transformedMission.name });
     return transformedMission;
   } catch (error) {
-    console.error('STORAGE: MongoDB getMissionById failed:', error);
+    logger.error('MongoDB getMissionById failed', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'missions', missionId: id });
     throw new Error('Database connection failed: Cannot retrieve mission data');
   }
 }
 
 export async function getAllMissions(filters?: { status?: string; leaderId?: string; userId?: string }): Promise<MissionResponse[]> {
-  console.log('STORAGE: Getting all missions');
+  logger.info('Getting all missions', { collection: 'missions', operation: 'getAll' });
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Prepare query filter
     let query: any = {};
-    
+
     if (filters) {
       if (filters.status && filters.status !== 'all') {
         query.status = filters.status;
       }
-      
+
       if (filters.leaderId) {
         query.leaderId = filters.leaderId;
       }
-      
+
       if (filters.userId) {
         query = {
           $or: [
@@ -166,10 +167,10 @@ export async function getAllMissions(filters?: { status?: string; leaderId?: str
         };
       }
     }
-    
+
     // Get missions from MongoDB
     const missions = await db.collection('missions').find(query).toArray();
-    
+
     // Transform to MissionResponse objects
     const transformedMissions: MissionResponse[] = missions.map(mission => ({
       id: mission._id.toString(),
@@ -187,24 +188,24 @@ export async function getAllMissions(filters?: { status?: string; leaderId?: str
       createdAt: mission.createdAt,
       updatedAt: mission.updatedAt
     }));
-    
+
     // Sort by scheduledDateTime in descending order
     transformedMissions.sort((a, b) => {
       const dateA = new Date(a.scheduledDateTime).getTime();
       const dateB = new Date(b.scheduledDateTime).getTime();
       return dateB - dateA;
     });
-    
-    console.log(`STORAGE: Found ${transformedMissions.length} missions after applying filters`);
+
+    logger.info('Found missions after applying filters', { storage: 'MongoDB', collection: 'missions', count: transformedMissions.length });
     return transformedMissions;
   } catch (error) {
-    console.error('STORAGE: MongoDB getAllMissions failed:', error);
+    logger.error('MongoDB getAllMissions failed', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'missions' });
     throw new Error('Database connection failed: Cannot retrieve mission data');
   }
 }
 
 export async function createMission(missionData: Omit<MissionResponse, 'id' | 'createdAt' | 'updatedAt'>): Promise<MissionResponse> {
-  console.log(`STORAGE: Creating mission: ${missionData.name}`);
+  logger.info('Creating mission', { collection: 'missions', operation: 'create', missionName: missionData.name });
 
   try {
     // Connect to MongoDB
@@ -231,16 +232,16 @@ export async function createMission(missionData: Omit<MissionResponse, 'id' | 'c
       id: result.insertedId.toString()
     } as MissionResponse;
 
-    console.log(`STORAGE: Mission created in MongoDB: ${createdMission.name} with ID: ${createdMission.id}`);
+    logger.info('Mission created in MongoDB', { storage: 'MongoDB', collection: 'missions', missionName: createdMission.name, missionId: createdMission.id });
     return createdMission;
   } catch (error) {
-    console.error('STORAGE: MongoDB createMission failed:', error);
+    logger.error('MongoDB createMission failed', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'missions', missionName: missionData.name });
     throw new Error('Database connection failed: Cannot create mission');
   }
 }
 
 export async function updateMission(id: string, missionData: Partial<MissionResponse>, expectedVersion?: number): Promise<MissionResponse | null> {
-  console.log(`STORAGE: Updating mission: ${id}`);
+  logger.info('Updating mission', { collection: 'missions', operation: 'update', missionId: id });
 
   try {
     // Connect to MongoDB
@@ -248,7 +249,7 @@ export async function updateMission(id: string, missionData: Partial<MissionResp
 
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
-    console.log(`STORAGE: Using filter for update:`, filter);
+    logger.info('Using filter for update', { storage: 'MongoDB', collection: 'missions', filter: JSON.stringify(filter) });
 
     // Build version filter for optimistic locking
     const versionFilter: Record<string, unknown> = {};
@@ -264,7 +265,7 @@ export async function updateMission(id: string, missionData: Partial<MissionResp
     const { id: _id, _id: _mongoId, __v: _v, ...updateFields } = missionData as any;
 
     // Log the update data for debugging
-    console.log(`STORAGE: Update data prepared:`, JSON.stringify(updateFields, null, 2).substring(0, 200) + '...');
+    logger.info('Update data prepared', { storage: 'MongoDB', collection: 'missions', updateDataPreview: JSON.stringify(updateFields).substring(0, 200) + '...' });
 
     try {
       // Update mission in database with optimistic locking
@@ -288,7 +289,7 @@ export async function updateMission(id: string, missionData: Partial<MissionResp
             throw new StaleDocumentError('missions', id);
           }
         }
-        console.log(`STORAGE: Mission not found in MongoDB: ${id}`);
+        logger.info('Mission not found in MongoDB', { storage: 'MongoDB', collection: 'missions', missionId: id });
         return null;
       }
 
@@ -310,13 +311,13 @@ export async function updateMission(id: string, missionData: Partial<MissionResp
         updatedAt: result.updatedAt
       };
 
-      console.log(`STORAGE: Mission updated in MongoDB: ${updatedMission?.name}`);
+      logger.info('Mission updated in MongoDB', { storage: 'MongoDB', collection: 'missions', missionName: updatedMission?.name });
       return updatedMission;
     } catch (updateError: unknown) {
       if (updateError instanceof StaleDocumentError) {
         throw updateError;
       }
-      console.error('STORAGE: MongoDB update operation failed:', updateError);
+      logger.error('MongoDB update operation failed', updateError instanceof Error ? updateError : new Error(String(updateError)), { storage: 'MongoDB', collection: 'missions', missionId: id });
       const errorMsg = updateError instanceof Error ? updateError.message : 'Unknown update error';
       throw new Error(`Database update operation failed: ${errorMsg}`);
     }
@@ -324,11 +325,11 @@ export async function updateMission(id: string, missionData: Partial<MissionResp
     if (error instanceof StaleDocumentError) {
       throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
     }
-    console.error('STORAGE: MongoDB updateMission failed:', error);
+    logger.error('MongoDB updateMission failed', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'missions', missionId: id });
 
     // Try to provide more specific error messages
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.log(`STORAGE: Falling back to local storage due to error: ${errorMessage}`);
+    logger.info('Falling back to local storage due to error', { storage: 'MongoDB', collection: 'missions', errorMessage });
 
     // Optional: Implement fallback to local storage here if needed
 
@@ -337,27 +338,27 @@ export async function updateMission(id: string, missionData: Partial<MissionResp
 }
 
 export async function deleteMission(id: string): Promise<boolean> {
-  console.log(`STORAGE: Deleting mission: ${id}`);
+  logger.info('Deleting mission', { collection: 'missions', operation: 'delete', missionId: id });
 
   try {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
-    
+
     // Create a filter that works with the ID format
     const filter = createIdFilter(id);
-    
+
     // Delete mission from database
     const result = await db.collection('missions').deleteOne(filter);
-    
+
     if (result.deletedCount === 0) {
-      console.log(`STORAGE: Mission not found in MongoDB: ${id}`);
+      logger.info('Mission not found in MongoDB', { storage: 'MongoDB', collection: 'missions', missionId: id });
       return false;
     }
-    
-    console.log(`STORAGE: Mission deleted from MongoDB: ${id}`);
+
+    logger.info('Mission deleted from MongoDB', { storage: 'MongoDB', collection: 'missions', missionId: id });
     return true;
   } catch (error) {
-    console.error('STORAGE: MongoDB deleteMission failed:', error);
+    logger.error('MongoDB deleteMission failed', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'missions', missionId: id });
     throw new Error('Database connection failed: Cannot delete mission');
   }
 }

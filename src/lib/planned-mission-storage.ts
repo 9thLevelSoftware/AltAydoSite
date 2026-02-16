@@ -4,6 +4,7 @@ import path from 'path';
 import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';
 import { StaleDocumentError } from './storage-errors';
+import { logger } from '@/lib/logger';
 
 // File storage paths
 const dataDir = path.join(process.cwd(), 'data');
@@ -15,33 +16,33 @@ let usingFallbackStorage = false;
 // Helper functions for local file storage
 export function ensureDataDir() {
   if (!fs.existsSync(dataDir)) {
-    console.log(`STORAGE: Creating data directory: ${dataDir}`);
+    logger.info('Creating data directory', { storage: 'Fallback', collection: 'planned-missions', path: dataDir });
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
   if (!fs.existsSync(plannedMissionsFilePath)) {
-    console.log(`STORAGE: Creating empty planned missions file: ${plannedMissionsFilePath}`);
+    logger.info('Creating empty planned missions file', { storage: 'Fallback', collection: 'planned-missions', path: plannedMissionsFilePath });
     fs.writeFileSync(plannedMissionsFilePath, JSON.stringify([]), 'utf8');
   }
 }
 
 export function getLocalPlannedMissions(): PlannedMissionResponse[] {
-  console.log('STORAGE: Reading planned missions from local storage');
+  logger.info('Reading planned missions from local storage', { storage: 'Fallback', collection: 'planned-missions', operation: 'read' });
   ensureDataDir();
 
   try {
     const data = fs.readFileSync(plannedMissionsFilePath, 'utf8');
     const missions = JSON.parse(data) as PlannedMissionResponse[];
-    console.log(`STORAGE: Found ${missions.length} planned missions in local storage`);
+    logger.info('Found planned missions in local storage', { storage: 'Fallback', collection: 'planned-missions', count: missions.length });
     return missions;
   } catch (error) {
-    console.error('STORAGE: Error reading planned missions file:', error);
+    logger.error('Error reading planned missions file', error instanceof Error ? error : new Error(String(error)), { storage: 'Fallback', collection: 'planned-missions' });
     return [];
   }
 }
 
 export function saveLocalPlannedMission(mission: PlannedMissionResponse): void {
-  console.log(`STORAGE: Saving planned mission to local storage: ${mission.name}`);
+  logger.info('Saving planned mission to local storage', { storage: 'Fallback', collection: 'planned-missions', operation: 'save', missionName: mission.name });
   ensureDataDir();
 
   const missions = getLocalPlannedMissions();
@@ -49,26 +50,26 @@ export function saveLocalPlannedMission(mission: PlannedMissionResponse): void {
   // Check if mission already exists
   const existingIndex = missions.findIndex(m => m.id === mission.id);
   if (existingIndex >= 0) {
-    console.log(`STORAGE: Updating existing planned mission: ${mission.name}`);
+    logger.info('Updating existing planned mission', { storage: 'Fallback', collection: 'planned-missions', operation: 'update', missionName: mission.name });
     missions[existingIndex] = mission;
   } else {
-    console.log(`STORAGE: Adding new planned mission: ${mission.name}`);
+    logger.info('Adding new planned mission', { storage: 'Fallback', collection: 'planned-missions', operation: 'insert', missionName: mission.name });
     missions.push(mission);
   }
 
   fs.writeFileSync(plannedMissionsFilePath, JSON.stringify(missions, null, 2), 'utf8');
-  console.log(`STORAGE: Successfully saved planned missions to file, total count: ${missions.length}`);
+  logger.info('Successfully saved planned missions to file', { storage: 'Fallback', collection: 'planned-missions', totalCount: missions.length });
 }
 
 export function deleteLocalPlannedMission(id: string): void {
-  console.log(`STORAGE: Deleting planned mission from local storage: ${id}`);
+  logger.info('Deleting planned mission from local storage', { storage: 'Fallback', collection: 'planned-missions', operation: 'delete', missionId: id });
   ensureDataDir();
 
   const missions = getLocalPlannedMissions();
   const filteredMissions = missions.filter(m => m.id !== id);
 
   fs.writeFileSync(plannedMissionsFilePath, JSON.stringify(filteredMissions, null, 2), 'utf8');
-  console.log(`STORAGE: Planned mission deleted from local storage, remaining missions: ${filteredMissions.length}`);
+  logger.info('Planned mission deleted from local storage', { storage: 'Fallback', collection: 'planned-missions', remainingCount: filteredMissions.length });
 }
 
 // MongoDB helper functions
@@ -76,7 +77,7 @@ function createIdFilter(id: string): any {
   try {
     return { _id: new ObjectId(id) };
   } catch (error) {
-    console.log(`ID ${id} is not a valid MongoDB ObjectId, using string ID filter`);
+    logger.info('ID is not a valid MongoDB ObjectId, using string ID filter', { collection: 'planned-missions', id });
     return { id: id };
   }
 }
@@ -114,7 +115,7 @@ function transformDbToResponse(dbMission: any): PlannedMissionResponse {
 
 // Planned Mission storage API
 export async function getPlannedMissionById(id: string): Promise<PlannedMissionResponse | null> {
-  console.log(`STORAGE: Getting planned mission by ID: ${id}`);
+  logger.info('Getting planned mission by ID', { collection: 'planned-missions', operation: 'getById', missionId: id });
 
   try {
     const { db } = await connectToDatabase();
@@ -122,15 +123,15 @@ export async function getPlannedMissionById(id: string): Promise<PlannedMissionR
     const mission = await db.collection('planned-missions').findOne(filter);
 
     if (!mission) {
-      console.log(`STORAGE: Planned mission not found in MongoDB: ${id}`);
+      logger.info('Planned mission not found in MongoDB', { storage: 'MongoDB', collection: 'planned-missions', missionId: id });
       return null;
     }
 
     const transformedMission = transformDbToResponse(mission);
-    console.log(`STORAGE: Found planned mission in MongoDB: ${transformedMission.name}`);
+    logger.info('Found planned mission in MongoDB', { storage: 'MongoDB', collection: 'planned-missions', missionName: transformedMission.name });
     return transformedMission;
   } catch (error) {
-    console.error('STORAGE: MongoDB getPlannedMissionById failed, falling back to local:', error);
+    logger.error('MongoDB getPlannedMissionById failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'planned-missions', missionId: id });
     usingFallbackStorage = true;
     return getLocalPlannedMissions().find(m => m.id === id) || null;
   }
@@ -144,7 +145,7 @@ export async function getAllPlannedMissions(filters?: {
   fromDate?: string;
   toDate?: string;
 }): Promise<PlannedMissionResponse[]> {
-  console.log('STORAGE: Getting all planned missions');
+  logger.info('Getting all planned missions', { collection: 'planned-missions', operation: 'getAll' });
 
   try {
     const { db } = await connectToDatabase();
@@ -193,10 +194,10 @@ export async function getAllPlannedMissions(filters?: {
       return dateA - dateB;
     });
 
-    console.log(`STORAGE: Found ${transformedMissions.length} planned missions after applying filters`);
+    logger.info('Found planned missions after applying filters', { storage: 'MongoDB', collection: 'planned-missions', count: transformedMissions.length });
     return transformedMissions;
   } catch (error) {
-    console.error('STORAGE: MongoDB getAllPlannedMissions failed, falling back to local:', error);
+    logger.error('MongoDB getAllPlannedMissions failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'planned-missions' });
     usingFallbackStorage = true;
 
     let locals = getLocalPlannedMissions();
@@ -232,7 +233,7 @@ export async function getAllPlannedMissionsPaginated(
     toDate?: string;
   }
 ): Promise<PaginatedMissionsResult> {
-  console.log(`STORAGE: Getting paginated planned missions (page=${page}, pageSize=${pageSize})`);
+  logger.info('Getting paginated planned missions', { collection: 'planned-missions', operation: 'getPaginated', page, pageSize });
 
   try {
     const { db } = await connectToDatabase();
@@ -261,10 +262,10 @@ export async function getAllPlannedMissionsPaginated(
 
     const missions = docs.map(doc => transformDbToResponse(doc));
 
-    console.log(`STORAGE: Found ${missions.length} of ${total} planned missions (page ${page})`);
+    logger.info('Found paginated planned missions', { storage: 'MongoDB', collection: 'planned-missions', count: missions.length, total, page });
     return { missions, total, page, pageSize };
   } catch (error) {
-    console.error('STORAGE: MongoDB getAllPlannedMissionsPaginated failed, falling back to local:', error);
+    logger.error('MongoDB getAllPlannedMissionsPaginated failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'planned-missions' });
     usingFallbackStorage = true;
 
     let locals = getLocalPlannedMissions();
@@ -285,7 +286,7 @@ export async function getAllPlannedMissionsPaginated(
 }
 
 export async function getUpcomingPlannedMissions(limit: number = 10): Promise<PlannedMissionResponse[]> {
-  console.log(`STORAGE: Getting upcoming planned missions (limit: ${limit})`);
+  logger.info('Getting upcoming planned missions', { collection: 'planned-missions', operation: 'getUpcoming', limit });
 
   try {
     const { db } = await connectToDatabase();
@@ -304,10 +305,10 @@ export async function getUpcomingPlannedMissions(limit: number = 10): Promise<Pl
       transformDbToResponse(mission)
     );
 
-    console.log(`STORAGE: Found ${transformedMissions.length} upcoming planned missions`);
+    logger.info('Found upcoming planned missions', { storage: 'MongoDB', collection: 'planned-missions', count: transformedMissions.length });
     return transformedMissions;
   } catch (error) {
-    console.error('STORAGE: MongoDB getUpcomingPlannedMissions failed, falling back to local:', error);
+    logger.error('MongoDB getUpcomingPlannedMissions failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'planned-missions' });
     usingFallbackStorage = true;
 
     const now = new Date().toISOString();
@@ -319,7 +320,7 @@ export async function getUpcomingPlannedMissions(limit: number = 10): Promise<Pl
 }
 
 export async function createPlannedMission(missionData: Omit<PlannedMissionResponse, 'id' | 'createdAt' | 'updatedAt'>): Promise<PlannedMissionResponse> {
-  console.log(`STORAGE: Creating planned mission: ${missionData.name}`);
+  logger.info('Creating planned mission', { collection: 'planned-missions', operation: 'create', missionName: missionData.name });
 
   try {
     const { db } = await connectToDatabase();
@@ -336,7 +337,7 @@ export async function createPlannedMission(missionData: Omit<PlannedMissionRespo
 
     const insertedId = (result as any)?.insertedId?.toString?.();
     if (!insertedId) {
-      console.warn('STORAGE: No insertedId returned by MongoDB insert, falling back to local');
+      logger.warn('No insertedId returned by MongoDB insert, falling back to local', { storage: 'MongoDB', collection: 'planned-missions' });
       usingFallbackStorage = true;
       const localMission: PlannedMissionResponse = {
         ...mission,
@@ -351,10 +352,10 @@ export async function createPlannedMission(missionData: Omit<PlannedMissionRespo
       id: insertedId
     } as PlannedMissionResponse;
 
-    console.log(`STORAGE: Planned mission created in MongoDB: ${createdMission.name} with ID: ${createdMission.id}`);
+    logger.info('Planned mission created in MongoDB', { storage: 'MongoDB', collection: 'planned-missions', missionName: createdMission.name, missionId: createdMission.id });
     return createdMission;
   } catch (error) {
-    console.error('STORAGE: MongoDB createPlannedMission failed, falling back to local:', error);
+    logger.error('MongoDB createPlannedMission failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'planned-missions', missionName: missionData.name });
     usingFallbackStorage = true;
     const localMission: PlannedMissionResponse = {
       ...missionData,
@@ -368,7 +369,7 @@ export async function createPlannedMission(missionData: Omit<PlannedMissionRespo
 }
 
 export async function updatePlannedMission(id: string, missionData: Partial<PlannedMissionResponse>, expectedVersion?: number): Promise<PlannedMissionResponse | null> {
-  console.log(`STORAGE: Updating planned mission: ${id}`);
+  logger.info('Updating planned mission', { collection: 'planned-missions', operation: 'update', missionId: id });
 
   try {
     const { db } = await connectToDatabase();
@@ -408,18 +409,18 @@ export async function updatePlannedMission(id: string, missionData: Partial<Plan
           throw new StaleDocumentError('planned-missions', id);
         }
       }
-      console.log(`STORAGE: Planned mission not found in MongoDB: ${id}`);
+      logger.info('Planned mission not found in MongoDB', { storage: 'MongoDB', collection: 'planned-missions', missionId: id });
       return null;
     }
 
     const updatedMission = transformDbToResponse(result);
-    console.log(`STORAGE: Planned mission updated in MongoDB: ${updatedMission?.name}`);
+    logger.info('Planned mission updated in MongoDB', { storage: 'MongoDB', collection: 'planned-missions', missionName: updatedMission?.name });
     return updatedMission;
   } catch (error: unknown) {
     if (error instanceof StaleDocumentError) {
       throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
     }
-    console.error('STORAGE: MongoDB updatePlannedMission failed, falling back to local:', error);
+    logger.error('MongoDB updatePlannedMission failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'planned-missions', missionId: id });
     usingFallbackStorage = true;
     const missions = getLocalPlannedMissions();
     const existing = missions.find(m => m.id === id);
@@ -436,7 +437,7 @@ export async function updatePlannedMission(id: string, missionData: Partial<Plan
 }
 
 export async function deletePlannedMission(id: string): Promise<boolean> {
-  console.log(`STORAGE: Deleting planned mission: ${id}`);
+  logger.info('Deleting planned mission', { collection: 'planned-missions', operation: 'delete', missionId: id });
 
   try {
     const { db } = await connectToDatabase();
@@ -444,14 +445,14 @@ export async function deletePlannedMission(id: string): Promise<boolean> {
     const result = await db.collection('planned-missions').deleteOne(filter);
 
     if (result.deletedCount === 0) {
-      console.log(`STORAGE: Planned mission not found in MongoDB: ${id}`);
+      logger.info('Planned mission not found in MongoDB', { storage: 'MongoDB', collection: 'planned-missions', missionId: id });
       return false;
     }
 
-    console.log(`STORAGE: Planned mission deleted from MongoDB: ${id}`);
+    logger.info('Planned mission deleted from MongoDB', { storage: 'MongoDB', collection: 'planned-missions', missionId: id });
     return true;
   } catch (error) {
-    console.error('STORAGE: MongoDB deletePlannedMission failed, falling back to local:', error);
+    logger.error('MongoDB deletePlannedMission failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'planned-missions', missionId: id });
     usingFallbackStorage = true;
     const before = getLocalPlannedMissions();
     const existed = before.some(m => m.id === id);
@@ -480,7 +481,7 @@ export async function canUserAccessMission(userId: string, missionId: string): P
     // All users can view planned missions
     return true;
   } catch (error) {
-    console.error('STORAGE: Error checking mission access:', error);
+    logger.error('Error checking mission access', error instanceof Error ? error : new Error(String(error)), { collection: 'planned-missions', userId, missionId });
     return false;
   }
 }
@@ -501,7 +502,7 @@ export async function canUserModifyMission(userId: string, missionId: string): P
     const isLeader = mission.leaders.some(leader => leader.userId === userId);
     return isLeader;
   } catch (error) {
-    console.error('STORAGE: Error checking mission modification access:', error);
+    logger.error('Error checking mission modification access', error instanceof Error ? error : new Error(String(error)), { collection: 'planned-missions', userId, missionId });
     return false;
   }
 }
@@ -516,7 +517,7 @@ export async function canUserDeleteMission(userId: string, missionId: string): P
     // Only creator can delete
     return mission.createdBy === userId;
   } catch (error) {
-    console.error('STORAGE: Error checking mission deletion access:', error);
+    logger.error('Error checking mission deletion access', error instanceof Error ? error : new Error(String(error)), { collection: 'planned-missions', userId, missionId });
     return false;
   }
 }
@@ -529,13 +530,13 @@ export function isUsingFallbackStorage(): boolean {
 
 // Update expected participants (from Discord RSVPs)
 export async function updateExpectedParticipants(id: string, participants: ExpectedParticipant[]): Promise<PlannedMissionResponse | null> {
-  console.log(`STORAGE: Updating expected participants for mission: ${id}`);
+  logger.info('Updating expected participants for mission', { collection: 'planned-missions', operation: 'updateExpectedParticipants', missionId: id });
   return updatePlannedMission(id, { expectedParticipants: participants });
 }
 
 // Add a confirmed participant (leader confirms attendance)
 export async function addConfirmedParticipant(id: string, participant: ConfirmedParticipant): Promise<PlannedMissionResponse | null> {
-  console.log(`STORAGE: Adding confirmed participant to mission: ${id}`);
+  logger.info('Adding confirmed participant to mission', { collection: 'planned-missions', operation: 'addConfirmedParticipant', missionId: id });
 
   const mission = await getPlannedMissionById(id);
   if (!mission) {
@@ -562,7 +563,7 @@ export async function addConfirmedParticipant(id: string, participant: Confirmed
 
 // Remove a confirmed participant
 export async function removeConfirmedParticipant(id: string, odId: string): Promise<PlannedMissionResponse | null> {
-  console.log(`STORAGE: Removing confirmed participant from mission: ${id}`);
+  logger.info('Removing confirmed participant from mission', { collection: 'planned-missions', operation: 'removeConfirmedParticipant', missionId: id });
 
   const mission = await getPlannedMissionById(id);
   if (!mission) {
@@ -578,13 +579,13 @@ export async function removeConfirmedParticipant(id: string, odId: string): Prom
 
 // Bulk update confirmed participants (for debriefing)
 export async function updateConfirmedParticipants(id: string, participants: ConfirmedParticipant[]): Promise<PlannedMissionResponse | null> {
-  console.log(`STORAGE: Updating confirmed participants for mission: ${id}`);
+  logger.info('Updating confirmed participants for mission', { collection: 'planned-missions', operation: 'updateConfirmedParticipants', missionId: id });
   return updatePlannedMission(id, { confirmedParticipants: participants });
 }
 
 // Get missions in debriefing status (for leaders to mark attendance)
 export async function getMissionsAwaitingDebrief(leaderId?: string): Promise<PlannedMissionResponse[]> {
-  console.log('STORAGE: Getting missions awaiting debrief');
+  logger.info('Getting missions awaiting debrief', { collection: 'planned-missions', operation: 'getAwaitingDebrief', leaderId });
 
   try {
     const { db } = await connectToDatabase();
@@ -603,7 +604,7 @@ export async function getMissionsAwaitingDebrief(leaderId?: string): Promise<Pla
 
     return missions.map(mission => transformDbToResponse(mission));
   } catch (error) {
-    console.error('STORAGE: MongoDB getMissionsAwaitingDebrief failed, falling back to local:', error);
+    logger.error('MongoDB getMissionsAwaitingDebrief failed, falling back to local', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'planned-missions' });
     usingFallbackStorage = true;
 
     let locals = getLocalPlannedMissions().filter(m => m.status === 'DEBRIEFING');
