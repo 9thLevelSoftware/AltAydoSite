@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** AydoCorp members have a secure, polished, and performant hub for managing fleet operations, missions, and org coordination.
-**Current focus:** Phase 11 - UX Critical Fixes
+**Current focus:** Phase 12 - Motion v12 Migration
 
 ## Current Position
 
-Phase: 11 of 15 (UX Critical Fixes)
-Plan: 3 of 5 in current phase (11-01, 11-02, 11-03 complete)
+Phase: 12 of 15 (Motion v12 Migration)
+Plan: 1 of 2 in current phase (12-01 complete)
 Status: In Progress
-Last activity: 2026-02-15 -- Plan 11-02 executed (server-first profile storage)
+Last activity: 2026-02-15 -- Plan 12-01 executed (motion v12 package swap + import migration)
 
-Progress: [████░░░░░░] 44%
+Progress: [█████░░░░░] 48%
 
 ## Performance Metrics
 
@@ -24,7 +24,7 @@ Progress: [████░░░░░░] 44%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 14
+- Total plans completed: 15
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -44,6 +44,7 @@ Progress: [████░░░░░░] 44%
 | 11    | 01   | 2min     | 2     | 7     |
 | 11    | 02   | 4min     | 2     | 5     |
 | 11    | 03   | 3min     | 2     | 3     |
+| 12    | 01   | 3min     | 2     | 117   |
 
 ## Accumulated Context
 
@@ -99,6 +100,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 11-03: Confirmation in UserFleetBuilder (child) wrapping onRemoveShip prop, not in parent wrapper
 11-03: ResetProfileComponent prompts confirmation before executing, redirects to profile on cancel
 11-03: ResetProfileComponent also resets server-side profile via API PUT (not just localStorage)
+12-01: Used `as const` assertions to fix motion v12 stricter transition type checking
+12-01: Fixed AboutHero direction -> repeatType for motion v12 API change
+12-01: No strict prop on LazyMotion -- codebase uses motion.div not m.div
 
 ### Pending Todos
 
@@ -111,11 +115,11 @@ None yet.
 - [RESOLVED]: RBAC hardcoded to return true -- fixed in Plan 10-01 with auth-guards.ts
 - [RESOLVED]: Next.js RCE vulnerability CVE-2025-55182 -- patched by upgrade to 15.5.12 in Plan 09-04
 - [Risk]: CSP nonces force dynamic rendering -- Phase 10 uses split strategy (hash for static, nonces for auth pages)
-- [Risk]: framer-motion migration affects 109 files atomically -- Phase 12
+- [RESOLVED]: framer-motion migration affects 112 files -- completed in Plan 12-01 with motion@12.34.0
 - [RESOLVED]: Profile localStorage migration -- server-first with one-time migration in Plan 11-02
 
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 11-02-PLAN.md (server-first profile storage)
-Resume file: .planning/phases/11-ux-critical-fixes/11-02-SUMMARY.md
+Stopped at: Completed 12-01-PLAN.md (motion v12 package swap + import migration)
+Resume file: .planning/phases/12-motion-v12-migration/12-01-SUMMARY.md
