@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 14 of 15 (Design System Consolidation)
-Plan: 6 of 7 in current phase (14-06 complete)
+Plan: 6 of 7 in current phase (14-05 complete)
 Status: Executing Phase 14
-Last activity: 2026-02-16 -- Plan 14-06 executed (loading states + error display standardization)
+Last activity: 2026-02-16 -- Plan 14-05 executed (corner accents + status color migration)
 
 Progress: [██████░░░░] 58%
 
@@ -54,6 +54,7 @@ Progress: [██████░░░░] 58%
 | 14    | 02   | 2min     | 2     | 3     |
 | 14    | 04   | 3min     | 2     | 2     |
 | 14    | 06   | 2min     | 2     | 3     |
+| 14    | 05   | 1min     | 2     | 8     |
 
 ## Accumulated Context
 
@@ -134,6 +135,8 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 14-04: Confirm password input kept as custom element (not MobiGlasInput) to preserve dynamic border color for password match states
 14-04: Discord OAuth button migrated to MobiGlasButton variant=secondary with leftIcon prop for Discord SVG
 14-06: Success messages kept as plain styled div (MobiGlasFormError is error-only)
+14-05: Added danger color option to CornerAccents component for delete button corner accents
+14-05: MissionDetail and OperationCard status colors migrated to MobiGlas palette for consistency
 
 ### Pending Todos
 
@@ -154,5 +157,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 14-06-PLAN.md
-Resume file: .planning/phases/14-design-system-consolidation/14-06-SUMMARY.md
+Stopped at: Completed 14-05-PLAN.md
+Resume file: .planning/phases/14-design-system-consolidation/14-05-SUMMARY.md
