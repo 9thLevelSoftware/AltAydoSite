@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
 
 const ReferencePageContent = () => {
   return (
@@ -53,7 +54,7 @@ const ReferencePageContent = () => {
               Holographic panels, buttons with interactive effects, and dynamic containers with subtle animations.
             </p>
             <div className="mt-4 flex gap-2">
-              <button className="mg-button text-xs py-1 px-2">ACTION</button>
+              <MobiGlasButton variant="primary" size="sm" className="text-xs">ACTION</MobiGlasButton>
               <div className="mg-container p-2 text-xs flex-1 flex items-center justify-center">DATA</div>
             </div>
           </div>

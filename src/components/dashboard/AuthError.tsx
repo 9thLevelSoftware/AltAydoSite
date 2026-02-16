@@ -3,6 +3,7 @@
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { bgUrl } from '@/lib/cdn';
+import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
 
 const AuthError = () => {
   const router = useRouter();
@@ -48,17 +49,13 @@ const AuthError = () => {
           </div>
           
           <div className="text-center">
-            <motion.button 
+            <MobiGlasButton
               onClick={() => router.replace('/login')}
-              className="mg-button py-2 px-6 bg-[rgba(var(--mg-danger),0.1)] border border-[rgba(var(--mg-danger),0.4)] text-[rgba(var(--mg-text),0.9)] font-quantify tracking-widest text-sm"
-              whileHover={{ 
-                scale: 1.05,
-                boxShadow: '0 0 15px rgba(255, 70, 70, 0.3)'
-              }}
-              transition={{ duration: 0.2 }}
+              variant="danger"
+              size="md"
             >
               SECURITY LOGIN
-            </motion.button>
+            </MobiGlasButton>
           </div>
         </motion.div>
       </div>
