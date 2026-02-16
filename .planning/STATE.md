@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** AydoCorp members have a secure, polished, and performant hub for managing fleet operations, missions, and org coordination.
-**Current focus:** Phase 12 - Motion v12 Migration
+**Current focus:** Phase 13 - Accessibility & Performance Foundations
 
 ## Current Position
 
-Phase: 12 of 15 (Motion v12 Migration) -- PHASE COMPLETE
-Plan: 2 of 2 in current phase (12-02 complete)
-Status: Phase 12 Complete
-Last activity: 2026-02-15 -- Plan 12-02 executed (stagger migration + full build validation)
+Phase: 13 of 15 (Accessibility & Performance Foundations)
+Plan: 1 of 4 in current phase (13-01 complete)
+Status: Executing Phase 13
+Last activity: 2026-02-16 -- Plan 13-01 executed (focus-visible, skip-link, menu close, auth delay, cache headers)
 
-Progress: [██████░░░░] 52%
+Progress: [██████░░░░] 55%
 
 ## Performance Metrics
 
@@ -24,7 +24,7 @@ Progress: [██████░░░░] 52%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 16
+- Total plans completed: 17
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -46,6 +46,7 @@ Progress: [██████░░░░] 52%
 | 11    | 03   | 3min     | 2     | 3     |
 | 12    | 01   | 3min     | 2     | 117   |
 | 12    | 02   | 2min     | 2     | 5     |
+| 13    | 01   | 3min     | 2     | 6     |
 
 ## Accumulated Context
 
@@ -105,6 +106,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 12-01: Fixed AboutHero direction -> repeatType for motion v12 API change
 12-01: No strict prop on LazyMotion -- codebase uses motion.div not m.div
 12-02: DashboardPanelLayout staggerChildren + delayChildren combined into stagger(0.1, { startDelay: 0.1 })
+13-01: Inputs retain :focus (not :focus-visible) -- form inputs should show focus on mouse click
+13-01: UX-08 hierarchy page uses hardcoded sample data -- added DEMO DATA badge label
+13-01: Build fails due to pre-existing Next.js manifest issue (not caused by Phase 13 changes)
 
 ### Pending Todos
 
@@ -120,8 +124,10 @@ None yet.
 - [RESOLVED]: framer-motion migration affects 112 files -- completed in Plan 12-01 with motion@12.34.0
 - [RESOLVED]: Profile localStorage migration -- server-first with one-time migration in Plan 11-02
 
+- [Build]: npm run build fails with missing manifest JSON -- pre-existing Node.js v24.5.0 / Next.js compatibility issue
+
 ## Session Continuity
 
-Last session: 2026-02-15
-Stopped at: Phase 13 context gathered
-Resume file: .planning/phases/13-accessibility-performance-foundations/13-CONTEXT.md
+Last session: 2026-02-16
+Stopped at: Completed 13-01-PLAN.md
+Resume file: .planning/phases/13-accessibility-performance-foundations/13-01-SUMMARY.md
