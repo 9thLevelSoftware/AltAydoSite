@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import nodemailer from 'nodemailer';
 
 // SEC-04: Escape user-supplied values before HTML interpolation to prevent XSS
@@ -70,10 +71,10 @@ export async function sendPasswordResetEmail(
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Password reset email sent:', info.messageId);
+    logger.info('Password reset email sent', { module: 'email', messageId: info.messageId });
     return true;
   } catch (error) {
-    console.error('Error sending password reset email:', error);
+    logger.error('Error sending password reset email', error instanceof Error ? error : undefined, { module: 'email' });
     return false;
   }
 }
@@ -125,10 +126,10 @@ ${escapeHtml(message)}
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Contact form email sent:', info.messageId);
+    logger.info('Contact form email sent', { module: 'email', messageId: info.messageId });
     return true;
   } catch (error) {
-    console.error('Error sending contact form email:', error);
+    logger.error('Error sending contact form email', error instanceof Error ? error : undefined, { module: 'email' });
     return false;
   }
 }
@@ -140,7 +141,7 @@ export async function verifyEmailConfig(): Promise<boolean> {
     await transporter.verify();
     return true;
   } catch (error) {
-    console.error('Email configuration error:', error);
+    logger.error('Email configuration error', error instanceof Error ? error : undefined, { module: 'email' });
     return false;
   }
 } 

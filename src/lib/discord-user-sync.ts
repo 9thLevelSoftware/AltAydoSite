@@ -1,6 +1,7 @@
 // Discord User Sync Service
 // Syncs existing website users with Discord server members to update profiles
 
+import { logger } from '@/lib/logger';
 import * as userStorage from '@/lib/user-storage';
 import { User } from '@/types/user';
 import { parseDiscordRoles } from '@/lib/discord-oauth';
@@ -17,9 +18,12 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
       const retryAfter = response.headers.get('Retry-After');
       const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt) * 1000;
 
-      console.warn(
-        `⚠️  Discord API rate limited. Waiting ${waitTime}ms before retry ${attempt + 1}/${maxRetries}`
-      );
+      logger.warn(`Discord API rate limited, waiting before retry`, {
+        module: 'discord-sync',
+        waitMs: waitTime,
+        attempt: attempt + 1,
+        maxRetries,
+      });
 
       await new Promise(resolve => setTimeout(resolve, waitTime));
       continue;
@@ -80,7 +84,7 @@ async function fetchAllGuildMembers(guildId: string): Promise<DiscordGuildMember
     throw new Error('Discord bot token not configured');
   }
 
-  console.log(`Fetching all members from Discord guild: ${guildId}`);
+  logger.info(`Fetching all members from Discord guild`, { module: 'discord-sync', guildId });
   
   const members: DiscordGuildMember[] = [];
   let after = '0';
@@ -111,10 +115,10 @@ async function fetchAllGuildMembers(guildId: string): Promise<DiscordGuildMember
       after = batch[batch.length - 1].user.id;
     }
 
-    console.log(`Fetched ${members.length} Discord members so far...`);
+    logger.info(`Fetched Discord members batch`, { module: 'discord-sync', memberCount: members.length });
   }
 
-  console.log(`Total Discord members fetched: ${members.length}`);
+  logger.info(`Total Discord members fetched`, { module: 'discord-sync', totalMembers: members.length });
   return members;
 }
 
@@ -142,7 +146,7 @@ async function fetchGuildRoles(guildId: string): Promise<DiscordRole[]> {
   }
 
   const roles: DiscordRole[] = await response.json();
-  console.log(`Fetched ${roles.length} Discord roles`);
+  logger.info(`Fetched Discord roles`, { module: 'discord-sync', roleCount: roles.length });
   return roles;
 }
 
@@ -155,7 +159,11 @@ function matchUsersWithDiscordMembers(
 ): { user: User; member: DiscordGuildMember; matchedBy: string }[] {
   const matches: { user: User; member: DiscordGuildMember; matchedBy: string }[] = [];
 
-  console.log(`Matching ${users.length} website users with ${discordMembers.length} Discord members`);
+  logger.info(`Matching website users with Discord members`, {
+    module: 'discord-sync',
+    userCount: users.length,
+    discordMemberCount: discordMembers.length,
+  });
 
   for (const user of users) {
     let match: DiscordGuildMember | null = null;
@@ -250,11 +258,20 @@ function matchUsersWithDiscordMembers(
 
     if (match) {
       matches.push({ user, member: match, matchedBy });
-      console.log(`Matched user ${user.aydoHandle} with Discord ${match.user.username}#${match.user.discriminator} (${matchedBy})`);
+      logger.info(`Matched user with Discord member`, {
+        module: 'discord-sync',
+        aydoHandle: user.aydoHandle,
+        discordUsername: `${match.user.username}#${match.user.discriminator}`,
+        matchedBy,
+      });
     }
   }
 
-  console.log(`Found ${matches.length} matches out of ${users.length} users`);
+  logger.info(`User matching complete`, {
+    module: 'discord-sync',
+    matchCount: matches.length,
+    totalUsers: users.length,
+  });
   return matches;
 }
 
@@ -267,7 +284,7 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
     throw new Error('Discord guild ID not configured');
   }
 
-  console.log('Starting Discord user sync...');
+  logger.info('Starting Discord user sync', { module: 'discord-sync' });
 
   const result: SyncResult = {
     totalUsers: 0,
@@ -279,17 +296,17 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
 
   try {
     // Fetch all website users
-    console.log('Fetching all website users...');
+    logger.info('Fetching all website users', { module: 'discord-sync' });
     const users = await userStorage.getAllUsers();
     result.totalUsers = users.length;
-    console.log(`Found ${users.length} website users`);
+    logger.info(`Found website users`, { module: 'discord-sync', userCount: users.length });
 
     // Fetch all Discord members
-    console.log('Fetching Discord guild members...');
+    logger.info('Fetching Discord guild members', { module: 'discord-sync' });
     const discordMembers = await fetchAllGuildMembers(guildId);
 
     // Fetch Discord roles for mapping
-    console.log('Fetching Discord guild roles...');
+    logger.info('Fetching Discord guild roles', { module: 'discord-sync' });
     const guildRoles = await fetchGuildRoles(guildId);
 
     // Match users with Discord members
@@ -297,7 +314,7 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
     result.matchedUsers = matches.length;
 
     // Update matched users
-    console.log('Updating matched users...');
+    logger.info('Updating matched users', { module: 'discord-sync' });
     for (const { user, member, matchedBy } of matches) {
       try {
         // Parse Discord roles to get division and position
@@ -318,7 +335,12 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
           updatedAt: new Date().toISOString()
         };
 
-        console.log(`Updating Discord info for ${user.aydoHandle}: ${user.discordName || 'none'} → ${correctDiscordName}`);
+        logger.info(`Updating Discord info for user`, {
+          module: 'discord-sync',
+          aydoHandle: user.aydoHandle,
+          previousDiscordName: user.discordName || 'none',
+          newDiscordName: correctDiscordName,
+        });
 
         // Only update division/position/paygrade/clearanceLevel if we found them from roles
         if (discordProfile.division) {
@@ -349,12 +371,13 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
             updated: true
           });
 
-          console.log(`Updated user ${user.aydoHandle}:`, {
+          logger.info(`Updated user profile from Discord`, {
+            module: 'discord-sync',
+            aydoHandle: user.aydoHandle,
             division: discordProfile.division,
             position: discordProfile.position,
             payGrade: discordProfile.payGrade,
             clearanceLevel: discordProfile.clearanceLevel,
-            discordName: updateData.discordName
           });
         } else {
           result.errors.push(`Failed to update user ${user.aydoHandle}`);
@@ -368,22 +391,26 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
         }
       } catch (error) {
         const errorMsg = `Error updating user ${user.aydoHandle}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        console.error(errorMsg);
+        logger.error(`Error updating user during Discord sync`, error instanceof Error ? error : undefined, {
+          module: 'discord-sync',
+          aydoHandle: user.aydoHandle,
+        });
         result.errors.push(errorMsg);
       }
     }
 
-    console.log('Discord user sync completed:', {
+    logger.info('Discord user sync completed', {
+      module: 'discord-sync',
       totalUsers: result.totalUsers,
       matchedUsers: result.matchedUsers,
       updatedUsers: result.updatedUsers,
-      errors: result.errors.length
+      errorCount: result.errors.length,
     });
 
     return result;
   } catch (error) {
     const errorMsg = `Discord sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
-    console.error(errorMsg);
+    logger.error('Discord sync failed', error instanceof Error ? error : undefined, { module: 'discord-sync' });
     result.errors.push(errorMsg);
     return result;
   }
@@ -398,7 +425,7 @@ export async function syncSingleUserWithDiscord(userId: string): Promise<SyncRes
     throw new Error('Discord guild ID not configured');
   }
 
-  console.log(`Syncing single user: ${userId}`);
+  logger.info('Syncing single user with Discord', { module: 'discord-sync', userId });
 
   const result: SyncResult = {
     totalUsers: 1,
@@ -470,7 +497,10 @@ export async function syncSingleUserWithDiscord(userId: string): Promise<SyncRes
     return result;
   } catch (error) {
     const errorMsg = `Single user sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
-    console.error(errorMsg);
+    logger.error('Single user sync failed', error instanceof Error ? error : undefined, {
+      module: 'discord-sync',
+      userId,
+    });
     result.errors.push(errorMsg);
     return result;
   }

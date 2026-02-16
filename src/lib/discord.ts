@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { DiscordScheduledEvent, DiscordEventStatus, DiscordEntityType, DiscordPrivacyLevel } from '@/types/DiscordEvent';
 import { Client, GatewayIntentBits, Guild, GuildMember, Role } from 'discord.js';
 
@@ -121,20 +122,20 @@ export class DiscordService {
 
     return new Promise((resolve, reject) => {
       this.client!.once('ready', async () => {
-        console.log(`Discord bot logged in as ${this.client!.user?.tag}`);
-        
+        logger.info('Discord bot logged in', { module: 'discord', botTag: this.client!.user?.tag });
+
         try {
           this.guild = await this.client!.guilds.fetch(this.guildId);
-          console.log(`Connected to guild: ${this.guild.name}`);
+          logger.info('Connected to Discord guild', { module: 'discord', guildName: this.guild.name });
           resolve();
         } catch (error) {
-          console.error('Error fetching guild:', error);
+          logger.error('Error fetching guild', error instanceof Error ? error : undefined, { module: 'discord' });
           reject(error);
         }
       });
 
       this.client!.once('error', (error) => {
-        console.error('Discord client error:', error);
+        logger.error('Discord client error', error, { module: 'discord' });
         reject(error);
       });
 
@@ -228,7 +229,7 @@ export class DiscordService {
       payload.image = params.image;
     }
 
-    console.log('Creating Discord scheduled event:', payload.name);
+    logger.info('Creating Discord scheduled event', { module: 'discord', eventName: payload.name });
 
     const response = await fetch(
       `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events`,
@@ -244,12 +245,16 @@ export class DiscordService {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Discord API error creating event:', response.status, errorText);
+      logger.error('Discord API error creating event', undefined, {
+        module: 'discord',
+        status: response.status,
+        errorText,
+      });
       throw new Error(`Discord API error: ${response.status} - ${errorText}`);
     }
 
     const event: DiscordScheduledEvent = await response.json();
-    console.log('Discord event created successfully:', event.id);
+    logger.info('Discord event created successfully', { module: 'discord', eventId: event.id });
     return event;
   }
 
@@ -272,7 +277,7 @@ export class DiscordService {
     }
     if (params.image) payload.image = params.image;
 
-    console.log('Updating Discord scheduled event:', eventId);
+    logger.info('Updating Discord scheduled event', { module: 'discord', eventId });
 
     const response = await fetch(
       `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events/${eventId}`,
@@ -288,12 +293,17 @@ export class DiscordService {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Discord API error updating event:', response.status, errorText);
+      logger.error('Discord API error updating event', undefined, {
+        module: 'discord',
+        eventId,
+        status: response.status,
+        errorText,
+      });
       throw new Error(`Discord API error: ${response.status} - ${errorText}`);
     }
 
     const event: DiscordScheduledEvent = await response.json();
-    console.log('Discord event updated successfully:', event.id);
+    logger.info('Discord event updated successfully', { module: 'discord', eventId: event.id });
     return event;
   }
 
@@ -305,7 +315,7 @@ export class DiscordService {
       throw new Error('Discord configuration missing');
     }
 
-    console.log('Deleting Discord scheduled event:', eventId);
+    logger.info('Deleting Discord scheduled event', { module: 'discord', eventId });
 
     const response = await fetch(
       `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events/${eventId}`,
@@ -320,11 +330,16 @@ export class DiscordService {
 
     if (!response.ok && response.status !== 404) {
       const errorText = await response.text();
-      console.error('Discord API error deleting event:', response.status, errorText);
+      logger.error('Discord API error deleting event', undefined, {
+        module: 'discord',
+        eventId,
+        status: response.status,
+        errorText,
+      });
       throw new Error(`Discord API error: ${response.status} - ${errorText}`);
     }
 
-    console.log('Discord event deleted successfully:', eventId);
+    logger.info('Discord event deleted successfully', { module: 'discord', eventId });
   }
 
   /**
@@ -412,12 +427,12 @@ export class DiscordService {
     if (existing) return existing;
 
     // Create role if not exists
-    console.log(`Creating Discord role: ${roleName}`);
+    logger.info('Creating Discord role', { module: 'discord', roleName });
     const created = await this.guild.roles.create({
       name: roleName,
       reason: 'Auto-created for AydoDB synchronization'
     });
-    console.log(`Created role ${created.name} (${created.id})`);
+    logger.info('Created Discord role', { module: 'discord', roleName: created.name, roleId: created.id });
     return created;
   }
 

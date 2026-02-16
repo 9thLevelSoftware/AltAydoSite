@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import type { Db } from 'mongodb';
 
 /**
@@ -17,7 +18,7 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
       users.createIndex({ discordId: 1 }).catch(() => {}), // ADDED: For Discord sync lookups
     ]);
   } catch (err) {
-    console.warn('Index setup (users) skipped or failed:', err);
+    logger.warn('Index setup (users) skipped or failed', { module: 'mongo-indexes', collection: 'users', error: String(err) });
   }
 
   try {
@@ -30,7 +31,7 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
       tokens.createIndex({ expiresAtDate: 1 }, { expireAfterSeconds: 0 }).catch(() => {}),
     ]);
   } catch (err) {
-    console.warn('Index setup (resetTokens) skipped or failed:', err);
+    logger.warn('Index setup (resetTokens) skipped or failed', { module: 'mongo-indexes', collection: 'resetTokens', error: String(err) });
   }
 
   try {
@@ -40,7 +41,7 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
       transactions.createIndex({ submittedBy: 1, submittedAt: -1 }).catch(() => {}),
     ]);
   } catch (err) {
-    console.warn('Index setup (transactions) skipped or failed:', err);
+    logger.warn('Index setup (transactions) skipped or failed', { module: 'mongo-indexes', collection: 'transactions', error: String(err) });
   }
 
   try {
@@ -50,7 +51,7 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
       missionImages.createIndex({ uploadedAt: -1 }).catch(() => {}),
     ]);
   } catch (err) {
-    console.warn('Index setup (missionImages) skipped or failed:', err);
+    logger.warn('Index setup (missionImages) skipped or failed', { module: 'mongo-indexes', collection: 'missionImages', error: String(err) });
   }
 
   try {
@@ -62,7 +63,7 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
       missions.createIndex({ 'participants.userId': 1 }).catch(() => {}), // ADDED: For participant lookups
     ]);
   } catch (err) {
-    console.warn('Index setup (missions) skipped or failed:', err);
+    logger.warn('Index setup (missions) skipped or failed', { module: 'mongo-indexes', collection: 'missions', error: String(err) });
   }
 
   try {
@@ -74,7 +75,7 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
       missionTemplates.createIndex({ isPublic: 1, createdAt: -1 }).catch(() => {}),
     ]);
   } catch (err) {
-    console.warn('Index setup (mission-templates) skipped or failed:', err);
+    logger.warn('Index setup (mission-templates) skipped or failed', { module: 'mongo-indexes', collection: 'mission-templates', error: String(err) });
   }
 
   try {
@@ -102,10 +103,10 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
       ships.createIndex(
         { name: 'text', 'manufacturer.name': 'text' },
         { weights: { name: 10, 'manufacturer.name': 5 }, name: 'ships_text_search' }
-      ).catch(err => console.warn('[mongo-indexes] Ships text index creation failed:', err)),
+      ).catch(err => logger.warn('Ships text index creation failed', { module: 'mongo-indexes', collection: 'ships', error: String(err) })),
     ]);
   } catch (err) {
-    console.warn('Index setup (ships) skipped or failed:', err);
+    logger.warn('Index setup (ships) skipped or failed', { module: 'mongo-indexes', collection: 'ships', error: String(err) });
   }
 
   try {
@@ -117,7 +118,7 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
       rateLimits.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }).catch(() => {}),
     ]);
   } catch (err) {
-    console.warn('Index setup (rateLimits) skipped or failed:', err);
+    logger.warn('Index setup (rateLimits) skipped or failed', { module: 'mongo-indexes', collection: 'rateLimits', error: String(err) });
   }
 
   try {
@@ -127,6 +128,6 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
       syncStatus.createIndex({ type: 1, lastSyncAt: -1 }).catch(() => {}),
     ]);
   } catch (err) {
-    console.warn('Index setup (sync-status) skipped or failed:', err);
+    logger.warn('Index setup (sync-status) skipped or failed', { module: 'mongo-indexes', collection: 'sync-status', error: String(err) });
   }
 }

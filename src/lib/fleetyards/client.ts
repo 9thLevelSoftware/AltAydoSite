@@ -8,6 +8,7 @@
  * This module uses native fetch only -- no external HTTP libraries required.
  */
 
+import { logger } from '@/lib/logger';
 import type { FleetYardsShipResponse } from './types';
 
 // ---------------------------------------------------------------------------
@@ -94,9 +95,13 @@ async function fetchWithRetry(
         const retryAfterHeader = response.headers.get('Retry-After');
         const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 5;
         const waitMs = (isNaN(retryAfterSeconds) ? 5 : retryAfterSeconds) * 1000;
-        console.warn(
-          `[ship-sync] Page ${page} rate limited (429). Waiting ${waitMs / 1000}s before retry ${attempt}/${retries}`,
-        );
+        logger.warn('FleetYards API rate limited (429)', {
+          module: 'fleetyards',
+          page,
+          waitSeconds: waitMs / 1000,
+          attempt,
+          retries,
+        });
         await new Promise((r) => setTimeout(r, waitMs));
         continue;
       }
@@ -104,39 +109,55 @@ async function fetchWithRetry(
       // Client error (not 429) -- do not retry
       if (response.status >= 400 && response.status < 500) {
         const body = await response.text().catch(() => '(no body)');
-        console.warn(
-          `[ship-sync] Page ${page} failed with ${response.status}: ${body}`,
-        );
+        logger.warn('FleetYards API client error', {
+          module: 'fleetyards',
+          page,
+          status: response.status,
+          body,
+        });
         return null;
       }
 
       // Server error (5xx) -- retry with backoff
       if (response.status >= 500) {
         const waitMs = 1000 * attempt;
-        console.warn(
-          `[ship-sync] Page ${page} server error (${response.status}). Retry ${attempt}/${retries} after ${waitMs}ms`,
-        );
+        logger.warn('FleetYards API server error, retrying', {
+          module: 'fleetyards',
+          page,
+          status: response.status,
+          attempt,
+          retries,
+          waitMs,
+        });
         await new Promise((r) => setTimeout(r, waitMs));
         continue;
       }
 
       // Unexpected status -- treat as non-retryable
       const body = await response.text().catch(() => '(no body)');
-      console.warn(
-        `[ship-sync] Page ${page} unexpected status ${response.status}: ${body}`,
-      );
+      logger.warn('FleetYards API unexpected status', {
+        module: 'fleetyards',
+        page,
+        status: response.status,
+        body,
+      });
       return null;
     } catch (error) {
       // Network error -- retry with backoff
       const waitMs = 1000 * attempt;
-      console.warn(
-        `[ship-sync] Page ${page} network error: ${error instanceof Error ? error.message : String(error)}. Retry ${attempt}/${retries} after ${waitMs}ms`,
-      );
+      logger.warn('FleetYards API network error, retrying', {
+        module: 'fleetyards',
+        page,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        attempt,
+        retries,
+        waitMs,
+      });
       await new Promise((r) => setTimeout(r, waitMs));
     }
   }
 
-  console.warn(`[ship-sync] Page ${page} failed after ${retries} retries`);
+  logger.warn('FleetYards API page failed after retries', { module: 'fleetyards', page, retries });
   return null;
 }
 
@@ -170,7 +191,7 @@ export async function fetchAllShips(): Promise<{
   let page = 1;
 
   while (nextUrl && page <= MAX_PAGES) {
-    console.log(`[ship-sync] Fetching page ${page}...`);
+    logger.info('Fetching FleetYards page', { module: 'fleetyards', page });
 
     const response = await fetchWithRetry(nextUrl, MAX_RETRIES, page);
 
@@ -187,19 +208,23 @@ export async function fetchAllShips(): Promise<{
     } catch (parseError) {
       const errorMsg = `Page ${page} JSON parse error: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
       errors.push(errorMsg);
-      console.warn(`[ship-sync] ${errorMsg}`);
+      logger.warn('FleetYards API JSON parse error', {
+        module: 'fleetyards',
+        page,
+        errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
+      });
       break;
     }
 
     // Empty response means no more data
     if (!Array.isArray(pageShips) || pageShips.length === 0) {
-      console.log(`[ship-sync] Page ${page}: empty response, pagination complete`);
+      logger.info('FleetYards pagination complete (empty response)', { module: 'fleetyards', page });
       break;
     }
 
     allShips.push(...pageShips);
     pagesProcessed++;
-    console.log(`[ship-sync] Page ${page}: ${pageShips.length} ships`);
+    logger.info('FleetYards page fetched', { module: 'fleetyards', page, shipCount: pageShips.length });
 
     // Determine if there are more pages
     const linkHeader = response.headers.get('Link');
@@ -227,12 +252,14 @@ export async function fetchAllShips(): Promise<{
   if (page > MAX_PAGES) {
     const errorMsg = `Reached MAX_PAGES limit (${MAX_PAGES}) -- pagination stopped as safety measure`;
     errors.push(errorMsg);
-    console.warn(`[ship-sync] ${errorMsg}`);
+    logger.warn('FleetYards reached MAX_PAGES limit', { module: 'fleetyards', maxPages: MAX_PAGES });
   }
 
-  console.log(
-    `[ship-sync] Fetch complete: ${allShips.length} ships from ${pagesProcessed} pages`,
-  );
+  logger.info('FleetYards fetch complete', {
+    module: 'fleetyards',
+    totalShips: allShips.length,
+    pagesProcessed,
+  });
 
   return { ships: allShips, pagesProcessed, errors };
 }

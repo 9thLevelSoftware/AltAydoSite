@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { MongoClient, Db } from 'mongodb';
 import { ensureMongoIndexes } from '@/lib/mongo-indexes';
 
@@ -12,13 +13,13 @@ if (!mongoUri) {
       'Set MONGODB_URI or COSMOSDB_CONNECTION_STRING in environment variables.'
     );
   } else {
-    console.warn('WARNING: No database connection string found. App will use fallback storage.');
+    logger.warn('No database connection string found, app will use fallback storage', { module: 'mongodb' });
   }
 }
 
 const uri: string = mongoUri || '';
 if (uri && process.env.NODE_ENV !== 'production') {
-  console.log('MongoDB configuration detected');
+  logger.info('MongoDB configuration detected', { module: 'mongodb' });
 }
 
 // Canonical database name -- always explicit, never rely on connection string default
@@ -47,30 +48,30 @@ if (process.env.NODE_ENV === 'development') {
   };
 
   if (!globalWithMongo._mongoClientPromise) {
-    console.log('Initializing MongoDB client (development)...');
+    logger.info('Initializing MongoDB client (development)', { module: 'mongodb' });
     client = new MongoClient(uri, options);
     globalWithMongo._mongoClientPromise = client.connect()
       .then((client) => {
-        console.log('MongoDB connected successfully (development)');
+        logger.info('MongoDB connected successfully (development)', { module: 'mongodb' });
         return client;
       })
       .catch((error) => {
-        console.error('MongoDB connection error (development):', error);
+        logger.error('MongoDB connection error (development)', error instanceof Error ? error : undefined, { module: 'mongodb' });
         throw error;
       });
   }
   clientPromise = globalWithMongo._mongoClientPromise;
 } else {
   // In production mode, it's best to not use a global variable.
-  console.log('Initializing MongoDB client (production)...');
+  logger.info('Initializing MongoDB client (production)', { module: 'mongodb' });
   client = new MongoClient(uri, options);
   clientPromise = client.connect()
     .then((client) => {
-      console.log('MongoDB connected successfully (production)');
+      logger.info('MongoDB connected successfully (production)', { module: 'mongodb' });
       return client;
     })
     .catch((error) => {
-      console.error('MongoDB connection error (production):', error);
+      logger.error('MongoDB connection error (production)', error instanceof Error ? error : undefined, { module: 'mongodb' });
       throw error;
     });
 }
@@ -88,7 +89,7 @@ export async function connectToDatabase(): Promise<{ client: MongoClient; db: Db
   if (!indexesEnsured) {
     indexesEnsured = true;
     ensureMongoIndexes(db).catch(err => {
-      console.error('Index creation failed:', err);
+      logger.error('Index creation failed', err instanceof Error ? err : undefined, { module: 'mongodb' });
       indexesEnsured = false; // Allow retry on next call
     });
   }
