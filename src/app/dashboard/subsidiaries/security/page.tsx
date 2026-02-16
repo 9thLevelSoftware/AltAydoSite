@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { EscortRequestResponse, SecurityAssetType, ThreatLevel } from '@/types/EscortRequest';
 import EscortRequestTracker from '@/components/security/EscortRequestTracker';
 import EscortRequestDetail from '@/components/security/EscortRequestDetail';
+import { MobiGlasButton, MobiGlasFormError } from '@/components/ui/mobiglas';
 
 interface EscortFormData {
   requestedBy: string;
@@ -318,12 +319,16 @@ export default function MidnightSecurityPage() {
                 For Aydo Intergalactic Corporation employees only. Complete this form to request security escort services.
               </p>
 
-              {submitMessage && (
-                <div className={`p-4 rounded-lg mb-6 ${
-                  submitMessage.includes('Error') 
-                    ? 'bg-[rgba(var(--mg-error),0.1)] border border-[rgba(var(--mg-error),0.3)] text-[rgba(var(--mg-error),0.9)]'
-                    : 'bg-[rgba(var(--mg-success),0.1)] border border-[rgba(var(--mg-success),0.3)] text-[rgba(var(--mg-success),0.9)]'
-                }`}>
+              {submitMessage && submitMessage.includes('Error') && (
+                <MobiGlasFormError
+                  message={submitMessage}
+                  onDismiss={() => setSubmitMessage(null)}
+                  className="mb-6"
+                />
+              )}
+
+              {submitMessage && !submitMessage.includes('Error') && (
+                <div className="p-4 rounded-lg mb-6 bg-[rgba(var(--mg-success),0.1)] border border-[rgba(var(--mg-success),0.3)] text-[rgba(var(--mg-success),0.9)]">
                   {submitMessage}
                 </div>
               )}
@@ -537,15 +542,14 @@ export default function MidnightSecurityPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <button
+                  <MobiGlasButton
                     type="submit"
+                    variant="danger"
+                    isLoading={isSubmitting}
                     disabled={isSubmitting}
-                    className={`mg-button px-6 py-2 bg-[rgba(255,100,100,0.2)] border border-[rgba(255,100,100,0.6)] text-[rgba(255,100,100,0.9)] hover:bg-[rgba(255,100,100,0.3)] transition-colors ${
-                      isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
                   >
-                    {isSubmitting ? 'Submitting...' : 'Submit Escort Request'}
-                  </button>
+                    Submit Escort Request
+                  </MobiGlasButton>
                 </div>
               </form>
             </div>
