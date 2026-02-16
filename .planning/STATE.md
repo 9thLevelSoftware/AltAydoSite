@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** AydoCorp members have a secure, polished, and performant hub for managing fleet operations, missions, and org coordination.
-**Current focus:** Phase 14 - Design System Consolidation
+**Current focus:** Phase 15 - Code Quality Optimization
 
 ## Current Position
 
-Phase: 14 of 15 (Design System Consolidation)
-Plan: 9 of 9 in current phase (14-09 complete)
-Status: Phase 14 Complete (including gap closure plans 08-09)
-Last activity: 2026-02-16 -- Plan 14-09 executed (ContactForm isLoading prop migration)
+Phase: 15 of 15 (Code Quality Optimization)
+Plan: 2 of 7 in current phase (15-02 complete)
+Status: Executing Phase 15
+Last activity: 2026-02-16 -- Plan 15-02 executed (Mission status state machine)
 
-Progress: [████████░░] 80%
+Progress: [████████░░] 85%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [████████░░] 80%
 | 14    | 07   | 2min     | 2     | 4     |
 | 14    | 08   | 2min     | 2     | 6     |
 | 14    | 09   | 1min     | 1     | 1     |
+| 15    | 02   | 2min     | 2     | 2     |
 
 ## Accumulated Context
 
@@ -148,6 +149,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 14-08: Confirm password input kept as custom element per 14-04 decision; only corner accents replaced with CornerAccents
 14-08: AboutSection w-6 corners mapped to size=md (w-5) as safer default over size=lg (w-8)
 14-08: Footer main container originally had only 2 top corners; CornerAccents renders all 4 adding bottom corners
+15-02: State machine uses typed Record (not classes/xstate) matching existing planned-missions pattern
+15-02: Validation occurs before storage update to prevent invalid data being persisted
+15-02: Same status re-assignment allowed (no-op) to avoid breaking partial update calls
 
 ### Pending Todos
 
@@ -168,5 +172,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 14-09-PLAN.md (gap closure plan - ContactForm isLoading)
-Resume file: .planning/phases/14-design-system-consolidation/14-09-SUMMARY.md
+Stopped at: Completed 15-02-PLAN.md (Mission status state machine)
+Resume file: .planning/phases/15-code-quality-optimization/15-02-SUMMARY.md
