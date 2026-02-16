@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import Image from 'next/image';
 import { cdn } from '@/lib/cdn';
 import Link from 'next/link';
+import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
 
 export default function HeroSection() {
   const [time, setTime] = useState(new Date());
@@ -148,29 +149,29 @@ export default function HeroSection() {
                   className="flex flex-wrap gap-4 justify-center md:justify-start"
                 >
                   <Link href="#services">
-                    <motion.button 
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="mg-button py-2.5 px-6 text-sm flex items-center"
+                    <MobiGlasButton
+                      variant="primary"
+                      size="md"
+                      rightIcon={
+                        <div className="w-4 h-4 relative">
+                          <span className="absolute inset-0 flex items-center justify-center">
+                            <span className="block w-3 h-0.5 bg-[rgba(var(--mg-primary),0.8)]"></span>
+                            <span className="block w-0.5 h-3 bg-[rgba(var(--mg-primary),0.8)] absolute right-0"></span>
+                          </span>
+                        </div>
+                      }
                     >
-                      <span>EXPLORE SERVICES</span>
-                      <div className="ml-2 w-4 h-4 relative">
-                        <span className="absolute inset-0 flex items-center justify-center">
-                          <span className="block w-3 h-0.5 bg-[rgba(var(--mg-primary),0.8)]"></span>
-                          <span className="block w-0.5 h-3 bg-[rgba(var(--mg-primary),0.8)] absolute right-0"></span>
-                        </span>
-                      </div>
-                    </motion.button>
+                      EXPLORE SERVICES
+                    </MobiGlasButton>
                   </Link>
-                  
+
                   <Link href="#join">
-                    <motion.button 
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="mg-button py-2.5 px-6 text-sm border-[rgba(var(--mg-success),0.4)] hover:border-[rgba(var(--mg-success),0.7)]"
+                    <MobiGlasButton
+                      variant="success"
+                      size="md"
                     >
                       JOIN OUR TEAM
-                    </motion.button>
+                    </MobiGlasButton>
                   </Link>
                 </motion.div>
               </motion.div>

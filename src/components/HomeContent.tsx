@@ -5,6 +5,7 @@ import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link';
 import Image from 'next/image';
 import { cdn } from '@/lib/cdn';
+import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
 
 interface HomeContentProps {
   isLoggedIn: boolean;
@@ -793,23 +794,24 @@ const shipImages = [
                                   </p>
                                 </div>
                                 <div className="w-full max-w-xs space-y-3">
-                                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                                    <Link 
-                                      href="/login" 
-                                      className="mg-button block w-full text-center group"
+                                  <Link href="/login" className="block w-full">
+                                    <MobiGlasButton
+                                      variant="primary"
+                                      size="md"
+                                      fullWidth
                                     >
-                                      <div className="radar-sweep opacity-0 group-hover:opacity-20"></div>
                                       ACCESS TERMINAL
-                                    </Link>
-                                  </motion.div>
-                                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                                    <Link 
-                                      href="/signup" 
-                                      className="mg-button block w-full text-center"
+                                    </MobiGlasButton>
+                                  </Link>
+                                  <Link href="/signup" className="block w-full">
+                                    <MobiGlasButton
+                                      variant="accent"
+                                      size="md"
+                                      fullWidth
                                     >
                                       REGISTER NEW DEVICE
-                                    </Link>
-                                  </motion.div>
+                                    </MobiGlasButton>
+                                  </Link>
                                 </div>
                               </>
                             )}
@@ -873,19 +875,23 @@ const shipImages = [
                                 { title: 'CONTACT', path: '/contact', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' }
                               ].map((item, idx) => (
                                 <li key={idx}>
-                                  <motion.div 
-                                    whileHover={{ x: 3 }}
-                                    whileTap={{ scale: 0.98 }}
+                                  <Link
+                                    href={item.path}
+                                    className="block w-full"
+                                    onMouseEnter={() => setActivePanel(item.title)}
+                                    onMouseLeave={() => setActivePanel(null)}
                                   >
-                                    <Link 
-                                      href={item.path} 
-                                      className="mg-button text-xs flex items-center py-2 w-full"
-                                      onMouseEnter={() => setActivePanel(item.title)}
-                                      onMouseLeave={() => setActivePanel(null)}
+                                    <MobiGlasButton
+                                      variant="ghost"
+                                      size="sm"
+                                      fullWidth
+                                      className="text-xs justify-start"
+                                      leftIcon={
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-[rgba(var(--mg-primary),0.8)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d={item.icon} />
+                                        </svg>
+                                      }
                                     >
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-2 text-[rgba(var(--mg-primary),0.8)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d={item.icon} />
-                                      </svg>
                                       <span className="relative">
                                         {item.title}
                                         <AnimatePresence>
@@ -900,8 +906,8 @@ const shipImages = [
                                           )}
                                         </AnimatePresence>
                                       </span>
-                                    </Link>
-                                  </motion.div>
+                                    </MobiGlasButton>
+                                  </Link>
                                 </li>
                               ))}
                             </ul>
