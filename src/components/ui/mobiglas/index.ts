@@ -22,6 +22,10 @@ export type { default as StatusIndicatorProps } from './StatusIndicator';
 export { MobiGlasPagination } from './MobiGlasPagination';
 export type { MobiGlasPaginationProps } from './MobiGlasPagination';
 
+// Form error banner
+export { MobiGlasFormError } from './MobiGlasFormError';
+export type { MobiGlasFormErrorProps } from './MobiGlasFormError';
+
 // Toast and Dialog components
 export { default as MobiGlasToast } from './MobiGlasToast';
 export { MobiGlasToastProvider } from './MobiGlasToastProvider';
