@@ -449,10 +449,11 @@ export default function UserProfileContent() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="mb-4">
-                  <label className="mg-subtitle text-xs mb-1 block tracking-wider">EMAIL ADDRESS</label>
+                  <label htmlFor="profile-email" className="mg-subtitle text-xs mb-1 block tracking-wider">EMAIL ADDRESS</label>
                   {isEditing ? (
                     <input
                       type="text"
+                      id="profile-email"
                       name="email"
                       value={userData.email}
                       disabled
@@ -466,10 +467,11 @@ export default function UserProfileContent() {
                 </div>
 
                 <div className="mb-4">
-                  <label className="mg-subtitle text-xs mb-1 block tracking-wider">DISCORD NAME</label>
+                  <label htmlFor="profile-discord" className="mg-subtitle text-xs mb-1 block tracking-wider">DISCORD NAME</label>
                   {isEditing ? (
                     <input
                       type="text"
+                      id="profile-discord"
                       name="discordName"
                       value={userData.discordName}
                       onChange={handleInputChange}
@@ -483,10 +485,11 @@ export default function UserProfileContent() {
                 </div>
 
                 <div className="mb-4">
-                  <label className="mg-subtitle text-xs mb-1 block tracking-wider">RSI ACCOUNT</label>
+                  <label htmlFor="profile-rsi" className="mg-subtitle text-xs mb-1 block tracking-wider">RSI ACCOUNT</label>
                   {isEditing ? (
                     <input
                       type="text"
+                      id="profile-rsi"
                       name="rsiAccountName"
                       value={userData.rsiAccountName}
                       onChange={handleInputChange}
@@ -500,10 +503,11 @@ export default function UserProfileContent() {
                 </div>
 
                 <div className="mb-4 md:col-span-2">
-                  <label className="mg-subtitle text-xs mb-1 block tracking-wider">TIMEZONE</label>
+                  <label htmlFor="profile-timezone" className="mg-subtitle text-xs mb-1 block tracking-wider">TIMEZONE</label>
                   {isEditing ? (
                     <div className="flex gap-2">
                       <select
+                        id="profile-timezone"
                         name="timezone"
                         value={userData.timezone}
                         onChange={handleInputChange}
@@ -543,9 +547,10 @@ export default function UserProfileContent() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="mb-4">
-                  <label className="mg-subtitle text-xs mb-1 block tracking-wider">DIVISION</label>
+                  <label htmlFor="profile-division" className="mg-subtitle text-xs mb-1 block tracking-wider">DIVISION</label>
                   {isEditing ? (
                     <select
+                      id="profile-division"
                       name="division"
                       value={userData.division}
                       onChange={handleInputChange}
@@ -569,10 +574,11 @@ export default function UserProfileContent() {
                 </div>
 
                 <div className="mb-4">
-                  <label className="mg-subtitle text-xs mb-1 block tracking-wider">POSITION</label>
+                  <label htmlFor="profile-position" className="mg-subtitle text-xs mb-1 block tracking-wider">POSITION</label>
                   {isEditing ? (
                     <input
                       type="text"
+                      id="profile-position"
                       name="position"
                       value={userData.position}
                       onChange={handleInputChange}
@@ -586,9 +592,10 @@ export default function UserProfileContent() {
                 </div>
 
                 <div className="mb-4">
-                  <label className="mg-subtitle text-xs mb-1 block tracking-wider">PAY GRADE</label>
+                  <label htmlFor="profile-paygrade" className="mg-subtitle text-xs mb-1 block tracking-wider">PAY GRADE</label>
                   {isEditing ? (
                     <select
+                      id="profile-paygrade"
                       name="payGrade"
                       value={userData.payGrade}
                       onChange={handleInputChange}
@@ -612,9 +619,10 @@ export default function UserProfileContent() {
 
               {/* Biography Section */}
               <div className="mt-4">
-                <label className="mg-subtitle text-xs mb-1 block tracking-wider">BIOGRAPHY</label>
+                <label htmlFor="profile-bio" className="mg-subtitle text-xs mb-1 block tracking-wider">BIOGRAPHY</label>
                 {isEditing ? (
                   <textarea
+                    id="profile-bio"
                     name="bio"
                     value={userData.bio}
                     onChange={handleInputChange}

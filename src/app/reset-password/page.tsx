@@ -135,11 +135,13 @@ export default function ResetPasswordPage() {
           {!success && (
             <form onSubmit={handleSubmit}>
               <div className="mg-input-group mb-4">
-                <label className="mg-subtitle text-xs mb-1 block tracking-wider">NEW PASSWORD</label>
+                <label htmlFor="reset-password" className="mg-subtitle text-xs mb-1 block tracking-wider">NEW PASSWORD</label>
                 <div className="relative">
                   <input
                     type="password"
+                    id="reset-password"
                     value={password}
+                    aria-required={true}
                     onChange={(e) => setPassword(e.target.value)}
                     className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
                     placeholder="ENTER NEW PASSWORD"
@@ -153,11 +155,13 @@ export default function ResetPasswordPage() {
               </div>
 
               <div className="mg-input-group mb-6">
-                <label className="mg-subtitle text-xs mb-1 block tracking-wider">CONFIRM PASSWORD</label>
+                <label htmlFor="reset-confirm" className="mg-subtitle text-xs mb-1 block tracking-wider">CONFIRM PASSWORD</label>
                 <div className="relative">
                   <input
                     type="password"
+                    id="reset-confirm"
                     value={confirmPassword}
+                    aria-required={true}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
                     placeholder="CONFIRM NEW PASSWORD"

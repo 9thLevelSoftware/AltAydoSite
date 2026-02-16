@@ -104,11 +104,13 @@ export default function ForgotPasswordPage() {
 
           <form onSubmit={handleSubmit}>
             <div className="mg-input-group mb-6">
-              <label className="mg-subtitle text-xs mb-1 block tracking-wider">EMAIL ADDRESS</label>
+              <label htmlFor="forgot-email" className="mg-subtitle text-xs mb-1 block tracking-wider">EMAIL ADDRESS</label>
               <div className="relative">
                 <input
                   type="email"
+                  id="forgot-email"
                   value={email}
+                  aria-required={true}
                   onChange={(e) => setEmail(e.target.value)}
                   className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
                   placeholder="ENTER EMAIL"

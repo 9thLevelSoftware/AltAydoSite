@@ -331,10 +331,12 @@ export default function MidnightSecurityPage() {
               <form onSubmit={handleEscortSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Requested By</label>
+                    <label htmlFor="security-requested-by" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Requested By</label>
                     <input
                       type="text"
+                      id="security-requested-by"
                       value={escortForm.requestedBy}
+                      aria-required={true}
                       onChange={(e) => handleInputChange('requestedBy', e.target.value)}
                       className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"
                       placeholder="Your username"
@@ -343,8 +345,9 @@ export default function MidnightSecurityPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Priority Level</label>
+                    <label htmlFor="security-priority" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Priority Level</label>
                     <select
+                      id="security-priority"
                       value={escortForm.priority}
                       onChange={(e) => handleInputChange('priority', e.target.value)}
                       className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"
@@ -357,10 +360,12 @@ export default function MidnightSecurityPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Ships to be Escorted</label>
+                    <label htmlFor="security-ships-count" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Ships to be Escorted</label>
                     <input
                       type="number"
+                      id="security-ships-count"
                       value={escortForm.shipsToEscort}
+                      aria-required={true}
                       onChange={(e) => handleInputChange('shipsToEscort', parseInt(e.target.value))}
                       className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"
                       min="1"
@@ -370,8 +375,8 @@ export default function MidnightSecurityPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Threat Assessment</label>
-                  <div className="flex gap-4 mb-2">
+                  <label id="security-threat-label" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Threat Assessment</label>
+                  <div className="flex gap-4 mb-2" role="radiogroup" aria-labelledby="security-threat-label">
                     <label className="flex items-center">
                       <input
                         type="radio"
@@ -397,6 +402,8 @@ export default function MidnightSecurityPage() {
                   </div>
                   {escortForm.threatAssessment === 'done' && (
                     <select
+                      id="security-threat-level"
+                      aria-label="Threat Level"
                       value={escortForm.threatLevel || ''}
                       onChange={(e) => handleInputChange('threatLevel', e.target.value)}
                       className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"
@@ -413,10 +420,12 @@ export default function MidnightSecurityPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Escort Start Location</label>
+                    <label htmlFor="security-start-location" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Escort Start Location</label>
                     <input
                       type="text"
+                      id="security-start-location"
                       value={escortForm.startLocation}
+                      aria-required={true}
                       onChange={(e) => handleInputChange('startLocation', e.target.value)}
                       className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"
                       placeholder="e.g., Port Olisar, Stanton System"
@@ -425,10 +434,12 @@ export default function MidnightSecurityPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Escort End Location</label>
+                    <label htmlFor="security-end-location" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Escort End Location</label>
                     <input
                       type="text"
+                      id="security-end-location"
                       value={escortForm.endLocation}
+                      aria-required={true}
                       onChange={(e) => handleInputChange('endLocation', e.target.value)}
                       className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"
                       placeholder="e.g., Lorville, Hurston"
@@ -438,9 +449,10 @@ export default function MidnightSecurityPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Secondary Locations</label>
+                  <label htmlFor="security-secondary-locations" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Secondary Locations</label>
                   <input
                     type="text"
+                    id="security-secondary-locations"
                     value={escortForm.secondaryLocations}
                     onChange={(e) => handleInputChange('secondaryLocations', e.target.value)}
                     className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"
@@ -449,9 +461,11 @@ export default function MidnightSecurityPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Planned Route</label>
+                  <label htmlFor="security-planned-route" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Planned Route</label>
                   <textarea
+                    id="security-planned-route"
                     value={escortForm.plannedRoute}
+                    aria-required={true}
                     onChange={(e) => handleInputChange('plannedRoute', e.target.value)}
                     className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"
                     rows={3}
@@ -465,9 +479,10 @@ export default function MidnightSecurityPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Estimated Duration</label>
+                    <label htmlFor="security-duration" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Estimated Duration</label>
                     <input
                       type="text"
+                      id="security-duration"
                       value={escortForm.estimatedDuration}
                       onChange={(e) => handleInputChange('estimatedDuration', e.target.value)}
                       className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"
@@ -476,9 +491,10 @@ export default function MidnightSecurityPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Preferred Date/Time</label>
+                    <label htmlFor="security-datetime" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Preferred Date/Time</label>
                     <input
                       type="datetime-local"
+                      id="security-datetime"
                       value={escortForm.preferredDateTime}
                       onChange={(e) => handleInputChange('preferredDateTime', e.target.value)}
                       className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"
@@ -487,8 +503,8 @@ export default function MidnightSecurityPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Assets Requested</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <label id="security-assets-label" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Assets Requested</label>
+                  <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="security-assets-label">
                     {[
                       'Escort Ships Only',
                       'Ground Security Only', 
@@ -509,8 +525,9 @@ export default function MidnightSecurityPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Additional Notes</label>
+                  <label htmlFor="security-notes" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Additional Notes</label>
                   <textarea
+                    id="security-notes"
                     value={escortForm.additionalNotes}
                     onChange={(e) => handleInputChange('additionalNotes', e.target.value)}
                     className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(255,100,100,0.3)]"

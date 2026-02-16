@@ -144,10 +144,11 @@ export default function UserProfilePanel() {
           <div className="flex-1">
             {isEditing ? (
               <div className="mb-4">
-                <label className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-1">NAME</label>
-                <input 
-                  type="text" 
-                  value={profile.name} 
+                <label htmlFor="panel-name" className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-1">NAME</label>
+                <input
+                  type="text"
+                  id="panel-name"
+                  value={profile.name}
                   onChange={(e) => updateProfile({ name: e.target.value })}
                   className="mg-input w-full text-base"
                   placeholder="Enter your name"
@@ -177,9 +178,10 @@ export default function UserProfilePanel() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-3">
           {/* Subsidiary/Division */}
           <div>
-            <label className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-2">SUBSIDIARY/DIVISION</label>
+            <label htmlFor="panel-subsidiary" className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-2">SUBSIDIARY/DIVISION</label>
             {isEditing ? (
-              <select 
+              <select
+                id="panel-subsidiary"
                 value={profile.subsidiary}
                 onChange={(e) => updateProfile({ subsidiary: e.target.value })}
                 className="mg-select w-full text-base"
@@ -197,9 +199,10 @@ export default function UserProfilePanel() {
           
           {/* Pay Grade */}
           <div>
-            <label className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-2">PAY GRADE</label>
+            <label htmlFor="panel-paygrade" className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-2">PAY GRADE</label>
             {isEditing ? (
-              <select 
+              <select
+                id="panel-paygrade"
                 value={profile.payGrade}
                 onChange={(e) => updateProfile({ payGrade: e.target.value })}
                 className="mg-select w-full text-base"
@@ -217,11 +220,12 @@ export default function UserProfilePanel() {
           
           {/* Position */}
           <div>
-            <label className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-2">POSITION</label>
+            <label htmlFor="panel-position" className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-2">POSITION</label>
             {isEditing ? (
-              <input 
-                type="text" 
-                value={profile.position} 
+              <input
+                type="text"
+                id="panel-position"
+                value={profile.position}
                 onChange={(e) => updateProfile({ position: e.target.value })}
                 className="mg-input w-full text-base"
                 placeholder="Enter your position"
@@ -235,11 +239,12 @@ export default function UserProfilePanel() {
           
           {/* Email Address */}
           <div>
-            <label className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-2">EMAIL ADDRESS</label>
+            <label htmlFor="panel-email" className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-2">EMAIL ADDRESS</label>
             {isEditing ? (
-              <input 
-                type="email" 
-                value={profile.email} 
+              <input
+                type="email"
+                id="panel-email"
+                value={profile.email}
                 onChange={(e) => updateProfile({ email: e.target.value })}
                 className="mg-input w-full text-base"
                 placeholder="Enter your email"
@@ -253,9 +258,10 @@ export default function UserProfilePanel() {
           
           {/* Timezone */}
           <div>
-            <label className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-2">TIMEZONE</label>
+            <label htmlFor="panel-timezone" className="block text-xs text-[rgba(var(--mg-text),0.6)] mb-2">TIMEZONE</label>
             {isEditing ? (
-              <select 
+              <select
+                id="panel-timezone"
                 value={profile.timezone}
                 onChange={(e) => updateProfile({ timezone: e.target.value })}
                 className="mg-select w-full text-base"

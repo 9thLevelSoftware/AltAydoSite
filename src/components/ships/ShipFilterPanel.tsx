@@ -179,9 +179,10 @@ export default function ShipFilterPanel({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3">
               {/* Manufacturer (from API) */}
               <div>
-                <label className={labelClasses}>Manufacturer</label>
+                <label htmlFor="ship-filter-manufacturer" className={labelClasses}>Manufacturer</label>
                 <div className="relative">
                   <select
+                    id="ship-filter-manufacturer"
                     value={filters.manufacturer}
                     onChange={(e) => onFilterChange('manufacturer', e.target.value)}
                     className={selectClasses}
@@ -199,9 +200,10 @@ export default function ShipFilterPanel({
 
               {/* Size */}
               <div>
-                <label className={labelClasses}>Size</label>
+                <label htmlFor="ship-filter-size" className={labelClasses}>Size</label>
                 <div className="relative">
                   <select
+                    id="ship-filter-size"
                     value={filters.size}
                     onChange={(e) => onFilterChange('size', e.target.value)}
                     className={selectClasses}
@@ -219,9 +221,10 @@ export default function ShipFilterPanel({
 
               {/* Classification */}
               <div>
-                <label className={labelClasses}>Classification</label>
+                <label htmlFor="ship-filter-classification" className={labelClasses}>Classification</label>
                 <div className="relative">
                   <select
+                    id="ship-filter-classification"
                     value={filters.classification}
                     onChange={(e) => onFilterChange('classification', e.target.value)}
                     className={selectClasses}
@@ -239,9 +242,10 @@ export default function ShipFilterPanel({
 
               {/* Production Status */}
               <div>
-                <label className={labelClasses}>Production Status</label>
+                <label htmlFor="ship-filter-status" className={labelClasses}>Production Status</label>
                 <div className="relative">
                   <select
+                    id="ship-filter-status"
                     value={filters.productionStatus}
                     onChange={(e) => onFilterChange('productionStatus', e.target.value)}
                     className={selectClasses}

@@ -54,11 +54,14 @@ export default function ShipSearchBar({ value, onChange }: ShipSearchBarProps) {
         className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[rgba(var(--mg-text),0.4)] pointer-events-none"
       />
 
+      <label htmlFor="ship-search" className="sr-only">Search ships by name</label>
       <input
         type="text"
+        id="ship-search"
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         placeholder="Search ships by name..."
+        aria-label="Search ships by name"
         className={`
           w-full pl-10 pr-10 py-2.5
           bg-[rgba(var(--mg-background),0.6)]
