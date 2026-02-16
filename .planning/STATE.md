@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 13 of 15 (Accessibility & Performance Foundations)
-Plan: 1 of 4 in current phase (13-01 complete)
+Plan: 4 of 4 in current phase (13-04 complete)
 Status: Executing Phase 13
-Last activity: 2026-02-16 -- Plan 13-01 executed (focus-visible, skip-link, menu close, auth delay, cache headers)
+Last activity: 2026-02-16 -- Plan 13-04 executed (DB-level pagination for users/missions APIs, MobiGlasPagination component)
 
 Progress: [██████░░░░] 55%
 
@@ -24,7 +24,7 @@ Progress: [██████░░░░] 55%
 - Total execution time: ~69 min
 
 **v1.1:**
-- Total plans completed: 17
+- Total plans completed: 18
 - Phases: 8 (Phases 8-15)
 - Requirements: 51
 
@@ -47,6 +47,7 @@ Progress: [██████░░░░] 55%
 | 12    | 01   | 3min     | 2     | 117   |
 | 12    | 02   | 2min     | 2     | 5     |
 | 13    | 01   | 3min     | 2     | 6     |
+| 13    | 04   | 4min     | 2     | 6     |
 
 ## Accumulated Context
 
@@ -109,6 +110,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 13-01: Inputs retain :focus (not :focus-visible) -- form inputs should show focus on mouse click
 13-01: UX-08 hierarchy page uses hardcoded sample data -- added DEMO DATA badge label
 13-01: Build fails due to pre-existing Next.js manifest issue (not caused by Phase 13 changes)
+13-04: Default pageSize changed to 25 (from 50), max to 100 (from 200) for consistency with ships API
+13-04: Paginated functions added alongside non-paginated for backward compat (dashboard counts etc.)
+13-04: passwordHash excluded from paginated user queries via MongoDB projection
 
 ### Pending Todos
 
@@ -129,5 +133,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 13-01-PLAN.md
-Resume file: .planning/phases/13-accessibility-performance-foundations/13-01-SUMMARY.md
+Stopped at: Completed 13-04-PLAN.md
+Resume file: .planning/phases/13-accessibility-performance-foundations/13-04-SUMMARY.md
