@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 14 of 15 (Design System Consolidation)
-Plan: 1 of 7 in current phase (14-01 complete)
+Plan: 6 of 7 in current phase (14-06 complete)
 Status: Executing Phase 14
-Last activity: 2026-02-16 -- Plan 14-01 executed (MobiGlasButton enhancements + MobiGlasFormError component)
+Last activity: 2026-02-16 -- Plan 14-06 executed (loading states + error display standardization)
 
 Progress: [██████░░░░] 58%
 
@@ -51,6 +51,7 @@ Progress: [██████░░░░] 58%
 | 13    | 02   | 5min     | 2     | 14    |
 | 13    | 04   | 4min     | 2     | 6     |
 | 14    | 01   | 2min     | 2     | 3     |
+| 14    | 06   | 2min     | 2     | 3     |
 
 ## Accumulated Context
 
@@ -123,6 +124,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 13-02: aria-labelledby with role=radiogroup/group for radio and checkbox groups
 14-01: HTML attributes passed explicitly (not via spread) to avoid MotionProps conflicts on MobiGlasButton
 14-01: ariaLabel prop name maps to aria-label on element for TypeScript compatibility
+14-06: MissionDetail has no form-level errors (read-only view) -- no changes needed
+14-06: Escort submit uses variant=danger matching security page red theme
+14-06: Success messages kept as plain styled div (MobiGlasFormError is error-only)
 
 ### Pending Todos
 
@@ -143,5 +147,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 14-01-PLAN.md
-Resume file: .planning/phases/14-design-system-consolidation/14-01-SUMMARY.md
+Stopped at: Completed 14-06-PLAN.md
+Resume file: .planning/phases/14-design-system-consolidation/14-06-SUMMARY.md
