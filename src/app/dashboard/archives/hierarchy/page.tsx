@@ -372,6 +372,9 @@ export default function HierarchyPage() {
         >
           <h1 className="mg-title text-3xl md:text-4xl font-bold mb-3">
             Organizational Hierarchy
+            <span className="ml-3 inline-block align-middle text-xs px-2 py-0.5 rounded-sm border border-[rgba(var(--mg-warning),0.5)] bg-[rgba(var(--mg-warning),0.1)] text-[rgba(var(--mg-warning),0.9)] font-sans font-medium tracking-wide">
+              DEMO DATA
+            </span>
           </h1>
           <p className="mg-subtitle text-base opacity-80">
             Dynamic organizational charts powered by the new OrgChart component. 

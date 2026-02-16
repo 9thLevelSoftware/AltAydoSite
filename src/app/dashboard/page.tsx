@@ -31,21 +31,15 @@ export default function DashboardPage() {
       return;
     }
 
-    // Add a small delay to ensure session is fully established
-    const timer = setTimeout(() => {
-      // Session check completed
-      setIsLoading(false);
+    // Session check completed -- respond immediately to session status
+    setIsLoading(false);
 
-      if (status === 'unauthenticated' || !session || !session.user) {
-        // Clear any stale session data
-        window.location.href = '/login?reset=true';
-      } else if (status === 'authenticated' && session && session.user) {
-        setIsAuthenticated(true);
-      }
-    }, 800); 
-
-    // Clean up timer on unmount
-    return () => clearTimeout(timer);
+    if (status === 'unauthenticated' || !session || !session.user) {
+      // Clear any stale session data
+      window.location.href = '/login?reset=true';
+    } else if (status === 'authenticated' && session && session.user) {
+      setIsAuthenticated(true);
+    }
   }, [status, router, session]);
 
   // Show loading state while checking authentication
