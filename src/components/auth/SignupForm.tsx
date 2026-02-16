@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
+import { MobiGlasInput, MobiGlasButton, MobiGlasFormError } from '@/components/ui/mobiglas';
 
 interface FormData {
   aydoHandle: string;
@@ -111,138 +112,105 @@ export default function SignupForm() {
           </div>
 
           <form onSubmit={handleSubmit}>
-            {error && (
-              <motion.div
-                className="mb-4 p-2 bg-[rgba(var(--mg-error),0.1)] border border-[rgba(var(--mg-error),0.3)] text-[rgba(var(--mg-error),0.8)] text-xs rounded-sm"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
+            <MobiGlasFormError
+              message={error}
+              details={error.includes('Failed to create user') ? 'Database connection issue. Please try again later or contact support.' : undefined}
+              className="mb-4"
+            />
+
+            <MobiGlasInput
+              label="AYDOCORP HANDLE"
+              id="signup-handle"
+              name="aydoHandle"
+              type="text"
+              placeholder="ENTER HANDLE"
+              required
+              value={formData.aydoHandle}
+              onChange={handleChange}
+            />
+
+            <MobiGlasInput
+              label="EMAIL ADDRESS"
+              id="signup-email"
+              name="email"
+              type="email"
+              placeholder="ENTER EMAIL"
+              required
+              value={formData.email}
+              onChange={handleChange}
+            />
+
+            <MobiGlasInput
+              label="DISCORD NAME"
+              id="signup-discord"
+              name="discordName"
+              type="text"
+              placeholder="ENTER DISCORD NAME"
+              value={formData.discordName}
+              onChange={handleChange}
+            />
+
+            <MobiGlasInput
+              label="RSI ACCOUNT NAME"
+              id="signup-rsi"
+              name="rsiAccountName"
+              type="text"
+              placeholder="ENTER RSI ACCOUNT"
+              value={formData.rsiAccountName}
+              onChange={handleChange}
+            />
+
+            <MobiGlasInput
+              label="PASSWORD"
+              id="signup-password"
+              name="password"
+              type="password"
+              placeholder="ENTER PASSWORD"
+              required
+              autoComplete="new-password"
+              value={formData.password}
+              onChange={handleChange}
+            />
+
+            {/* Confirm Password - custom wrapper to preserve password match indicator */}
+            <div className="mg-input-group mb-4">
+              <label
+                htmlFor="signup-confirm-password"
+                className="block text-sm font-medium text-[rgba(var(--mg-text),0.8)] mb-2 font-quantify tracking-wider"
               >
-                <div className="flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  {error}
-                </div>
-                {error.includes('Failed to create user') && (
-                  <div className="mt-2 text-[rgba(var(--mg-text),0.7)]">
-                    <p>Database connection issue. Please try again later or contact support.</p>
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {/* AydoCorp Handle */}
-            <div className="mg-input-group mb-4">
-              <label htmlFor="signup-handle" className="mg-subtitle text-xs mb-1 block tracking-wider">AYDOCORP HANDLE*</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  id="signup-handle"
-                  name="aydoHandle"
-                  aria-required={true}
-                  value={formData.aydoHandle}
-                  onChange={handleChange}
-                  className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
-                  placeholder="ENTER HANDLE"
-                  required
-                />
-                <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
-              </div>
-            </div>
-
-            {/* Email Address */}
-            <div className="mg-input-group mb-4">
-              <label htmlFor="signup-email" className="mg-subtitle text-xs mb-1 block tracking-wider">EMAIL ADDRESS*</label>
-              <div className="relative">
-                <input
-                  type="email"
-                  id="signup-email"
-                  name="email"
-                  aria-required={true}
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
-                  placeholder="ENTER EMAIL"
-                  required
-                />
-                <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
-              </div>
-            </div>
-
-            {/* Discord Name */}
-            <div className="mg-input-group mb-4">
-              <label htmlFor="signup-discord" className="mg-subtitle text-xs mb-1 block tracking-wider">DISCORD NAME</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  id="signup-discord"
-                  name="discordName"
-                  value={formData.discordName}
-                  onChange={handleChange}
-                  className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
-                  placeholder="ENTER DISCORD NAME"
-                />
-                <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
-              </div>
-            </div>
-
-            {/* RSI Account Name */}
-            <div className="mg-input-group mb-4">
-              <label htmlFor="signup-rsi" className="mg-subtitle text-xs mb-1 block tracking-wider">RSI ACCOUNT NAME</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  id="signup-rsi"
-                  name="rsiAccountName"
-                  value={formData.rsiAccountName}
-                  onChange={handleChange}
-                  className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
-                  placeholder="ENTER RSI ACCOUNT"
-                />
-                <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
-              </div>
-            </div>
-
-            {/* Password */}
-            <div className="mg-input-group mb-4">
-              <label htmlFor="signup-password" className="mg-subtitle text-xs mb-1 block tracking-wider">PASSWORD*</label>
-              <div className="relative">
-                <input
-                  type="password"
-                  id="signup-password"
-                  name="password"
-                  aria-required={true}
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none transition-colors font-quantify tracking-wide"
-                  placeholder="••••••••••••"
-                  required
-                  autoComplete="new-password"
-                />
-                <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
-              </div>
-            </div>
-
-            {/* Confirm Password */}
-            <div className="mg-input-group mb-4">
-              <label htmlFor="signup-confirm-password" className="mg-subtitle text-xs mb-1 block tracking-wider">CONFIRM PASSWORD*</label>
+                CONFIRM PASSWORD <span className="text-[rgba(var(--mg-error),0.9)] text-xs">*</span>
+              </label>
               <div className="relative">
                 <input
                   type="password"
                   id="signup-confirm-password"
                   name="confirmPassword"
+                  required
                   aria-required={true}
+                  aria-invalid={passwordMatch === 'not-matching'}
+                  aria-describedby={passwordMatch === 'not-matching' ? 'signup-confirm-password-match' : undefined}
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className={`mg-input w-full bg-[rgba(var(--mg-panel-dark),0.5)] rounded-sm px-4 py-3 text-base md:px-3 md:py-2 md:text-sm focus:outline-none transition-colors font-quantify tracking-wide
-                    ${passwordMatch === 'matching' ? 'border border-[rgba(var(--mg-success),0.4)] focus:border-[rgba(var(--mg-success),0.7)]' :
-                      passwordMatch === 'not-matching' ? 'border border-[rgba(var(--mg-danger),0.4)] focus:border-[rgba(var(--mg-danger),0.7)]' :
-                      'border border-[rgba(var(--mg-primary),0.2)] focus:border-[rgba(var(--mg-primary),0.5)]'}`}
-                  placeholder="••••••••••••"
-                  required
+                  className={`
+                    w-full px-4 py-3 bg-[rgba(var(--mg-background),0.6)]
+                    rounded-sm text-white
+                    focus:outline-none focus:ring-2 focus:ring-[rgba(var(--mg-primary),0.5)]
+                    transition-all mg-input text-base md:text-sm
+                    ${passwordMatch === 'matching'
+                      ? 'border border-[rgba(var(--mg-success),0.4)] focus:border-[rgba(var(--mg-success),0.7)]'
+                      : passwordMatch === 'not-matching'
+                        ? 'border border-[rgba(var(--mg-danger),0.4)] focus:border-[rgba(var(--mg-danger),0.7)]'
+                        : 'border border-[rgba(var(--mg-primary),0.3)] focus:border-[rgba(var(--mg-primary),0.5)]'
+                    }
+                  `}
+                  placeholder="ENTER PASSWORD AGAIN"
                   autoComplete="new-password"
                 />
-                <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
+                {/* Corner accents matching MobiGlasInput */}
+                <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)] pointer-events-none"></div>
+                <div className="absolute top-0 right-0 w-[6px] h-[6px] border-r border-t border-[rgba(var(--mg-primary),0.4)] pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-[6px] h-[6px] border-l border-b border-[rgba(var(--mg-primary),0.4)] pointer-events-none"></div>
+                <div className="absolute bottom-0 right-0 w-[6px] h-[6px] border-r border-b border-[rgba(var(--mg-primary),0.4)] pointer-events-none"></div>
 
                 {/* Status indicator for password matching */}
                 <AnimatePresence>
@@ -312,6 +280,7 @@ export default function SignupForm() {
               <AnimatePresence>
                 {passwordMatch && (
                   <motion.div
+                    id="signup-confirm-password-match"
                     className={`text-xs mt-1 font-quantify tracking-wider ${
                       passwordMatch === 'matching' ? 'text-[rgba(var(--mg-success),0.8)]' :
                       passwordMatch === 'not-matching' ? 'text-[rgba(var(--mg-danger),0.8)]' :
@@ -345,23 +314,16 @@ export default function SignupForm() {
               </AnimatePresence>
             </div>
 
-            <motion.button
+            <MobiGlasButton
               type="submit"
-              className={`mg-button w-full py-2 px-4 relative overflow-hidden mt-6 ${isLoading ? 'opacity-80' : 'hover:bg-[rgba(var(--mg-primary),0.1)]'}`}
+              variant="primary"
+              fullWidth
+              isLoading={isLoading}
               disabled={isLoading}
-              whileTap={{ scale: 0.98 }}
+              className="mt-6"
             >
-              <div className="relative z-10 font-quantify tracking-wider text-sm">
-                {isLoading ? 'CREATING ACCOUNT...' : 'CREATE ACCOUNT'}
-              </div>
-
-              {/* Loading indicator */}
-              {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="scanner-line"></div>
-                </div>
-              )}
-            </motion.button>
+              CREATE ACCOUNT
+            </MobiGlasButton>
           </form>
 
           <div className="mt-4 text-center text-[rgba(var(--mg-text),0.5)] text-xs">
