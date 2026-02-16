@@ -2,17 +2,10 @@ import { User } from '@/types/user';
 import crypto from 'crypto';
 import { getDb } from './mongodb';
 import * as localStorage from './local-storage';
+import { StaleDocumentError } from './storage-errors';
 
-/**
- * Thrown when an optimistic-locking version mismatch is detected.
- * API routes should catch this and return 409 Conflict.
- */
-export class StaleDocumentError extends Error {
-  constructor(collection: string, id: string) {
-    super(`Document in ${collection} with id ${id} was modified by another request. Please reload and try again.`);
-    this.name = 'StaleDocumentError';
-  }
-}
+// Re-export for backward compatibility (existing consumers import from user-storage)
+export { StaleDocumentError } from './storage-errors';
 
 // State to track if we should use local storage fallback
 let usingFallback = false;
