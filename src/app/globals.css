@@ -137,7 +137,7 @@ body {
   will-change: transform, box-shadow;
 }
 
-.mg-button:hover, .mg-button:focus {
+.mg-button:hover, .mg-button:focus-visible {
   background: rgba(var(--mg-primary), 0.1);
   border-color: rgba(var(--mg-primary), 0.6);
   box-shadow: 0 0 10px rgba(var(--mg-primary), 0.15);
@@ -436,7 +436,11 @@ html {
 /* Focus Styles */
 *:focus {
   outline: none;
-  box-shadow: 0 0 0 1px rgba(var(--mg-primary), 0.3);
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--mg-accent), 0.6);
 }
 
 /* Loading Animation */

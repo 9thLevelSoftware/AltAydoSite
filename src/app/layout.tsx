@@ -37,6 +37,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${quantify.variable} font-quantify bg-black text-white min-h-screen antialiased overflow-x-hidden text-sm`}>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-[rgba(var(--mg-panel-dark),0.95)] focus:text-[rgba(var(--mg-accent),1)] focus:border focus:border-[rgba(var(--mg-accent),0.6)] focus:rounded-sm focus:text-sm focus:font-quantify"
+        >
+          Skip to main content
+        </a>
         <ClientErrorBoundary>
           <Providers>
             <UserProviderWrapper>
@@ -74,7 +80,7 @@ export default function RootLayout({
                       <Navigation />
                     </Suspense>
                   </header>
-                  <main className="flex-1">
+                  <main id="main-content" className="flex-1">
                     <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading content...</div>}>
                       {children}
                     </Suspense>
