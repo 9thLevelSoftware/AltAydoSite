@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 15 of 15 (Code Quality Optimization)
-Plan: 2 of 7 in current phase (15-02 complete)
+Plan: 4 of 7 in current phase (15-04 complete)
 Status: Executing Phase 15
-Last activity: 2026-02-16 -- Plan 15-02 executed (Mission status state machine)
+Last activity: 2026-02-16 -- Plan 15-04 executed (Page metadata titles)
 
-Progress: [████████░░] 85%
+Progress: [████████░░] 88%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [████████░░] 85%
 | 14    | 08   | 2min     | 2     | 6     |
 | 14    | 09   | 1min     | 1     | 1     |
 | 15    | 02   | 2min     | 2     | 2     |
+| 15    | 04   | 4min     | 2     | 19    |
 
 ## Accumulated Context
 
@@ -152,6 +153,9 @@ v1.1 decision: Address all project review findings in v1.1 (100+ issues across s
 15-02: State machine uses typed Record (not classes/xstate) matching existing planned-missions pattern
 15-02: Validation occurs before storage update to prevent invalid data being persisted
 15-02: Same status re-assignment allowed (no-op) to avoid breaking partial update calls
+15-04: Server component pages get direct metadata export; client component pages use layout.tsx
+15-04: Parent layouts (archives, operations, subsidiaries) get generic titles; child layouts override
+15-04: Task 1 files (public/auth pages) already committed in prior execution (1fbad39)
 
 ### Pending Todos
 
@@ -172,5 +176,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 15-02-PLAN.md (Mission status state machine)
-Resume file: .planning/phases/15-code-quality-optimization/15-02-SUMMARY.md
+Stopped at: Completed 15-04-PLAN.md (Page metadata titles)
+Resume file: .planning/phases/15-code-quality-optimization/15-04-SUMMARY.md
