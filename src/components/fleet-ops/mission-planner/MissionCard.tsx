@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { MissionResponse } from '@/types/Mission';
+import { CornerAccents } from '@/components/ui/mobiglas';
 
 interface MissionCardProps {
   mission: MissionResponse;
@@ -26,21 +27,21 @@ const MissionCard: React.FC<MissionCardProps> = ({ mission, onClick }) => {
     }).format(date);
   };
 
-  // Mission status styling
+  // Mission status styling - uses MobiGlas palette variables
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Planning':
-        return 'border-blue-400 text-blue-400 bg-[rgba(59,130,246,0.1)]';
+        return 'border-[rgba(var(--mg-primary),0.5)] text-[rgba(var(--mg-primary),0.8)] bg-[rgba(var(--mg-primary),0.1)]';
       case 'Briefing':
-        return 'border-purple-400 text-purple-400 bg-[rgba(167,139,250,0.1)]';
+        return 'border-[rgba(var(--mg-accent),0.5)] text-[rgba(var(--mg-accent),0.8)] bg-[rgba(var(--mg-accent),0.1)]';
       case 'In Progress':
-        return 'border-green-400 text-green-400 bg-[rgba(74,222,128,0.1)]';
+        return 'border-[rgba(var(--mg-success),0.5)] text-[rgba(var(--mg-success),0.8)] bg-[rgba(var(--mg-success),0.1)]';
       case 'Completed':
-        return 'border-gray-400 text-gray-400 bg-[rgba(156,163,175,0.1)]';
+        return 'border-[rgba(var(--mg-text),0.3)] text-[rgba(var(--mg-text),0.5)] bg-[rgba(var(--mg-text),0.05)]';
       case 'Archived':
-        return 'border-gray-500 text-gray-500 bg-[rgba(107,114,128,0.1)]';
+        return 'border-[rgba(var(--mg-text),0.2)] text-[rgba(var(--mg-text),0.4)] bg-[rgba(var(--mg-text),0.03)]';
       case 'Cancelled':
-        return 'border-red-400 text-red-400 bg-[rgba(248,113,113,0.1)]';
+        return 'border-[rgba(var(--mg-danger),0.5)] text-[rgba(var(--mg-danger),0.8)] bg-[rgba(var(--mg-danger),0.1)]';
       default:
         return 'border-[rgba(var(--mg-primary),0.5)] text-[rgba(var(--mg-primary),0.8)] bg-[rgba(var(--mg-primary),0.1)]';
     }
@@ -118,14 +119,7 @@ const MissionCard: React.FC<MissionCardProps> = ({ mission, onClick }) => {
       <div className="hexagon-bg absolute inset-0 opacity-5 pointer-events-none"></div>
       
       {/* Corner decorations */}
-      <div className="absolute top-0 right-0 w-[20px] h-[20px]">
-        <div className="absolute top-0 right-0 w-[2px] h-[10px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-        <div className="absolute top-0 right-0 w-[10px] h-[2px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-      </div>
-      <div className="absolute bottom-0 left-0 w-[20px] h-[20px]">
-        <div className="absolute bottom-0 left-0 w-[2px] h-[10px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-        <div className="absolute bottom-0 left-0 w-[10px] h-[2px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-      </div>
+      <CornerAccents size="lg" color="primary" opacity="low" />
       
       {/* Enhanced corner decorations that appear on hover */}
       <AnimatePresence>
