@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 export interface CornerAccentsProps {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   variant?: 'simple' | 'detailed' | 'animated';
-  color?: 'primary' | 'secondary' | 'accent' | 'success' | 'warning';
+  color?: 'primary' | 'secondary' | 'accent' | 'success' | 'warning' | 'danger';
   opacity?: 'low' | 'medium' | 'high';
   withDots?: boolean;
   className?: string;
@@ -33,7 +33,8 @@ export default function CornerAccents({
     secondary: 'border-[rgba(var(--mg-secondary),var(--opacity))]',
     accent: 'border-[rgba(var(--mg-accent),var(--opacity))]',
     success: 'border-[rgba(var(--mg-success),var(--opacity))]',
-    warning: 'border-[rgba(var(--mg-warning),var(--opacity))]'
+    warning: 'border-[rgba(var(--mg-warning),var(--opacity))]',
+    danger: 'border-[rgba(var(--mg-danger),var(--opacity))]'
   };
 
   const opacityMap = {

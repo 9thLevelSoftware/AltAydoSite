@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { bgUrl } from '@/lib/cdn';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { CornerAccents } from '@/components/ui/mobiglas';
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
@@ -92,10 +93,7 @@ export default function ResetPasswordPage() {
       >
         <div className="mg-panel bg-[rgba(var(--mg-panel-dark),0.8)] backdrop-blur-md p-6 rounded-sm relative">
           {/* Corner brackets */}
-          <div className="absolute top-0 left-0 w-5 h-5 border-l border-t border-[rgba(var(--mg-primary),0.5)]"></div>
-          <div className="absolute top-0 right-0 w-5 h-5 border-r border-t border-[rgba(var(--mg-primary),0.5)]"></div>
-          <div className="absolute bottom-0 left-0 w-5 h-5 border-l border-b border-[rgba(var(--mg-primary),0.5)]"></div>
-          <div className="absolute bottom-0 right-0 w-5 h-5 border-r border-b border-[rgba(var(--mg-primary),0.5)]"></div>
+          <CornerAccents size="md" color="primary" opacity="medium" />
 
           <div className="text-center mb-6">
             <h2 className="mg-title text-xl mb-1">AYDO<span className="mg-subtitle font-light">CORP</span></h2>
@@ -147,7 +145,7 @@ export default function ResetPasswordPage() {
                     placeholder="ENTER NEW PASSWORD"
                     disabled={isLoading || !token}
                   />
-                  <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
+                  <CornerAccents size="xs" color="primary" opacity="low" />
                 </div>
                 <p className="text-xs text-[rgba(var(--mg-text),0.6)] mt-1">
                   Password must be at least 8 characters long.
@@ -167,7 +165,7 @@ export default function ResetPasswordPage() {
                     placeholder="CONFIRM NEW PASSWORD"
                     disabled={isLoading || !token}
                   />
-                  <div className="absolute top-0 left-0 w-[6px] h-[6px] border-l border-t border-[rgba(var(--mg-primary),0.4)]"></div>
+                  <CornerAccents size="xs" color="primary" opacity="low" />
                 </div>
               </div>
 

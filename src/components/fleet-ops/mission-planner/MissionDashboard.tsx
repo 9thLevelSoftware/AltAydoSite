@@ -5,7 +5,7 @@ import { motion, stagger } from 'motion/react';
 import { MissionResponse, MissionStatus, MissionType } from '@/types/Mission';
 import MissionList from './MissionList';
 import MissionFilters from './MissionFilters';
-import { MobiGlasButton } from '@/components/ui/mobiglas';
+import { MobiGlasButton, CornerAccents } from '@/components/ui/mobiglas';
 
 interface MissionDashboardProps {
   missions: MissionResponse[];
@@ -131,14 +131,7 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
       >
         <div className="mg-panel bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.15)] p-6 relative overflow-hidden">
           {/* Corner decorations */}
-          <div className="absolute top-0 right-0 w-[20px] h-[20px]">
-            <div className="absolute top-0 right-0 w-[2px] h-[10px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-            <div className="absolute top-0 right-0 w-[10px] h-[2px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-          </div>
-          <div className="absolute bottom-0 left-0 w-[20px] h-[20px]">
-            <div className="absolute bottom-0 left-0 w-[2px] h-[10px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-            <div className="absolute bottom-0 left-0 w-[10px] h-[2px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-          </div>
+          <CornerAccents size="lg" color="primary" opacity="low" />
 
           {/* Grid background */}
           <div className="mg-grid-bg"></div>

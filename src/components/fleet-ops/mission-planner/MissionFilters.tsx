@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence, stagger } from 'motion/react';
 import { MissionStatus, MissionType } from '@/types/Mission';
+import { CornerAccents } from '@/components/ui/mobiglas';
 
 interface MissionFiltersProps {
   statusFilter: MissionStatus | 'all';
@@ -81,31 +82,8 @@ const MissionFilters: React.FC<MissionFiltersProps> = ({
       animate="visible"
     >
       <div className="mg-panel bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.15)] p-5 relative overflow-hidden">
-        {/* Enhanced corner decorations */}
-        <div className="absolute top-0 right-0 w-[20px] h-[20px]">
-          <motion.div 
-            className="absolute top-0 right-0 w-[2px] h-[10px] bg-[rgba(var(--mg-primary),0.4)]"
-            animate={{ height: [10, 15, 10] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          />
-          <motion.div 
-            className="absolute top-0 right-0 w-[10px] h-[2px] bg-[rgba(var(--mg-primary),0.4)]"
-            animate={{ width: [10, 15, 10] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          />
-        </div>
-        <div className="absolute bottom-0 left-0 w-[20px] h-[20px]">
-          <motion.div 
-            className="absolute bottom-0 left-0 w-[2px] h-[10px] bg-[rgba(var(--mg-primary),0.4)]"
-            animate={{ height: [10, 15, 10] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-          />
-          <motion.div 
-            className="absolute bottom-0 left-0 w-[10px] h-[2px] bg-[rgba(var(--mg-primary),0.4)]"
-            animate={{ width: [10, 15, 10] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-          />
-        </div>
+        {/* Corner decorations */}
+        <CornerAccents size="lg" color="primary" opacity="low" variant="animated" />
 
         {/* Multiple scanning line effects */}
         <motion.div

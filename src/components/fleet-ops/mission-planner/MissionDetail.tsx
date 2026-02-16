@@ -6,6 +6,7 @@ import { MissionResponse } from '@/types/Mission';
 import Image from 'next/image';
 import { useShipBatch } from '@/hooks/useShipBatch';
 import MissionParticipantShip from '@/components/ships/MissionParticipantShip';
+import { CornerAccents } from '@/components/ui/mobiglas';
 
 interface MissionDetailProps {
   mission: MissionResponse;
@@ -64,21 +65,21 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
     }
   };
 
-  // Mission status styling
+  // Mission status styling - uses MobiGlas palette variables
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Planning':
-        return 'border-blue-400 text-blue-400 bg-[rgba(59,130,246,0.1)]';
+        return 'border-[rgba(var(--mg-primary),0.5)] text-[rgba(var(--mg-primary),0.8)] bg-[rgba(var(--mg-primary),0.1)]';
       case 'Briefing':
-        return 'border-purple-400 text-purple-400 bg-[rgba(167,139,250,0.1)]';
+        return 'border-[rgba(var(--mg-accent),0.5)] text-[rgba(var(--mg-accent),0.8)] bg-[rgba(var(--mg-accent),0.1)]';
       case 'In Progress':
-        return 'border-green-400 text-green-400 bg-[rgba(74,222,128,0.1)]';
+        return 'border-[rgba(var(--mg-success),0.5)] text-[rgba(var(--mg-success),0.8)] bg-[rgba(var(--mg-success),0.1)]';
       case 'Completed':
-        return 'border-gray-400 text-gray-400 bg-[rgba(156,163,175,0.1)]';
+        return 'border-[rgba(var(--mg-text),0.3)] text-[rgba(var(--mg-text),0.5)] bg-[rgba(var(--mg-text),0.05)]';
       case 'Archived':
-        return 'border-gray-500 text-gray-500 bg-[rgba(107,114,128,0.1)]';
+        return 'border-[rgba(var(--mg-text),0.2)] text-[rgba(var(--mg-text),0.4)] bg-[rgba(var(--mg-text),0.03)]';
       case 'Cancelled':
-        return 'border-red-400 text-red-400 bg-[rgba(248,113,113,0.1)]';
+        return 'border-[rgba(var(--mg-danger),0.5)] text-[rgba(var(--mg-danger),0.8)] bg-[rgba(var(--mg-danger),0.1)]';
       default:
         return 'border-[rgba(var(--mg-primary),0.5)] text-[rgba(var(--mg-primary),0.8)] bg-[rgba(var(--mg-primary),0.1)]';
     }
@@ -103,14 +104,7 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
           <div className="holo-scan absolute inset-0 opacity-50 pointer-events-none" />
           
           {/* Corner decorations */}
-          <div className="absolute top-0 right-0 w-[10px] h-[10px]">
-            <div className="absolute top-0 right-0 w-[1px] h-[5px] bg-[rgba(var(--mg-primary),0.6)]"></div>
-            <div className="absolute top-0 right-0 w-[5px] h-[1px] bg-[rgba(var(--mg-primary),0.6)]"></div>
-          </div>
-          <div className="absolute bottom-0 left-0 w-[10px] h-[10px]">
-            <div className="absolute bottom-0 left-0 w-[1px] h-[5px] bg-[rgba(var(--mg-primary),0.6)]"></div>
-            <div className="absolute bottom-0 left-0 w-[5px] h-[1px] bg-[rgba(var(--mg-primary),0.6)]"></div>
-          </div>
+          <CornerAccents size="xs" color="primary" opacity="medium" />
           
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -140,15 +134,8 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
             <div className="holo-scan absolute inset-0 opacity-30 pointer-events-none" />
             
             {/* Corner decorations */}
-            <div className="absolute top-0 right-0 w-[15px] h-[15px]">
-              <div className="absolute top-0 right-0 w-[2px] h-[8px] bg-[rgba(var(--mg-primary),0.6)]"></div>
-              <div className="absolute top-0 right-0 w-[8px] h-[2px] bg-[rgba(var(--mg-primary),0.6)]"></div>
-            </div>
-            <div className="absolute bottom-0 left-0 w-[15px] h-[15px]">
-              <div className="absolute bottom-0 left-0 w-[2px] h-[8px] bg-[rgba(var(--mg-primary),0.6)]"></div>
-              <div className="absolute bottom-0 left-0 w-[8px] h-[2px] bg-[rgba(var(--mg-primary),0.6)]"></div>
-            </div>
-            
+            <CornerAccents size="sm" color="primary" opacity="medium" />
+
             <span className="relative z-10 inline-flex items-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -167,14 +154,7 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[rgba(var(--mg-danger),0.1)] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             
             {/* Corner decorations */}
-            <div className="absolute top-0 right-0 w-[15px] h-[15px]">
-              <div className="absolute top-0 right-0 w-[2px] h-[8px] bg-[rgba(var(--mg-danger),0.6)]"></div>
-              <div className="absolute top-0 right-0 w-[8px] h-[2px] bg-[rgba(var(--mg-danger),0.6)]"></div>
-            </div>
-            <div className="absolute bottom-0 left-0 w-[15px] h-[15px]">
-              <div className="absolute bottom-0 left-0 w-[2px] h-[8px] bg-[rgba(var(--mg-danger),0.6)]"></div>
-              <div className="absolute bottom-0 left-0 w-[8px] h-[2px] bg-[rgba(var(--mg-danger),0.6)]"></div>
-            </div>
+            <CornerAccents size="sm" color="danger" opacity="medium" />
             
             <span className="relative z-10 inline-flex items-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -192,14 +172,7 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
         className="mg-panel bg-[rgba(var(--mg-panel-dark),0.4)] border border-[rgba(var(--mg-primary),0.15)] rounded-sm p-6 relative overflow-hidden"
       >
         {/* Corner decorations */}
-        <div className="absolute top-0 right-0 w-[20px] h-[20px]">
-          <div className="absolute top-0 right-0 w-[2px] h-[10px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-          <div className="absolute top-0 right-0 w-[10px] h-[2px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-        </div>
-        <div className="absolute bottom-0 left-0 w-[20px] h-[20px]">
-          <div className="absolute bottom-0 left-0 w-[2px] h-[10px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-          <div className="absolute bottom-0 left-0 w-[10px] h-[2px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-        </div>
+        <CornerAccents size="lg" color="primary" opacity="low" />
         
         {/* Scanning line effect */}
         <motion.div

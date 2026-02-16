@@ -1,5 +1,6 @@
 import React from 'react';
 import { OperationResponse } from '@/types/Operation';
+import { CornerAccents } from '@/components/ui/mobiglas';
 
 interface OperationCardProps {
   operation: OperationResponse;
@@ -19,23 +20,23 @@ const OperationCard: React.FC<OperationCardProps> = ({ operation, onClick }) => 
     }).format(date);
   };
   
-  // Get status color
+  // Get status color - uses MobiGlas palette variables
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Planning':
-        return 'bg-[rgba(59,130,246,0.15)] text-[rgba(96,165,250,0.9)] border-[rgba(59,130,246,0.3)]';
+        return 'bg-[rgba(var(--mg-primary),0.15)] text-[rgba(var(--mg-primary),0.9)] border-[rgba(var(--mg-primary),0.3)]';
       case 'Briefing':
-        return 'bg-[rgba(124,58,237,0.15)] text-[rgba(167,139,250,0.9)] border-[rgba(124,58,237,0.3)]';
+        return 'bg-[rgba(var(--mg-accent),0.15)] text-[rgba(var(--mg-accent),0.9)] border-[rgba(var(--mg-accent),0.3)]';
       case 'Active':
-        return 'bg-[rgba(16,185,129,0.15)] text-[rgba(52,211,153,0.9)] border-[rgba(16,185,129,0.3)]';
+        return 'bg-[rgba(var(--mg-success),0.15)] text-[rgba(var(--mg-success),0.9)] border-[rgba(var(--mg-success),0.3)]';
       case 'Completed':
-        return 'bg-[rgba(20,184,166,0.15)] text-[rgba(45,212,191,0.9)] border-[rgba(20,184,166,0.3)]';
+        return 'bg-[rgba(var(--mg-text),0.1)] text-[rgba(var(--mg-text),0.7)] border-[rgba(var(--mg-text),0.2)]';
       case 'Debriefing':
-        return 'bg-[rgba(249,115,22,0.15)] text-[rgba(251,146,60,0.9)] border-[rgba(249,115,22,0.3)]';
+        return 'bg-[rgba(var(--mg-warning),0.15)] text-[rgba(var(--mg-warning),0.9)] border-[rgba(var(--mg-warning),0.3)]';
       case 'Cancelled':
-        return 'bg-[rgba(239,68,68,0.15)] text-[rgba(248,113,113,0.9)] border-[rgba(239,68,68,0.3)]';
+        return 'bg-[rgba(var(--mg-danger),0.15)] text-[rgba(var(--mg-danger),0.9)] border-[rgba(var(--mg-danger),0.3)]';
       default:
-        return 'bg-[rgba(107,114,128,0.15)] text-[rgba(156,163,175,0.9)] border-[rgba(107,114,128,0.3)]';
+        return 'bg-[rgba(var(--mg-text),0.1)] text-[rgba(var(--mg-text),0.7)] border-[rgba(var(--mg-text),0.2)]';
     }
   };
   
@@ -44,17 +45,8 @@ const OperationCard: React.FC<OperationCardProps> = ({ operation, onClick }) => 
       className="mg-panel bg-[rgba(var(--mg-panel-dark),0.6)] border border-[rgba(var(--mg-primary),0.15)] rounded-sm p-4 cursor-pointer hover:border-[rgba(var(--mg-primary),0.4)] transition-all relative group"
       onClick={onClick}
     >
-      {/* Top right corner decoration */}
-      <div className="absolute top-0 right-0 w-[20px] h-[20px]">
-        <div className="absolute top-0 right-0 w-[2px] h-[10px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-        <div className="absolute top-0 right-0 w-[10px] h-[2px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-      </div>
-      
-      {/* Bottom left corner decoration */}
-      <div className="absolute bottom-0 left-0 w-[20px] h-[20px]">
-        <div className="absolute bottom-0 left-0 w-[2px] h-[10px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-        <div className="absolute bottom-0 left-0 w-[10px] h-[2px] bg-[rgba(var(--mg-primary),0.4)]"></div>
-      </div>
+      {/* Corner decorations */}
+      <CornerAccents size="lg" color="primary" opacity="low" />
       
       {/* Hover effect */}
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
