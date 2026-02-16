@@ -566,10 +566,18 @@ const shipImages = [
                           </div>
 
                           <div className="p-3 space-y-4">
-                            <div className="mg-button text-xs w-full flex items-center justify-center">
-                              <div className={`w-2 h-2 ${scanning ? 'bg-[rgba(var(--mg-warning),1)] animate-pulse' : 'bg-[rgba(var(--mg-primary),0.8)]'} rounded-full mr-2`}></div>
+                            <MobiGlasButton
+                              variant={scanning ? 'accent' : 'primary'}
+                              size="sm"
+                              fullWidth
+                              className="text-xs cursor-default"
+                              disabled={scanning}
+                              leftIcon={
+                                <div className={`w-2 h-2 ${scanning ? 'bg-[rgba(var(--mg-warning),1)] animate-pulse' : 'bg-[rgba(var(--mg-primary),0.8)]'} rounded-full`}></div>
+                              }
+                            >
                               {scanning ? 'RECALIBRATING...' : 'SIGNAL SECURE'}
-                            </div>
+                            </MobiGlasButton>
 
                             <div className="space-y-2">
                               <div className="flex justify-between text-xs">
