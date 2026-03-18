@@ -5,6 +5,7 @@ import * as plannedMissionStorage from '@/lib/planned-mission-storage';
 import { getDiscordService, DiscordEventUser } from '@/lib/discord';
 import { DiscordEventStatus } from '@/types/DiscordEvent';
 import { PlannedMissionStatus } from '@/types/PlannedMission';
+import { buildEventDescription } from '@/lib/discord-event-description';
 import { logger } from '@/lib/logger';
 
 // Map Discord event status to mission status
@@ -30,38 +31,6 @@ function mapDiscordStatusToMissionStatus(discordStatus: number, currentMissionSt
       break;
   }
   return null; // No status change needed
-}
-
-// Helper to build Discord event description from mission
-function buildEventDescription(mission: any, baseUrl?: string): string {
-  const parts: string[] = [];
-
-  // Add objectives
-  if (mission.objectives) {
-    parts.push(`**Objectives:**\n${mission.objectives}`);
-  }
-
-  // Add operation type and activities
-  const activities = [mission.primaryActivity];
-  if (mission.secondaryActivity) activities.push(mission.secondaryActivity);
-  if (mission.tertiaryActivity) activities.push(mission.tertiaryActivity);
-  parts.push(`**Type:** ${mission.operationType}`);
-  parts.push(`**Activities:** ${activities.join(', ')}`);
-
-  // Add leaders
-  if (mission.leaders && mission.leaders.length > 0) {
-    const leaderList = mission.leaders
-      .map((l: any) => `${l.role}: ${l.aydoHandle}`)
-      .join('\n');
-    parts.push(`**Leadership:**\n${leaderList}`);
-  }
-
-  // Add link to full mission briefing
-  if (baseUrl) {
-    parts.push(`\n📋 **Full Briefing:** ${baseUrl}/dashboard/mission-planner?missionId=${mission.id}`);
-  }
-
-  return parts.join('\n\n');
 }
 
 // POST - Publish mission to Discord (create event)

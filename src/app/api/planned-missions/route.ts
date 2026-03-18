@@ -5,35 +5,8 @@ import { ActivityType, OperationType } from '@/types/MissionTemplate';
 import { PlannedMissionStatus } from '@/types/PlannedMission';
 import * as plannedMissionStorage from '@/lib/planned-mission-storage';
 import { getDiscordService } from '@/lib/discord';
+import { buildEventDescription } from '@/lib/discord-event-description';
 import { logger } from '@/lib/logger';
-
-// Helper to build Discord event description from mission
-function buildEventDescription(mission: any, baseUrl?: string): string {
-  const parts: string[] = [];
-
-  if (mission.objectives) {
-    parts.push(`**Objectives:**\n${mission.objectives}`);
-  }
-
-  const activities = [mission.primaryActivity];
-  if (mission.secondaryActivity) activities.push(mission.secondaryActivity);
-  if (mission.tertiaryActivity) activities.push(mission.tertiaryActivity);
-  parts.push(`**Type:** ${mission.operationType}`);
-  parts.push(`**Activities:** ${activities.join(', ')}`);
-
-  if (mission.leaders && mission.leaders.length > 0) {
-    const leaderList = mission.leaders
-      .map((l: any) => `${l.role}: ${l.aydoHandle}`)
-      .join('\n');
-    parts.push(`**Leadership:**\n${leaderList}`);
-  }
-
-  if (baseUrl) {
-    parts.push(`\n📋 **Full Briefing:** ${baseUrl}/dashboard/mission-planner?missionId=${mission.id}`);
-  }
-
-  return parts.join('\n\n');
-}
 
 // Auto-publish mission to Discord
 async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ success: boolean; discordEvent?: any; error?: string }> {
