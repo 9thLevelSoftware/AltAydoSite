@@ -25,7 +25,9 @@
     "gen-password": "tsx src/scripts/generate-password.ts",
     "start-discord-monitor": "node scripts/start-discord-monitor.js",
     "assign-synced-role": "tsx src/scripts/assign-synced-role.ts",
-    "analyze": "cross-env ANALYZE=true next build"
+    "analyze": "cross-env ANALYZE=true next build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": ">=18 <=22"
@@ -69,6 +71,7 @@
     "postcss": "^8",
     "postcss-preset-env": "^10.1.6",
     "tsx": "^4.19.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.0"
   }
 }
