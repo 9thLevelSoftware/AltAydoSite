@@ -27,7 +27,8 @@
     "assign-synced-role": "tsx src/scripts/assign-synced-role.ts",
     "analyze": "cross-env ANALYZE=true next build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "husky"
   },
   "engines": {
     "node": ">=18 <=22"
@@ -54,6 +55,15 @@
     "zlib-sync": "^0.1.10",
     "zod": "^3.24.4"
   },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,css}": [
+      "prettier --write"
+    ]
+  },
   "devDependencies": {
     "@next/bundle-analyzer": "^15.3.3",
     "@types/bcrypt": "^6.0.0",
@@ -68,8 +78,11 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "^15.5.12",
     "fs-extra": "^11.3.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "postcss": "^8",
     "postcss-preset-env": "^10.1.6",
+    "prettier": "^3.8.1",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "vitest": "^4.1.0"
