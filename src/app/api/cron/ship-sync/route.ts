@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
     // Fail-closed cron auth: reject if CRON_SECRET not configured
     const cronSecret = process.env.CRON_SECRET;
     if (!cronSecret) {
-      logger.error('CRON_SECRET not configured - rejecting request', undefined, { route: '/api/cron/ship-sync' });
+      logger.error('CRON_SECRET not configured - rejecting request', undefined, {
+        route: '/api/cron/ship-sync',
+      });
       return NextResponse.json({ error: 'Server misconfigured' }, { status: 503 });
     }
     const authHeader = request.headers.get('authorization');
@@ -46,7 +48,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    const responseBody = {
       success: result.status !== 'failed',
       result: {
         status: result.status,
@@ -59,18 +61,25 @@ export async function GET(request: NextRequest) {
         pagesProcessed: result.pagesProcessed,
         errorCount: result.errors.length,
         hasErrors: result.errors.length > 0,
+        errors: result.errors.slice(0, 10),
       },
       timestamp: new Date().toISOString(),
+    };
+
+    return NextResponse.json(responseBody, {
+      status: result.status === 'failed' ? 502 : 200,
     });
   } catch (error) {
-    logger.error('API sync failed', error instanceof Error ? error : new Error(String(error)), { route: '/api/cron/ship-sync' });
+    logger.error('API sync failed', error instanceof Error ? error : new Error(String(error)), {
+      route: '/api/cron/ship-sync',
+    });
     return NextResponse.json(
       {
         success: false,
         error: 'Ship sync failed',
         timestamp: new Date().toISOString(),
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

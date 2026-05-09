@@ -110,7 +110,9 @@ async function fetchWithRetry(
   url: string,
   retries: number,
   page: number
-): Promise<Response | null> {
+): Promise<{ response: Response | null; error?: string }> {
+  let lastError: string | undefined;
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const response = await fetch(url, {
@@ -119,7 +121,7 @@ async function fetchWithRetry(
 
       // Success
       if (response.ok) {
-        return response;
+        return { response };
       }
 
       // Rate limited -- respect Retry-After
@@ -141,22 +143,26 @@ async function fetchWithRetry(
       // Client error (not 429) -- do not retry
       if (response.status >= 400 && response.status < 500) {
         const body = await response.text().catch(() => '(no body)');
+        const error = `FleetYards API returned ${response.status} for page ${page}: ${body.slice(0, 500)}`;
         logger.warn('FleetYards API client error', {
           module: 'fleetyards',
           page,
           status: response.status,
           body,
         });
-        return null;
+        return { response: null, error };
       }
 
       // Server error (5xx) -- retry with backoff
       if (response.status >= 500) {
+        const body = await response.text().catch(() => '(no body)');
+        lastError = `FleetYards API returned ${response.status} for page ${page}: ${body.slice(0, 500)}`;
         const waitMs = 1000 * attempt;
         logger.warn('FleetYards API server error, retrying', {
           module: 'fleetyards',
           page,
           status: response.status,
+          body,
           attempt,
           retries,
           waitMs,
@@ -167,15 +173,19 @@ async function fetchWithRetry(
 
       // Unexpected status -- treat as non-retryable
       const body = await response.text().catch(() => '(no body)');
+      const error = `FleetYards API returned unexpected status ${response.status} for page ${page}: ${body.slice(0, 500)}`;
       logger.warn('FleetYards API unexpected status', {
         module: 'fleetyards',
         page,
         status: response.status,
         body,
       });
-      return null;
+      return { response: null, error };
     } catch (error) {
       // Network error -- retry with backoff
+      lastError = `FleetYards API network error for page ${page}: ${
+        error instanceof Error ? error.message : String(error)
+      }`;
       const waitMs = 1000 * attempt;
       logger.warn('FleetYards API network error, retrying', {
         module: 'fleetyards',
@@ -190,7 +200,7 @@ async function fetchWithRetry(
   }
 
   logger.warn('FleetYards API page failed after retries', { module: 'fleetyards', page, retries });
-  return null;
+  return { response: null, error: lastError };
 }
 
 // ---------------------------------------------------------------------------
@@ -224,10 +234,10 @@ export async function fetchAllShips(): Promise<{
   while (nextUrl && page <= MAX_PAGES) {
     logger.info('Fetching FleetYards page', { module: 'fleetyards', page });
 
-    const response = await fetchWithRetry(nextUrl, MAX_RETRIES, page);
+    const { response, error } = await fetchWithRetry(nextUrl, MAX_RETRIES, page);
 
     if (!response) {
-      const errorMsg = `Page ${page} failed after retries -- skipping`;
+      const errorMsg = error ?? `Page ${page} failed after retries -- skipping`;
       errors.push(errorMsg);
       // Stop pagination if a page fails entirely (data may be incomplete)
       break;
@@ -238,7 +248,7 @@ export async function fetchAllShips(): Promise<{
     try {
       const normalized = normalizeModelsResponse(await response.json());
       if (!normalized) {
-        const errorMsg = `Page ${page} returned an unsupported FleetYards response shape`;
+        const errorMsg = `Page ${page} returned an unsupported FleetYards response shape; content-type=${response.headers.get('content-type') ?? 'unknown'}`;
         errors.push(errorMsg);
         logger.warn('FleetYards API unsupported response shape', {
           module: 'fleetyards',

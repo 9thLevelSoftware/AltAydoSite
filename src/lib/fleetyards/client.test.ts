@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchAllShips } from './client';
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'Content-Type': 'application/json' },
   });
 }
@@ -51,5 +51,19 @@ describe('fetchAllShips', () => {
 
     expect(result.ships).toHaveLength(1);
     expect(result.errors).toEqual([]);
+  });
+
+  it('returns the FleetYards HTTP error details when page fetch fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ error: 'forbidden' }, 403))
+    );
+
+    const result = await fetchAllShips();
+
+    expect(result.ships).toEqual([]);
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.errors[0]).toContain('FleetYards API returned 403 for page 1');
+    expect(result.errors[0]).toContain('forbidden');
   });
 });
