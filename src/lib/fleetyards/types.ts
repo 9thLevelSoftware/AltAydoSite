@@ -101,6 +101,13 @@ export interface FleetYardsShipResponse {
   price: number | null;
   /** Ship description text */
   description: string | null;
+  /** Related external URLs */
+  links?: {
+    salesPageUrl?: string | null;
+    storeUrl?: string | null;
+    self?: string | null;
+    frontend?: string | null;
+  };
   /** Store image URL */
   storeImage: FleetYardsImageField;
   /** RSI store URL */
@@ -123,6 +130,21 @@ export interface FleetYardsShipResponse {
     frontView?: FleetYardsImageField;
     storeImage?: FleetYardsImageField;
     fleetchartImage?: FleetYardsImageField;
+  };
+  /** Current physical metrics object */
+  metrics?: {
+    beam?: number | null;
+    cargo?: number | null;
+    height?: number | null;
+    hydrogenFuelTankSize?: number | null;
+    length?: number | null;
+    mass?: number | null;
+    quantumFuelTankSize?: number | null;
+    size?: string | null;
+  };
+  /** Current speeds object */
+  speeds?: {
+    scmSpeed?: number | null;
   };
   /** Whether the ship is currently on sale */
   onSale: boolean;

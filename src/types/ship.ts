@@ -219,6 +219,13 @@ export const FleetYardsShipSchema = z
     description: z.string().nullable().optional(),
     storeImage: ViewFieldSchema,
     storeUrl: z.string().nullable().optional(),
+    links: z
+      .object({
+        salesPageUrl: z.string().nullable().optional(),
+        storeUrl: z.string().nullable().optional(),
+      })
+      .passthrough()
+      .optional(),
 
     // View fields: current API returns flat strings at top level, objects under media
     angledView: ViewFieldSchema,
@@ -240,6 +247,25 @@ export const FleetYardsShipSchema = z
       .optional(),
 
     fleetchartImage: ViewFieldSchema,
+    metrics: z
+      .object({
+        beam: z.number().nullable().optional(),
+        cargo: z.number().nullable().optional(),
+        height: z.number().nullable().optional(),
+        hydrogenFuelTankSize: z.number().nullable().optional(),
+        length: z.number().nullable().optional(),
+        mass: z.number().nullable().optional(),
+        quantumFuelTankSize: z.number().nullable().optional(),
+        size: z.string().nullable().optional(),
+      })
+      .passthrough()
+      .optional(),
+    speeds: z
+      .object({
+        scmSpeed: z.number().nullable().optional(),
+      })
+      .passthrough()
+      .optional(),
     onSale: z.boolean().optional().default(false),
     hasImages: z.boolean().optional().default(false),
     hasPaints: z.boolean().optional().default(false),

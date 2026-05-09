@@ -148,7 +148,7 @@ export function transformFleetYardsShip(
     classification: raw.classification ?? '',
     classificationLabel: raw.classificationLabel ?? '',
     focus: raw.focus ?? '',
-    size: raw.size ?? '',
+    size: raw.metrics?.size ?? raw.size ?? '',
     productionStatus: raw.productionStatus ?? '',
 
     // Crew
@@ -158,16 +158,16 @@ export function transformFleetYardsShip(
     },
 
     // Physical attributes
-    cargo: raw.cargo ?? 0,
-    length: raw.length ?? 0,
-    beam: raw.beam ?? 0,
-    height: raw.height ?? 0,
-    mass: raw.mass ?? 0,
+    cargo: raw.metrics?.cargo ?? raw.cargo ?? 0,
+    length: raw.metrics?.length ?? raw.length ?? 0,
+    beam: raw.metrics?.beam ?? raw.beam ?? 0,
+    height: raw.metrics?.height ?? raw.height ?? 0,
+    mass: raw.metrics?.mass ?? raw.mass ?? 0,
 
     // Performance
-    scmSpeed: raw.scmSpeed ?? null,
-    hydrogenFuelTankSize: raw.hydrogenFuelTankSize ?? null,
-    quantumFuelTankSize: raw.quantumFuelTankSize ?? null,
+    scmSpeed: raw.speeds?.scmSpeed ?? raw.scmSpeed ?? null,
+    hydrogenFuelTankSize: raw.metrics?.hydrogenFuelTankSize ?? raw.hydrogenFuelTankSize ?? null,
+    quantumFuelTankSize: raw.metrics?.quantumFuelTankSize ?? raw.quantumFuelTankSize ?? null,
 
     // Pricing
     pledgePrice: raw.pledgePrice ?? null,
@@ -175,7 +175,7 @@ export function transformFleetYardsShip(
 
     // Content
     description: raw.description ?? null,
-    storeUrl: raw.storeUrl ?? null,
+    storeUrl: raw.links?.storeUrl ?? raw.storeUrl ?? null,
 
     // Images -- prefer media.*View objects (full resolutions) over flat string URLs
     images: {

@@ -51,6 +51,22 @@ describe('transformFleetYardsShip', () => {
             'https://api.fleetyards.net/files/representations/redirect/100i-angled-medium.png',
         },
       },
+      metrics: {
+        beam: 12,
+        cargo: 2,
+        height: 5,
+        hydrogenFuelTankSize: 6.5,
+        length: 19,
+        mass: 45143,
+        quantumFuelTankSize: 1.3,
+        size: 'small',
+      },
+      speeds: {
+        scmSpeed: 223,
+      },
+      links: {
+        storeUrl: 'https://robertsspaceindustries.com/pledge/ships/origin-100/100i',
+      },
       updatedAt: '2026-04-03T23:10:15Z',
     });
 
@@ -66,5 +82,15 @@ describe('transformFleetYardsShip', () => {
     expect(doc.images.angledViewMedium).toBe(
       'https://api.fleetyards.net/files/representations/redirect/100i-angled-medium.png'
     );
+    expect(doc.cargo).toBe(2);
+    expect(doc.length).toBe(19);
+    expect(doc.beam).toBe(12);
+    expect(doc.height).toBe(5);
+    expect(doc.mass).toBe(45143);
+    expect(doc.hydrogenFuelTankSize).toBe(6.5);
+    expect(doc.quantumFuelTankSize).toBe(1.3);
+    expect(doc.scmSpeed).toBe(223);
+    expect(doc.size).toBe('small');
+    expect(doc.storeUrl).toBe('https://robertsspaceindustries.com/pledge/ships/origin-100/100i');
   });
 });

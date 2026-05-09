@@ -116,3 +116,39 @@ jobs:
           clean: true
           restart: true
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_E8F83D01518942F1B2B01381F804622F }}
+
+      - name: Trigger ship database sync
+        env:
+          APP_URL: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+          FALLBACK_APP_URL: ${{ secrets.NEXTAUTH_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET GitHub secret is not configured; skipping post-deploy ship sync."
+            exit 0
+          fi
+
+          if [ -z "${APP_URL}" ]; then
+            APP_URL="${FALLBACK_APP_URL:-https://aydocorp.space}"
+          fi
+
+          APP_URL="${APP_URL%/}"
+          echo "Waiting for deployed app to respond at ${APP_URL}..."
+          for attempt in {1..20}; do
+            if curl --silent --show-error --fail "${APP_URL}/api/ships/sync-status" > /dev/null; then
+              break
+            fi
+            if [ "${attempt}" -eq 20 ]; then
+              echo "App did not become ready before ship sync."
+              exit 1
+            fi
+            sleep 6
+          done
+
+          echo "Triggering FleetYards ship sync..."
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL}/api/cron/ship-sync"
