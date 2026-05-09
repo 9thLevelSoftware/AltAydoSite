@@ -11,7 +11,12 @@
       "Bash(git checkout stash@{1} -- .skills/)",
       "Bash(git add .skills/)",
       "Bash(git add .skills/ .gitignore)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nfeat(skills): add AI Quadrumvirate coordination skills\n\nAdd comprehensive skills for token-efficient AI coordination:\n- ai-quadrumvirate-coordination.md: Core coordination philosophy and workflows\n- gemini-cli-codebase-analysis.md: Gemini as unlimited code analyst\n- cursor-agent-advanced-usage.md: Cursor CLI for UI/visual implementation\n- github-copilot-cli-usage.md: Copilot CLI for GitHub/backend operations\n\nThese skills enable 80-96% token savings through strategic delegation\nto specialized AI agents while Claude Code orchestrates.\n\nAlso update .gitignore to track .skills directory for project-specific\nAI coordination patterns.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "mcp__context7",
+      "mcp__github",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat(skills): add AI Quadrumvirate coordination skills\n\nAdd comprehensive skills for token-efficient AI coordination:\n- ai-quadrumvirate-coordination.md: Core coordination philosophy and workflows\n- gemini-cli-codebase-analysis.md: Gemini as unlimited code analyst\n- cursor-agent-advanced-usage.md: Cursor CLI for UI/visual implementation\n- github-copilot-cli-usage.md: Copilot CLI for GitHub/backend operations\n\nThese skills enable 80-96% token savings through strategic delegation\nto specialized AI agents while Claude Code orchestrates.\n\nAlso update .gitignore to track .skills directory for project-specific\nAI coordination patterns.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(claude mcp:*)"
     ],
     "deny": [],
     "ask": []

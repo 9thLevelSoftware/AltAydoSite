@@ -1,0 +1,14 @@
+[mcp_servers.context7]
+args = [
+    "-y",
+    "@upstash/context7-mcp@latest",
+]
+command = "npx"
+
+[mcp_servers.github]
+args = [
+    "-y",
+    "@modelcontextprotocol/server-github",
+]
+command = "npx"
+env_vars = ["GITHUB_PERSONAL_ACCESS_TOKEN"]

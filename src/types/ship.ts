@@ -151,13 +151,20 @@ export interface SyncStatusDocument {
  * non-critical data are not rejected. Uses .passthrough() to allow unknown
  * fields through without validation failures.
  */
-/** Reusable schema for a FleetYards image view object (multiple resolutions). */
-const ImageViewSchema = z.object({
-  source: z.string(),
-  small: z.string().optional(),
-  medium: z.string().optional(),
-  large: z.string().optional(),
-}).passthrough();
+/** Reusable schema for a FleetYards image object (multiple API generations). */
+const ImageViewSchema = z
+  .object({
+    source: z.string().optional(),
+    url: z.string().optional(),
+    small: z.string().optional(),
+    smallUrl: z.string().optional(),
+    medium: z.string().optional(),
+    mediumUrl: z.string().optional(),
+    large: z.string().optional(),
+    largeUrl: z.string().optional(),
+    xlargeUrl: z.string().optional(),
+  })
+  .passthrough();
 
 /**
  * A view field can be either a full resolution object (old API / nested media)
@@ -165,72 +172,82 @@ const ImageViewSchema = z.object({
  */
 const ViewFieldSchema = z.union([ImageViewSchema, z.string()]).nullable().optional();
 
-export const FleetYardsShipSchema = z.object({
-  // Required fields -- sync fails for this ship if these are missing
-  id: z.string().uuid(),
-  name: z.string().min(1),
-  slug: z.string().min(1),
-  manufacturer: z.object({
-    name: z.string(),
-    code: z.string().optional().default(''),
-    slug: z.string(),
-    logo: z.string().nullable().optional().default(null),
-  }).passthrough(),
+export const FleetYardsShipSchema = z
+  .object({
+    // Required fields -- sync fails for this ship if these are missing
+    id: z.string().uuid(),
+    name: z.string().min(1),
+    slug: z.string().min(1),
+    manufacturer: z
+      .object({
+        name: z.string(),
+        code: z.string().optional().default(''),
+        slug: z.string(),
+        logo: ViewFieldSchema.default(null),
+      })
+      .passthrough(),
 
-  // Optional/nullable fields -- ship is still valid without these
-  scIdentifier: z.string().nullable().optional(),
-  rsiId: z.number().nullable().optional(),
-  rsiName: z.string().nullable().optional(),
-  rsiSlug: z.string().nullable().optional(),
-  classification: z.string().optional().default(''),
-  classificationLabel: z.string().optional().default(''),
-  focus: z.string().optional().default(''),
-  productionStatus: z.string().optional().default(''),
-  size: z.string().optional().default(''),
-  crew: z.object({
-    min: z.number().nullable().optional().default(0),
-    max: z.number().nullable().optional().default(0),
-    minLabel: z.string().optional(),
-    maxLabel: z.string().optional(),
-  }).optional().default({ min: 0, max: 0 }),
-  cargo: z.number().optional().default(0),
-  mass: z.number().optional().default(0),
-  length: z.number().optional().default(0),
-  beam: z.number().optional().default(0),
-  height: z.number().optional().default(0),
-  hydrogenFuelTankSize: z.number().nullable().optional(),
-  quantumFuelTankSize: z.number().nullable().optional(),
-  scmSpeed: z.number().nullable().optional(),
-  pledgePrice: z.number().nullable().optional(),
-  price: z.number().nullable().optional(),
-  description: z.string().nullable().optional(),
-  storeImage: z.string().nullable().optional(),
-  storeUrl: z.string().nullable().optional(),
+    // Optional/nullable fields -- ship is still valid without these
+    scIdentifier: z.string().nullable().optional(),
+    rsiId: z.number().nullable().optional(),
+    rsiName: z.string().nullable().optional(),
+    rsiSlug: z.string().nullable().optional(),
+    classification: z.string().optional().default(''),
+    classificationLabel: z.string().optional().default(''),
+    focus: z.string().optional().default(''),
+    productionStatus: z.string().optional().default(''),
+    size: z.string().optional().default(''),
+    crew: z
+      .object({
+        min: z.number().nullable().optional().default(0),
+        max: z.number().nullable().optional().default(0),
+        minLabel: z.string().optional(),
+        maxLabel: z.string().optional(),
+      })
+      .optional()
+      .default({ min: 0, max: 0 }),
+    cargo: z.number().optional().default(0),
+    mass: z.number().optional().default(0),
+    length: z.number().optional().default(0),
+    beam: z.number().optional().default(0),
+    height: z.number().optional().default(0),
+    hydrogenFuelTankSize: z.number().nullable().optional(),
+    quantumFuelTankSize: z.number().nullable().optional(),
+    scmSpeed: z.number().nullable().optional(),
+    pledgePrice: z.number().nullable().optional(),
+    price: z.number().nullable().optional(),
+    description: z.string().nullable().optional(),
+    storeImage: ViewFieldSchema,
+    storeUrl: z.string().nullable().optional(),
 
-  // View fields: current API returns flat strings at top level, objects under media
-  angledView: ViewFieldSchema,
-  sideView: ViewFieldSchema,
-  topView: ViewFieldSchema,
-  frontView: ViewFieldSchema,
+    // View fields: current API returns flat strings at top level, objects under media
+    angledView: ViewFieldSchema,
+    sideView: ViewFieldSchema,
+    topView: ViewFieldSchema,
+    frontView: ViewFieldSchema,
 
-  // Nested media object with full resolution image views (current API format)
-  media: z.object({
-    angledView: ImageViewSchema.nullable().optional(),
-    sideView: ImageViewSchema.nullable().optional(),
-    topView: ImageViewSchema.nullable().optional(),
-    frontView: ImageViewSchema.nullable().optional(),
-    storeImage: z.union([ImageViewSchema, z.string()]).nullable().optional(),
-    fleetchartImage: z.string().nullable().optional(),
-  }).passthrough().optional(),
+    // Nested media object with full resolution image views (current API format)
+    media: z
+      .object({
+        angledView: ViewFieldSchema,
+        sideView: ViewFieldSchema,
+        topView: ViewFieldSchema,
+        frontView: ViewFieldSchema,
+        storeImage: ViewFieldSchema,
+        fleetchartImage: ViewFieldSchema,
+      })
+      .passthrough()
+      .optional(),
 
-  fleetchartImage: z.string().nullable().optional(),
-  onSale: z.boolean().optional().default(false),
-  hasImages: z.boolean().optional().default(false),
-  hasPaints: z.boolean().optional().default(false),
-  lastUpdatedAt: z.string().optional().default(''),
-  createdAt: z.string().optional().default(''),
-  updatedAt: z.string().optional().default(''),
-}).passthrough();
+    fleetchartImage: ViewFieldSchema,
+    onSale: z.boolean().optional().default(false),
+    hasImages: z.boolean().optional().default(false),
+    hasPaints: z.boolean().optional().default(false),
+    lastUpdatedAt: z.string().optional().default(''),
+    createdAt: z.string().optional().default(''),
+    updatedAt: z.string().optional().default(''),
+  })
+  .passthrough();
 
 /**
  * Inferred TypeScript type from the Zod schema.

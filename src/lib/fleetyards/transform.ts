@@ -15,6 +15,69 @@ import type { ValidatedFleetYardsShip, ShipDocument } from '@/types/ship';
 // Image URL Extraction Helper
 // ---------------------------------------------------------------------------
 
+type ImageSize = 'source' | 'small' | 'medium' | 'large';
+
+type ImageObject = {
+  source?: string;
+  url?: string;
+  small?: string;
+  smallUrl?: string;
+  medium?: string;
+  mediumUrl?: string;
+  large?: string;
+  largeUrl?: string;
+  xlargeUrl?: string;
+};
+
+type ImageField = ImageObject | string | null | undefined;
+
+const imageUrlKeys: Record<ImageSize, (keyof ImageObject)[]> = {
+  source: [
+    'source',
+    'url',
+    'largeUrl',
+    'large',
+    'mediumUrl',
+    'medium',
+    'smallUrl',
+    'small',
+    'xlargeUrl',
+  ],
+  small: [
+    'small',
+    'smallUrl',
+    'url',
+    'source',
+    'mediumUrl',
+    'medium',
+    'largeUrl',
+    'large',
+    'xlargeUrl',
+  ],
+  medium: [
+    'medium',
+    'mediumUrl',
+    'largeUrl',
+    'large',
+    'url',
+    'source',
+    'smallUrl',
+    'small',
+    'xlargeUrl',
+  ],
+  large: [
+    'large',
+    'largeUrl',
+    'xlargeUrl',
+    'url',
+    'source',
+    'mediumUrl',
+    'medium',
+    'smallUrl',
+    'small',
+  ],
+};
+
 /**
  * Safely extracts an image URL from a view field.
  *
@@ -26,14 +89,21 @@ import type { ValidatedFleetYardsShip, ShipDocument } from '@/types/ship';
  * @param size - The resolution to extract when view is an object: 'source' or 'medium'
  * @returns The URL string, or null if not available
  */
-export function extractImageUrl(
-  view: { source?: string; medium?: string } | string | null | undefined,
-  size: 'source' | 'medium' = 'source',
-): string | null {
+export function extractImageUrl(view: ImageField, size: ImageSize = 'source'): string | null {
   if (!view) return null;
-  if (typeof view === 'string') return view.length > 0 ? view : null;
-  const url = view[size];
-  return url && url.length > 0 ? url : null;
+  if (typeof view === 'string') {
+    const trimmed = view.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  for (const key of imageUrlKeys[size]) {
+    const url = view[key];
+    if (typeof url === 'string' && url.trim().length > 0) {
+      return url;
+    }
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +127,7 @@ export function extractImageUrl(
  */
 export function transformFleetYardsShip(
   raw: ValidatedFleetYardsShip,
-  syncVersion: number,
+  syncVersion: number
 ): Omit<ShipDocument, '_id' | 'createdAt'> {
   return {
     // Identity
@@ -71,7 +141,7 @@ export function transformFleetYardsShip(
       name: raw.manufacturer.name,
       code: raw.manufacturer.code,
       slug: raw.manufacturer.slug,
-      logo: raw.manufacturer.logo ?? null,
+      logo: extractImageUrl(raw.manufacturer.logo, 'small'),
     },
 
     // Classification and status
@@ -109,7 +179,7 @@ export function transformFleetYardsShip(
 
     // Images -- prefer media.*View objects (full resolutions) over flat string URLs
     images: {
-      store: raw.storeImage ?? null,
+      store: extractImageUrl(raw.media?.storeImage ?? raw.storeImage, 'source'),
       angledView: extractImageUrl(raw.media?.angledView ?? raw.angledView, 'source'),
       angledViewMedium: extractImageUrl(raw.media?.angledView ?? raw.angledView, 'medium'),
       sideView: extractImageUrl(raw.media?.sideView ?? raw.sideView, 'source'),
@@ -118,7 +188,7 @@ export function transformFleetYardsShip(
       topViewMedium: extractImageUrl(raw.media?.topView ?? raw.topView, 'medium'),
       frontView: extractImageUrl(raw.media?.frontView ?? raw.frontView, 'source'),
       frontViewMedium: extractImageUrl(raw.media?.frontView ?? raw.frontView, 'medium'),
-      fleetchartImage: raw.media?.fleetchartImage ?? raw.fleetchartImage ?? null,
+      fleetchartImage: extractImageUrl(raw.media?.fleetchartImage ?? raw.fleetchartImage, 'source'),
     },
 
     // Sync metadata

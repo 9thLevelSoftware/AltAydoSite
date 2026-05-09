@@ -13,15 +13,22 @@
  */
 
 /**
- * Image view object containing multiple resolution URLs.
- * Used for angled, side, top, and front ship views.
+ * Image object containing multiple resolution URLs. FleetYards has returned
+ * both source/small/medium/large and url/smallUrl/mediumUrl/largeUrl shapes.
  */
-export interface FleetYardsImageView {
-  source: string;
-  small: string;
-  medium: string;
-  large: string;
+export interface FleetYardsImageAsset {
+  source?: string;
+  url?: string;
+  small?: string;
+  smallUrl?: string;
+  medium?: string;
+  mediumUrl?: string;
+  large?: string;
+  largeUrl?: string;
+  xlargeUrl?: string;
 }
+
+export type FleetYardsImageField = FleetYardsImageAsset | string | null;
 
 /**
  * Ship manufacturer as returned by the FleetYards API.
@@ -31,7 +38,7 @@ export interface FleetYardsManufacturer {
   longName: string;
   slug: string;
   code: string;
-  logo: string | null;
+  logo: FleetYardsImageField;
 }
 
 /**
@@ -95,27 +102,27 @@ export interface FleetYardsShipResponse {
   /** Ship description text */
   description: string | null;
   /** Store image URL */
-  storeImage: string | null;
+  storeImage: FleetYardsImageField;
   /** RSI store URL */
   storeUrl: string | null;
   /** Angled view image URL (flat string in current API format) */
-  angledView: FleetYardsImageView | string | null;
+  angledView: FleetYardsImageField;
   /** Side view image URL (flat string in current API format) */
-  sideView: FleetYardsImageView | string | null;
+  sideView: FleetYardsImageField;
   /** Top view image URL (flat string in current API format) */
-  topView: FleetYardsImageView | string | null;
+  topView: FleetYardsImageField;
   /** Front view image URL (flat string in current API format) */
-  frontView: FleetYardsImageView | string | null;
+  frontView: FleetYardsImageField;
   /** Fleet chart comparison image URL */
-  fleetchartImage: string | null;
+  fleetchartImage: FleetYardsImageField;
   /** Nested media object with full resolution image views (current API format) */
   media?: {
-    angledView?: FleetYardsImageView | null;
-    sideView?: FleetYardsImageView | null;
-    topView?: FleetYardsImageView | null;
-    frontView?: FleetYardsImageView | null;
-    storeImage?: FleetYardsImageView | string | null;
-    fleetchartImage?: string | null;
+    angledView?: FleetYardsImageField;
+    sideView?: FleetYardsImageField;
+    topView?: FleetYardsImageField;
+    frontView?: FleetYardsImageField;
+    storeImage?: FleetYardsImageField;
+    fleetchartImage?: FleetYardsImageField;
   };
   /** Whether the ship is currently on sale */
   onSale: boolean;

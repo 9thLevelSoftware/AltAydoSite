@@ -18,7 +18,7 @@ import type { FleetYardsShipResponse } from './types';
 const FLEETYARDS_API_BASE = 'https://api.fleetyards.net/v1';
 
 /** Maximum ships per page (FleetYards API cap) */
-const PER_PAGE = 200;
+const PER_PAGE = 240;
 
 /** Delay between page fetches to respect undocumented rate limits */
 const PAGE_DELAY_MS = 300;
@@ -27,7 +27,39 @@ const PAGE_DELAY_MS = 300;
 const MAX_RETRIES = 3;
 
 /** Safety limit to prevent infinite pagination loops */
-const MAX_PAGES = 10;
+const MAX_PAGES = 20;
+
+interface FleetYardsPagination {
+  currentPage?: number;
+  totalPages?: number;
+}
+
+interface FleetYardsModelsResponse {
+  items: FleetYardsShipResponse[];
+  meta?: {
+    pagination?: FleetYardsPagination;
+  };
+}
+
+function normalizeModelsResponse(
+  body: unknown
+): { ships: FleetYardsShipResponse[]; pagination?: FleetYardsPagination } | null {
+  if (Array.isArray(body)) {
+    return { ships: body as FleetYardsShipResponse[] };
+  }
+
+  if (body && typeof body === 'object') {
+    const response = body as Partial<FleetYardsModelsResponse>;
+    if (Array.isArray(response.items)) {
+      return {
+        ships: response.items,
+        pagination: response.meta?.pagination,
+      };
+    }
+  }
+
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Link Header Parser
@@ -77,7 +109,7 @@ function parseLinkHeader(linkHeader: string | null): { next?: string } {
 async function fetchWithRetry(
   url: string,
   retries: number,
-  page: number,
+  page: number
 ): Promise<Response | null> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -186,8 +218,7 @@ export async function fetchAllShips(): Promise<{
   const allShips: FleetYardsShipResponse[] = [];
   const errors: string[] = [];
   let pagesProcessed = 0;
-  let nextUrl: string | undefined =
-    `${FLEETYARDS_API_BASE}/models?page=1&perPage=${PER_PAGE}`;
+  let nextUrl: string | undefined = `${FLEETYARDS_API_BASE}/models?page=1&perPage=${PER_PAGE}`;
   let page = 1;
 
   while (nextUrl && page <= MAX_PAGES) {
@@ -203,8 +234,21 @@ export async function fetchAllShips(): Promise<{
     }
 
     let pageShips: FleetYardsShipResponse[];
+    let pagination: FleetYardsPagination | undefined;
     try {
-      pageShips = (await response.json()) as FleetYardsShipResponse[];
+      const normalized = normalizeModelsResponse(await response.json());
+      if (!normalized) {
+        const errorMsg = `Page ${page} returned an unsupported FleetYards response shape`;
+        errors.push(errorMsg);
+        logger.warn('FleetYards API unsupported response shape', {
+          module: 'fleetyards',
+          page,
+        });
+        break;
+      }
+
+      pageShips = normalized.ships;
+      pagination = normalized.pagination;
     } catch (parseError) {
       const errorMsg = `Page ${page} JSON parse error: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
       errors.push(errorMsg);
@@ -218,27 +262,41 @@ export async function fetchAllShips(): Promise<{
 
     // Empty response means no more data
     if (!Array.isArray(pageShips) || pageShips.length === 0) {
-      logger.info('FleetYards pagination complete (empty response)', { module: 'fleetyards', page });
+      logger.info('FleetYards pagination complete (empty response)', {
+        module: 'fleetyards',
+        page,
+      });
       break;
     }
 
     allShips.push(...pageShips);
     pagesProcessed++;
-    logger.info('FleetYards page fetched', { module: 'fleetyards', page, shipCount: pageShips.length });
+    logger.info('FleetYards page fetched', {
+      module: 'fleetyards',
+      page,
+      shipCount: pageShips.length,
+    });
 
     // Determine if there are more pages
-    const linkHeader = response.headers.get('Link');
-    const links = parseLinkHeader(linkHeader);
-
-    if (links.next) {
-      // Link header provides the next URL directly
-      nextUrl = links.next;
-    } else if (pageShips.length < PER_PAGE) {
-      // Response smaller than page size -- this was the last page
-      nextUrl = undefined;
+    if (typeof pagination?.currentPage === 'number' && typeof pagination?.totalPages === 'number') {
+      nextUrl =
+        pagination.currentPage < pagination.totalPages
+          ? `${FLEETYARDS_API_BASE}/models?page=${pagination.currentPage + 1}&perPage=${PER_PAGE}`
+          : undefined;
     } else {
-      // No Link header but full page -- construct next URL manually
-      nextUrl = `${FLEETYARDS_API_BASE}/models?page=${page + 1}&perPage=${PER_PAGE}`;
+      const linkHeader = response.headers.get('Link');
+      const links = parseLinkHeader(linkHeader);
+
+      if (links.next) {
+        // Link header provides the next URL directly
+        nextUrl = links.next;
+      } else if (pageShips.length < PER_PAGE) {
+        // Response smaller than page size -- this was the last page
+        nextUrl = undefined;
+      } else {
+        // No Link header but full page -- construct next URL manually
+        nextUrl = `${FLEETYARDS_API_BASE}/models?page=${page + 1}&perPage=${PER_PAGE}`;
+      }
     }
 
     page++;
@@ -252,7 +310,10 @@ export async function fetchAllShips(): Promise<{
   if (page > MAX_PAGES) {
     const errorMsg = `Reached MAX_PAGES limit (${MAX_PAGES}) -- pagination stopped as safety measure`;
     errors.push(errorMsg);
-    logger.warn('FleetYards reached MAX_PAGES limit', { module: 'fleetyards', maxPages: MAX_PAGES });
+    logger.warn('FleetYards reached MAX_PAGES limit', {
+      module: 'fleetyards',
+      maxPages: MAX_PAGES,
+    });
   }
 
   logger.info('FleetYards fetch complete', {

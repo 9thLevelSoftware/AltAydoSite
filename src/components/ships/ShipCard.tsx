@@ -16,6 +16,7 @@ interface ShipCardProps {
 export default function ShipCard({ ship, onClick }: ShipCardProps) {
   const [imgSrc] = useState(() => resolveShipImage(ship.images, 'store'));
   const [imgError, setImgError] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   return (
     <motion.div
@@ -58,13 +59,14 @@ export default function ShipCard({ ship, onClick }: ShipCardProps) {
             {ship.name}
           </h3>
           <div className="flex items-center gap-1.5">
-            {ship.manufacturer.logo ? (
+            {ship.manufacturer.logo && !logoError ? (
               <Image
                 src={ship.manufacturer.logo}
                 alt={ship.manufacturer.name}
                 width={16}
                 height={16}
                 className="object-contain flex-shrink-0"
+                onError={() => setLogoError(true)}
               />
             ) : null}
             <span className="text-[rgba(var(--mg-text),0.6)] text-xs truncate">

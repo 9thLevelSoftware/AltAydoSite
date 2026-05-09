@@ -11,6 +11,7 @@ import type { ShipDocument } from '@/types/ship';
 
 interface ShipGridProps {
   ships: ShipDocument[];
+  total?: number;
   isLoading: boolean;
   viewMode: 'grid' | 'list';
   onViewModeChange: (mode: 'grid' | 'list') => void;
@@ -74,11 +75,14 @@ function EmptyState() {
 
 export default function ShipGrid({
   ships,
+  total,
   isLoading,
   viewMode,
   onViewModeChange,
   onShipClick,
 }: ShipGridProps) {
+  const displayCount = total ?? ships.length;
+
   return (
     <div>
       {/* View Toggle Header */}
@@ -87,7 +91,9 @@ export default function ShipGrid({
           {isLoading ? (
             <span className="animate-pulse">Loading ships...</span>
           ) : (
-            <span>{ships.length} ship{ships.length !== 1 ? 's' : ''}</span>
+            <span>
+              {displayCount} ship{displayCount !== 1 ? 's' : ''}
+            </span>
           )}
         </div>
 
@@ -143,11 +149,7 @@ export default function ShipGrid({
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
           >
             {ships.map((ship) => (
-              <ShipCard
-                key={ship.fleetyardsId}
-                ship={ship}
-                onClick={onShipClick}
-              />
+              <ShipCard key={ship.fleetyardsId} ship={ship} onClick={onShipClick} />
             ))}
           </motion.div>
         ) : (
@@ -160,11 +162,7 @@ export default function ShipGrid({
           >
             <MobiGlasPanel variant="dark" cornerAccents={true} cornerSize="sm" padding="sm">
               {ships.map((ship) => (
-                <ShipCardList
-                  key={ship.fleetyardsId}
-                  ship={ship}
-                  onClick={onShipClick}
-                />
+                <ShipCardList key={ship.fleetyardsId} ship={ship} onClick={onShipClick} />
               ))}
             </MobiGlasPanel>
           </motion.div>

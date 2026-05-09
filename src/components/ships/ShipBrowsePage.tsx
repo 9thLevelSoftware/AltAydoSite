@@ -259,11 +259,7 @@ export default function ShipBrowsePage() {
 
       {/* Filter Chips (show active filters when panel is collapsed) */}
       {!state.filterPanelOpen && (
-        <ShipFilterChips
-          filters={chipFilters}
-          labels={chipLabels}
-          onRemove={handleRemoveChip}
-        />
+        <ShipFilterChips filters={chipFilters} labels={chipLabels} onRemove={handleRemoveChip} />
       )}
 
       {/* Error State */}
@@ -279,6 +275,7 @@ export default function ShipBrowsePage() {
       {/* Ship Grid */}
       <ShipGrid
         ships={ships}
+        total={total}
         isLoading={isLoading}
         viewMode={state.viewMode}
         onViewModeChange={handleViewModeChange}
@@ -302,10 +299,7 @@ export default function ShipBrowsePage() {
       </div>
 
       {/* Detail Panel (slide-out overlay) */}
-      <ShipDetailPanel
-        shipId={state.selectedShipId}
-        onClose={handleCloseDetail}
-      />
+      <ShipDetailPanel shipId={state.selectedShipId} onClose={handleCloseDetail} />
     </div>
   );
 }
