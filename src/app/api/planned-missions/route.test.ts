@@ -202,4 +202,19 @@ describe('planned missions POST', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Invalid personnel requirements data' });
     expect(mocks.updatePlannedMission).not.toHaveBeenCalled();
   });
+
+  it('accepts null activity clear markers on full PUT updates', async () => {
+    const response = await PUT(makePutRequest({
+      ...validMissionPayload,
+      id: 'mission-1',
+      secondaryActivity: null,
+      tertiaryActivity: null,
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.updatePlannedMission).toHaveBeenCalledWith('mission-1', expect.objectContaining({
+      secondaryActivity: null,
+      tertiaryActivity: null,
+    }));
+  });
 });

@@ -211,7 +211,12 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
     try {
       const method = selectedMission ? 'PUT' : 'POST';
       const body = selectedMission
-        ? { ...formData, id: selectedMission.id }
+        ? {
+            ...formData,
+            id: selectedMission.id,
+            secondaryActivity: formData.secondaryActivity ?? null,
+            tertiaryActivity: formData.tertiaryActivity ?? null,
+          }
         : formData;
 
       const res = await fetch('/api/planned-missions', {

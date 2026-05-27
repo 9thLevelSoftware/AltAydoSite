@@ -13,6 +13,58 @@ const plannedMissionsFilePath = path.join(dataDir, 'planned-missions.json');
 // Tracking if we had to fall back to local storage
 let usingFallbackStorage = false;
 
+type PlannedMissionClearableField =
+  | 'secondaryActivity'
+  | 'tertiaryActivity'
+  | 'duration'
+  | 'location'
+  | 'equipmentNotes'
+  | 'discordEvent'
+  | 'creatorName';
+
+type PlannedMissionUpdate = Partial<Omit<PlannedMissionResponse, PlannedMissionClearableField>> & {
+  [Field in PlannedMissionClearableField]?: PlannedMissionResponse[Field] | null;
+};
+
+const CLEARABLE_UPDATE_FIELDS: ReadonlySet<string> = new Set<PlannedMissionClearableField>([
+  'secondaryActivity',
+  'tertiaryActivity',
+  'duration',
+  'location',
+  'equipmentNotes',
+  'discordEvent',
+  'creatorName',
+]);
+
+function stripManagedUpdateFields(missionData: PlannedMissionUpdate): Record<string, unknown> {
+  const updateFields = { ...(missionData as Record<string, unknown>) };
+  delete updateFields.id;
+  delete updateFields._id;
+  delete updateFields.__v;
+  return updateFields;
+}
+
+function splitUpdateFields(updateFields: Record<string, unknown>): {
+  fieldsToSet: Record<string, unknown>;
+  fieldsToUnset: Record<string, ''>;
+} {
+  const fieldsToSet: Record<string, unknown> = {};
+  const fieldsToUnset: Record<string, ''> = {};
+
+  for (const [key, value] of Object.entries(updateFields)) {
+    if ((value === null || value === undefined) && CLEARABLE_UPDATE_FIELDS.has(key)) {
+      fieldsToUnset[key] = '';
+      continue;
+    }
+
+    if (value !== undefined) {
+      fieldsToSet[key] = value;
+    }
+  }
+
+  return { fieldsToSet, fieldsToUnset };
+}
+
 // Helper functions for local file storage
 export function ensureDataDir() {
   if (!fs.existsSync(dataDir)) {
@@ -368,7 +420,7 @@ export async function createPlannedMission(missionData: Omit<PlannedMissionRespo
   }
 }
 
-export async function updatePlannedMission(id: string, missionData: Partial<PlannedMissionResponse>, expectedVersion?: number): Promise<PlannedMissionResponse | null> {
+export async function updatePlannedMission(id: string, missionData: PlannedMissionUpdate, expectedVersion?: number): Promise<PlannedMissionResponse | null> {
   logger.info('Updating planned mission', { collection: 'planned-missions', operation: 'update', missionId: id });
 
   try {
@@ -386,18 +438,29 @@ export async function updatePlannedMission(id: string, missionData: Partial<Plan
       }
     }
 
-    // Strip id, _id, and __v from update data to prevent conflicts
-    const { id: _id, _id: _mongoId, __v: _v, ...updateFields } = missionData as any;
+    const updateFields = stripManagedUpdateFields(missionData);
+    const { fieldsToSet, fieldsToUnset } = splitUpdateFields(updateFields);
+    const nowIso = new Date().toISOString();
+
+    const updateOperation: {
+      $set: Record<string, unknown>;
+      $inc: { __v: number };
+      $unset?: Record<string, ''>;
+    } = {
+      $set: {
+        ...fieldsToSet,
+        updatedAt: nowIso
+      },
+      $inc: { __v: 1 }
+    };
+
+    if (Object.keys(fieldsToUnset).length > 0) {
+      updateOperation.$unset = fieldsToUnset;
+    }
 
     const result = await db.collection('planned-missions').findOneAndUpdate(
       { ...filter, ...versionFilter },
-      {
-        $set: {
-          ...updateFields,
-          updatedAt: new Date().toISOString()
-        },
-        $inc: { __v: 1 }
-      },
+      updateOperation,
       { returnDocument: 'after' }
     );
 
@@ -425,12 +488,17 @@ export async function updatePlannedMission(id: string, missionData: Partial<Plan
     const missions = getLocalPlannedMissions();
     const existing = missions.find(m => m.id === id);
     if (!existing) return null;
+    const updateFields = stripManagedUpdateFields(missionData);
+    const { fieldsToSet, fieldsToUnset } = splitUpdateFields(updateFields);
     const updated: PlannedMissionResponse = {
       ...existing,
-      ...missionData,
+      ...fieldsToSet,
       id: existing.id,
       updatedAt: new Date().toISOString()
     } as PlannedMissionResponse;
+    for (const field of Object.keys(fieldsToUnset)) {
+      Reflect.deleteProperty(updated, field);
+    }
     saveLocalPlannedMission(updated);
     return updated;
   }
