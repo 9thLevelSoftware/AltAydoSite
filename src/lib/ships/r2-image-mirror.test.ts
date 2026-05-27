@@ -265,6 +265,7 @@ describe('r2-image-mirror', () => {
 
     expect(isFleetYardsUrl(baseShip.images.store)).toBe(true);
     expect(isFleetYardsUrl('https://cdn.fleetyards.net/uploads/model.jpg')).toBe(true);
+    expect(isFleetYardsUrl('https://storage.fltyrd.net/w4e3ywfoq66bpp0h34nzg7a8i2ae?origin=')).toBe(true);
     expect(needsImageMirrorBackfill(baseShip)).toBe(true);
 
     expect(

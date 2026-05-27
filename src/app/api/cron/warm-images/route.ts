@@ -25,7 +25,9 @@ export async function GET(request: NextRequest) {
     // Fail-closed cron auth: reject if CRON_SECRET not configured
     const cronSecret = process.env.CRON_SECRET;
     if (!cronSecret) {
-      logger.error('CRON_SECRET not configured - rejecting request', undefined, { route: '/api/cron/warm-images' });
+      logger.error('CRON_SECRET not configured - rejecting request', undefined, {
+        route: '/api/cron/warm-images',
+      });
       return NextResponse.json({ error: 'Server misconfigured' }, { status: 503 });
     }
     const authHeader = request.headers.get('authorization');
@@ -43,19 +45,20 @@ export async function GET(request: NextRequest) {
       .toArray();
 
     // Collect unique image URLs (primary image per ship)
-    const imageUrls: string[] = [];
+    const imageUrlsSet = new Set<string>();
     let skippedUnoptimized = 0;
     for (const ship of ships) {
       const url = ship.images?.angledView || ship.images?.store;
       if (url && typeof url === 'string' && url.trim().length > 0) {
         const trimmedUrl = url.trim();
         if (shouldOptimizeShipImage(trimmedUrl)) {
-          imageUrls.push(trimmedUrl);
+          imageUrlsSet.add(trimmedUrl);
         } else {
           skippedUnoptimized++;
         }
       }
     }
+    const imageUrls = Array.from(imageUrlsSet);
 
     logger.info('Found ship images to warm', {
       route: '/api/cron/warm-images',
@@ -86,7 +89,7 @@ export async function GET(request: NextRequest) {
           } catch {
             failed++;
           }
-        }),
+        })
       );
       await Promise.all(requests);
     }
@@ -104,14 +107,18 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error('Image cache warm-up failed', error instanceof Error ? error : new Error(String(error)), { route: '/api/cron/warm-images' });
+    logger.error(
+      'Image cache warm-up failed',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/cron/warm-images' }
+    );
     return NextResponse.json(
       {
         success: false,
         error: 'Image cache warm-up failed',
         timestamp: new Date().toISOString(),
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

@@ -162,7 +162,7 @@ describe('planned mission Discord PATCH', () => {
     });
   });
 
-  it('uses a safe fallback end time when the stored mission date is invalid', async () => {
+  it('uses a safe fallback end time and omits invalid start time when the stored mission date is invalid', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-01T00:00:00.000Z'));
     try {
@@ -177,6 +177,7 @@ describe('planned mission Discord PATCH', () => {
       expect(updateParams).toMatchObject({
         scheduledEndTime: '2026-06-01T02:00:00.000Z',
       });
+      expect(updateParams).not.toHaveProperty('scheduledStartTime');
     } finally {
       vi.useRealTimers();
     }

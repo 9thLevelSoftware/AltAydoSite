@@ -89,7 +89,8 @@ export function isFleetYardsImageUrl(url: string | null | undefined): boolean {
     const hostname = new URL(url).hostname.toLowerCase();
     return hostname === 'api.fleetyards.net' ||
       hostname === 'cdn.fleetyards.net' ||
-      hostname === 'fleetyards.net';
+      hostname === 'fleetyards.net' ||
+      hostname === 'storage.fltyrd.net';
   } catch {
     return false;
   }

@@ -10,7 +10,10 @@ const DISCORD_BANNER_HEIGHT = 300;
 const DISCORD_BANNER_QUALITY = 85;
 const MAX_SOURCE_IMAGE_BYTES = 10 * 1024 * 1024;
 
-export const DISCORD_EVENT_ACTIVITY_SHIPS: Record<ActivityType, { shipName: string; slug: string }> = {
+export const DISCORD_EVENT_ACTIVITY_SHIPS: Record<
+  ActivityType,
+  { shipName: string; slug: string }
+> = {
   Mining: { shipName: 'Prospector', slug: 'misc-prospector' },
   Salvage: { shipName: 'Vulture', slug: 'drak-vulture' },
   Escort: { shipName: 'Vanguard Warden', slug: 'aegs-vanguard-warden' },
@@ -35,7 +38,11 @@ async function safelyConsumeOrCancel(response: Response): Promise<void> {
 
 async function readImageBuffer(response: Response): Promise<Buffer> {
   if (!response.body) {
-    return Buffer.from(await response.arrayBuffer());
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.byteLength > MAX_SOURCE_IMAGE_BYTES) {
+      throw new Error(`image exceeds ${MAX_SOURCE_IMAGE_BYTES} byte limit`);
+    }
+    return buffer;
   }
 
   const reader = response.body.getReader();

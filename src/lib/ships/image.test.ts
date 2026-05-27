@@ -6,12 +6,14 @@ describe('ship image helpers', () => {
     expect(isFleetYardsImageUrl('https://api.fleetyards.net/files/blobs/redirect/model.png')).toBe(true);
     expect(isFleetYardsImageUrl('https://cdn.fleetyards.net/uploads/model.png')).toBe(true);
     expect(isFleetYardsImageUrl('https://fleetyards.net/files/representations/redirect/model.png')).toBe(true);
+    expect(isFleetYardsImageUrl('https://storage.fltyrd.net/w4e3ywfoq66bpp0h34nzg7a8i2ae?origin=')).toBe(true);
     expect(isFleetYardsImageUrl('https://images.aydocorp.space/ships/ship-1/store.png')).toBe(false);
   });
 
   it('keeps mirrored ship images eligible for optimization', () => {
     expect(shouldOptimizeShipImage('https://images.aydocorp.space/ships/ship-1/store.png')).toBe(true);
     expect(shouldOptimizeShipImage('https://api.fleetyards.net/files/blobs/redirect/model.png')).toBe(false);
+    expect(shouldOptimizeShipImage('https://storage.fltyrd.net/w4e3ywfoq66bpp0h34nzg7a8i2ae?origin=')).toBe(false);
     expect(shouldOptimizeShipImage('')).toBe(false);
   });
 });
