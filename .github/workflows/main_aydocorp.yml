@@ -152,3 +152,9 @@ jobs:
             --request POST \
             --header "Authorization: Bearer ${CRON_SECRET}" \
             "${APP_URL}/api/cron/ship-sync"
+
+          echo "Warming mirrored ship images..."
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL}/api/cron/warm-images"

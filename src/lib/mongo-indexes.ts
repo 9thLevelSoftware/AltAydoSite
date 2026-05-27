@@ -75,12 +75,15 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
       ships.createIndex({ slug: 1 }, { unique: true }).catch(() => {}),
       // Manufacturer filter queries
       ships.createIndex({ 'manufacturer.code': 1 }).catch(() => {}),
+      ships.createIndex({ 'manufacturer.slug': 1 }).catch(() => {}),
       // Production status filter
       ships.createIndex({ productionStatus: 1 }).catch(() => {}),
       // Sync housekeeping (find stale records)
       ships.createIndex({ syncVersion: 1 }).catch(() => {}),
+      ships.createIndex({ fleetyardsUpdatedAt: 1 }).catch(() => {}),
       // Combined filter: manufacturer + size (common filter combo)
       ships.createIndex({ 'manufacturer.code': 1, size: 1 }).catch(() => {}),
+      ships.createIndex({ 'manufacturer.slug': 1, size: 1 }).catch(() => {}),
       // Standalone classification filter (findShips classification parameter)
       ships.createIndex({ classification: 1 }).catch(() => {}),
       // Standalone size filter (findShips size parameter)
@@ -117,5 +120,15 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
     ]);
   } catch (err) {
     logger.warn('Index setup (sync-status) skipped or failed', { module: 'mongo-indexes', collection: 'sync-status', error: String(err) });
+  }
+
+  try {
+    const syncLocks = db.collection('sync-locks');
+    await Promise.all([
+      syncLocks.createIndex({ type: 1 }).catch(() => {}),
+      syncLocks.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }).catch(() => {}),
+    ]);
+  } catch (err) {
+    logger.warn('Index setup (sync-locks) skipped or failed', { module: 'mongo-indexes', collection: 'sync-locks', error: String(err) });
   }
 }

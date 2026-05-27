@@ -22,18 +22,24 @@ export async function GET() {
           shipCount: status.shipCount,
           status: status.status,
           syncVersion: status.syncVersion,
+          deferredShips: status.deferredShips ?? 0,
+          mirroredImages: status.mirroredImages ?? 0,
+          failedImages: status.failedImages ?? 0,
         }
       : {
           lastSyncAt: null,
           shipCount: 0,
           status: 'unknown',
           syncVersion: 0,
+          deferredShips: 0,
+          mirroredImages: 0,
+          failedImages: 0,
         };
 
     const response = NextResponse.json(body);
     response.headers.set(
       'Cache-Control',
-      'public, max-age=60, stale-while-revalidate=30'
+      'public, max-age=300, stale-while-revalidate=300'
     );
     return response;
   } catch (error) {

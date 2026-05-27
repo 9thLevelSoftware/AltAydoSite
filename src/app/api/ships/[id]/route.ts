@@ -37,7 +37,7 @@ export async function GET(
     const response = NextResponse.json(ship);
     response.headers.set(
       'Cache-Control',
-      'public, max-age=300, stale-while-revalidate=60'
+      'public, max-age=1800, stale-while-revalidate=86400'
     );
     return response;
   } catch (error) {

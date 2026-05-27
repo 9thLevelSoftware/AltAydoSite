@@ -93,6 +93,12 @@ export interface ShipDocument {
     frontViewMedium: string | null;
     fleetchartImage: string | null;
   };
+  /**
+   * Source and mirror metadata for external images. `images` remains the
+   * display contract; this metadata lets sync compare source URLs and preserve
+   * previous mirrored URLs when a refresh fails.
+   */
+  imageMirrors?: ShipImageMirrorMetadata;
   /** When this document was last synced from FleetYards */
   syncedAt: Date;
   /** Incrementing sync version number */
@@ -103,6 +109,33 @@ export interface ShipDocument {
   createdAt: Date;
   /** When this document was last modified */
   updatedAt: Date;
+}
+
+export type ShipImageField =
+  | 'store'
+  | 'angledView'
+  | 'angledViewMedium'
+  | 'sideView'
+  | 'sideViewMedium'
+  | 'topView'
+  | 'topViewMedium'
+  | 'frontView'
+  | 'frontViewMedium'
+  | 'fleetchartImage';
+
+export interface ShipImageMirrorEntry {
+  sourceUrl: string | null;
+  mirroredUrl: string | null;
+  contentHash: string | null;
+  contentType: string | null;
+  byteLength: number | null;
+  mirroredAt: Date | null;
+  error: string | null;
+}
+
+export interface ShipImageMirrorMetadata {
+  images: Partial<Record<ShipImageField, ShipImageMirrorEntry>>;
+  manufacturerLogo?: ShipImageMirrorEntry;
 }
 
 /**
@@ -127,6 +160,14 @@ export interface SyncStatusDocument {
   unchangedShips: number;
   /** Number of ships skipped due to validation errors */
   skippedShips: number;
+  /** Changed/new ships deferred because this run hit its processing limit */
+  deferredShips?: number;
+  /** Number of image objects successfully mirrored into owned storage */
+  mirroredImages?: number;
+  /** Number of image objects that failed to mirror */
+  failedImages?: number;
+  /** Whether this run exited because another sync already held the lock */
+  lockSkipped?: boolean;
   /** Total sync duration in milliseconds */
   durationMs: number;
   /** Overall sync result status */
@@ -329,6 +370,32 @@ export const ShipDocumentSchema = z.object({
     frontViewMedium: z.string().nullable(),
     fleetchartImage: z.string().nullable(),
   }),
+  imageMirrors: z
+    .object({
+      images: z.record(
+        z.object({
+          sourceUrl: z.string().nullable(),
+          mirroredUrl: z.string().nullable(),
+          contentHash: z.string().nullable(),
+          contentType: z.string().nullable(),
+          byteLength: z.number().nullable(),
+          mirroredAt: z.date().nullable(),
+          error: z.string().nullable(),
+        })
+      ),
+      manufacturerLogo: z
+        .object({
+          sourceUrl: z.string().nullable(),
+          mirroredUrl: z.string().nullable(),
+          contentHash: z.string().nullable(),
+          contentType: z.string().nullable(),
+          byteLength: z.number().nullable(),
+          mirroredAt: z.date().nullable(),
+          error: z.string().nullable(),
+        })
+        .optional(),
+    })
+    .optional(),
   syncedAt: z.date(),
   syncVersion: z.number().int().positive(),
   fleetyardsUpdatedAt: z.string(),
