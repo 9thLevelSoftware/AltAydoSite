@@ -11,15 +11,20 @@ import MissionPlannerForm from './MissionPlannerForm';
 import { useToast } from '@/hooks/useToast';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
+  createMissionCopyDraft,
+  getMissionPersonnelRequirements,
+  getMissionShipRequirements,
+  getPersonnelRequirementCount,
+  getShipRequirementCount,
+} from '@/lib/mission-requirements';
+import {
   PlannedMission,
   PlannedMissionResponse,
   PlannedMissionValidationErrors,
   PlannedMissionStatus,
-  ExpectedParticipant,
   ConfirmedParticipant,
   createEmptyMission
 } from '@/types/PlannedMission';
-import { MissionTemplate } from '@/types/MissionTemplate';
 import {
   PlusIcon,
   CalendarIcon,
@@ -57,7 +62,6 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
   const { confirm } = useConfirmDialog();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [missions, setMissions] = useState<PlannedMissionResponse[]>([]);
-  const [templates, setTemplates] = useState<MissionTemplate[]>([]);
   const [selectedMission, setSelectedMission] = useState<PlannedMissionResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingList, setIsLoadingList] = useState(true);
@@ -66,7 +70,6 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
   const [rsvpData, setRsvpData] = useState<Record<string, { count: number; users: Array<{ username: string; globalName?: string; nickname?: string }> }>>({});
 
   // Track if we've already processed URL params
-  const templateParamProcessed = useRef(false);
   const missionIdParamProcessed = useRef(false);
 
   // Debrief state
@@ -107,19 +110,6 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
     }
   }, [statusFilter]);
 
-  // Fetch templates
-  const fetchTemplates = useCallback(async () => {
-    try {
-      const res = await fetch('/api/mission-templates');
-      if (res.ok) {
-        const data = await res.json();
-        setTemplates(data.items || []);
-      }
-    } catch (error) {
-      console.error('Error fetching templates:', error);
-    }
-  }, []);
-
   // Fetch RSVP data for a mission
   const fetchRsvpData = async (missionId: string) => {
     try {
@@ -142,8 +132,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
   // Initial load
   useEffect(() => {
     fetchMissions();
-    fetchTemplates();
-  }, [fetchMissions, fetchTemplates]);
+  }, [fetchMissions]);
 
   // Handle initial mission ID
   useEffect(() => {
@@ -154,37 +143,6 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       }
     }
   }, [initialMissionId, missions]);
-
-  // Handle templateId from URL params (when navigating from template creator)
-  useEffect(() => {
-    if (templateParamProcessed.current) return;
-
-    const templateId = searchParams.get('templateId');
-    if (!templateId || templates.length === 0) return;
-
-    const template = templates.find(t => t.id === templateId);
-    if (template) {
-      templateParamProcessed.current = true;
-
-      // Pre-populate form with template data
-      setFormData({
-        ...createEmptyMission(),
-        templateId: template.id,
-        templateName: template.name,
-        operationType: template.operationType,
-        primaryActivity: template.primaryActivity,
-        secondaryActivity: template.secondaryActivity,
-        tertiaryActivity: template.tertiaryActivity,
-        equipmentNotes: template.requiredEquipment
-      });
-
-      // Switch to create mode
-      setViewMode('create');
-
-      // Clear the URL param to prevent re-triggering on navigation
-      router.replace('/dashboard/mission-planner', { scroll: false });
-    }
-  }, [searchParams, templates, router]);
 
   // Handle missionId from URL params (when navigating from Discord event or calendar)
   useEffect(() => {
@@ -302,14 +260,14 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       scheduledDateTime: mission.scheduledDateTime,
       duration: mission.duration,
       location: mission.location,
-      templateId: mission.templateId,
-      templateName: mission.templateName,
       operationType: mission.operationType,
       primaryActivity: mission.primaryActivity,
       secondaryActivity: mission.secondaryActivity,
       tertiaryActivity: mission.tertiaryActivity,
       leaders: mission.leaders,
-      ships: mission.ships,
+      shipRequirements: getMissionShipRequirements(mission),
+      personnelRequirements: getMissionPersonnelRequirements(mission),
+      ships: [],
       objectives: mission.objectives,
       briefing: mission.briefing,
       equipmentNotes: mission.equipmentNotes,
@@ -319,6 +277,15 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       status: mission.status
     });
     setViewMode('edit');
+  };
+
+  // Copy mission into a new draft
+  const handleCopyToNewMission = (mission: PlannedMissionResponse) => {
+    setSelectedMission(null);
+    setErrors({});
+    setFormData(createMissionCopyDraft(mission));
+    setViewMode('create');
+    toast.success('Mission copied into a new draft.');
   };
 
   // Delete mission
@@ -545,10 +512,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
   };
 
-  // Calculate total ships for a mission
-  const getTotalShips = (mission: PlannedMissionResponse) => {
-    return (mission.ships || []).reduce((total, ship) => total + ship.quantity, 0);
-  };
+  const getTotalShipsRequired = (mission: PlannedMissionResponse) => getShipRequirementCount(mission);
+
+  const getTotalPersonnelRequired = (mission: PlannedMissionResponse) => getPersonnelRequirementCount(mission);
 
   // Render list view
   const renderListView = () => (
@@ -627,35 +593,15 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
               animate={{ opacity: 1, y: 0 }}
               className="rounded-lg border border-[rgba(var(--mg-primary),0.2)] bg-[rgba(var(--mg-panel-dark),0.4)] overflow-hidden hover:border-[rgba(var(--mg-primary),0.4)] transition-all"
             >
-              {/* Mission Header Image (first ship) */}
-              {mission.ships?.[0] && (
-                <div className="h-32 relative">
-                  {mission.ships[0].image ? (
-                    <Image
-                      src={mission.ships[0].image}
-                      alt={mission.ships[0].shipName}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center w-full h-full bg-[rgba(var(--mg-panel-dark),0.6)] border border-[rgba(var(--mg-primary),0.15)] rounded">
-                      <span className="text-xs text-[rgba(var(--mg-primary),0.3)]">No image</span>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[rgba(0,0,0,0.8)] to-transparent" />
-                  {/* Status Badge */}
-                  <div className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[mission.status]}`}>
-                    {mission.status}
-                  </div>
-                </div>
-              )}
-
-              {/* Mission Info */}
               <div className="p-4">
-                <h3 className="text-lg font-medium text-[rgba(var(--mg-text),0.95)] mb-2 truncate">
-                  {mission.name}
-                </h3>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h3 className="text-lg font-medium text-[rgba(var(--mg-text),0.95)] truncate">
+                    {mission.name}
+                  </h3>
+                  <span className={`shrink-0 px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[mission.status]}`}>
+                    {mission.status}
+                  </span>
+                </div>
 
                 <div className="flex items-center justify-between gap-2 text-sm text-[rgba(var(--mg-text),0.6)] mb-3">
                   <div className="flex items-center gap-1">
@@ -688,11 +634,11 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                 <div className="flex items-center gap-4 text-xs text-[rgba(var(--mg-text),0.5)] mb-4">
                   <div className="flex items-center gap-1">
                     <ShipIcon />
-                    <span>{mission.ships?.length || 0} ships</span>
+                    <span>{getTotalShipsRequired(mission)} ships required</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <UsersIcon />
-                    <span>{getTotalShips(mission)} ships</span>
+                    <span>{getTotalPersonnelRequired(mission)} personnel required</span>
                   </div>
                   {mission.discordEvent && rsvpData[mission.id] && (
                     <div className="flex items-center gap-1 text-[rgba(var(--mg-primary),0.8)] relative group cursor-help">
@@ -753,6 +699,15 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                     <EyeIcon />
                     View
                   </button>
+                  {canCreateMission && (
+                    <button
+                      onClick={() => handleCopyToNewMission(mission)}
+                      className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(var(--mg-accent),0.1)] text-[rgba(var(--mg-accent),0.9)] hover:bg-[rgba(var(--mg-accent),0.2)] transition-colors text-sm"
+                      title="Copy to New Mission"
+                    >
+                      <ClipboardIcon />
+                    </button>
+                  )}
                   {(mission.createdBy === session?.user?.id || userClearance >= 4) && mission.status !== 'COMPLETED' && mission.status !== 'CANCELLED' && (
                     <>
                       {(mission.status === 'ACTIVE' || mission.status === 'DEBRIEFING') && (
@@ -790,6 +745,11 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
   // Render view mode (read-only mission details)
   const renderViewMode = () => {
     if (!selectedMission) return null;
+
+    const shipRequirements = getMissionShipRequirements(selectedMission);
+    const personnelRequirements = getMissionPersonnelRequirements(selectedMission);
+    const canModifySelectedMission = selectedMission.createdBy === session?.user?.id || userClearance >= 4;
+    const isReadOnlyStatus = selectedMission.status === 'COMPLETED' || selectedMission.status === 'CANCELLED';
 
     return (
       <div className="space-y-6">
@@ -935,66 +895,91 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
             )}
           </div>
 
-          {/* Right Column - Ships */}
+          {/* Right Column - Requirements */}
           <div className="space-y-6">
             <MobiGlasPanel
-              title="Ship Roster"
+              title="Ship Requirements"
               rightContent={
                 <span className="text-sm text-[rgba(var(--mg-text),0.5)]">
-                  {getTotalShips(selectedMission)} ships
+                  {getTotalShipsRequired(selectedMission)} ships
                 </span>
               }
             >
-              {selectedMission.ships.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3">
-                  {selectedMission.ships.map((ship, shipIdx) => (
+              {shipRequirements.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {shipRequirements.map((ship, shipIdx) => (
                     <div
                       key={shipIdx}
-                      className="rounded overflow-hidden border border-[rgba(var(--mg-primary),0.2)]"
+                      className="rounded border border-[rgba(var(--mg-primary),0.2)] bg-[rgba(var(--mg-panel-dark),0.3)] p-3"
                     >
-                      <div className="aspect-video relative">
-                        {ship.image ? (
-                          <Image
-                            src={ship.image}
-                            alt={ship.shipName}
-                            fill
-                            className="object-cover"
-                            sizes="200px"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center w-full h-full bg-[rgba(var(--mg-panel-dark),0.6)] border border-[rgba(var(--mg-primary),0.15)] rounded">
-                            <span className="text-xs text-[rgba(var(--mg-primary),0.3)]">No image</span>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-[rgba(var(--mg-text),0.9)]">
+                            {ship.size} {ship.category}
                           </div>
-                        )}
-                        <div className="absolute top-1 right-1 bg-[rgba(0,0,0,0.7)] px-2 py-0.5 rounded text-sm">
-                          x{ship.quantity}
+                          <div className="text-xs text-[rgba(var(--mg-text),0.5)]">Ship slot</div>
                         </div>
-                        <div className="absolute bottom-1 left-1 bg-[rgba(0,0,0,0.7)] px-2 py-0.5 rounded text-xs">
-                          {ship.size}
+                        <div className="text-lg font-bold text-[rgba(var(--mg-primary),1)]">
+                          x{ship.count}
                         </div>
-                      </div>
-                      <div className="p-2 bg-[rgba(var(--mg-panel-dark),0.4)]">
-                        <div className="text-sm font-medium truncate">{ship.shipName}</div>
-                        <div className="text-xs text-[rgba(var(--mg-text),0.5)]">{ship.manufacturer}</div>
-                        {ship.notes && (
-                          <div className="text-xs text-[rgba(var(--mg-primary),0.7)] mt-1">{ship.notes}</div>
-                        )}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-[rgba(var(--mg-text),0.5)]">No ships assigned to this mission.</div>
+                <div className="text-[rgba(var(--mg-text),0.5)]">No ship requirements assigned to this mission.</div>
+              )}
+            </MobiGlasPanel>
+
+            <MobiGlasPanel
+              title="Personnel Requirements"
+              rightContent={
+                <span className="text-sm text-[rgba(var(--mg-text),0.5)]">
+                  {getTotalPersonnelRequired(selectedMission)} personnel
+                </span>
+              }
+            >
+              {personnelRequirements.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {personnelRequirements.map((personnel, index) => (
+                    <div
+                      key={index}
+                      className="rounded border border-[rgba(var(--mg-secondary),0.2)] bg-[rgba(var(--mg-panel-dark),0.3)] p-3"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-[rgba(var(--mg-text),0.9)]">
+                            {personnel.profession}
+                          </div>
+                          <div className="text-xs text-[rgba(var(--mg-text),0.5)]">Personnel role</div>
+                        </div>
+                        <div className="text-lg font-bold text-[rgba(var(--mg-secondary),1)]">
+                          x{personnel.count}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[rgba(var(--mg-text),0.5)]">No personnel requirements assigned to this mission.</div>
               )}
             </MobiGlasPanel>
           </div>
         </div>
 
-        {/* Action Buttons - Hidden for COMPLETED/CANCELLED missions */}
-        {(selectedMission.createdBy === session?.user?.id || userClearance >= 4) &&
-         selectedMission.status !== 'COMPLETED' && selectedMission.status !== 'CANCELLED' && (
+        {(canCreateMission || (canModifySelectedMission && !isReadOnlyStatus)) && (
           <div className="flex justify-end gap-3">
-            {(selectedMission.status === 'ACTIVE' || selectedMission.status === 'DEBRIEFING') && (
+            {canCreateMission && (
+              <MobiGlasButton
+                onClick={() => handleCopyToNewMission(selectedMission)}
+                variant="secondary"
+                size="md"
+                leftIcon={<ClipboardIcon />}
+              >
+                Copy to New Mission
+              </MobiGlasButton>
+            )}
+            {canModifySelectedMission && !isReadOnlyStatus && (selectedMission.status === 'ACTIVE' || selectedMission.status === 'DEBRIEFING') && (
               <MobiGlasButton
                 onClick={() => handleStartDebrief(selectedMission)}
                 variant="secondary"
@@ -1004,19 +989,21 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                 Mark Attendance
               </MobiGlasButton>
             )}
-            <MobiGlasButton
-              onClick={() => handleEdit(selectedMission)}
-              variant="primary"
-              size="md"
-              leftIcon={<EditIcon />}
-            >
-              Edit Mission
-            </MobiGlasButton>
+            {canModifySelectedMission && !isReadOnlyStatus && (
+              <MobiGlasButton
+                onClick={() => handleEdit(selectedMission)}
+                variant="primary"
+                size="md"
+                leftIcon={<EditIcon />}
+              >
+                Edit Mission
+              </MobiGlasButton>
+            )}
           </div>
         )}
 
         {/* Read-only notice for completed/cancelled missions */}
-        {(selectedMission.status === 'COMPLETED' || selectedMission.status === 'CANCELLED') && (
+        {isReadOnlyStatus && (
           <div className="flex justify-center">
             <div className="px-4 py-2 rounded bg-[rgba(var(--mg-panel-dark),0.5)] text-[rgba(var(--mg-text),0.5)] text-sm">
               This mission is {selectedMission.status.toLowerCase()} and cannot be edited.
@@ -1202,7 +1189,6 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
             errors={errors}
             isLoading={isLoading}
             isEditing={viewMode === 'edit'}
-            templates={templates}
             onInputChange={handleInputChange}
             onSave={handleSave}
             onCancel={() => { setViewMode('list'); resetForm(); }}

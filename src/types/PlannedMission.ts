@@ -1,16 +1,11 @@
 // Planned Mission types for the Mission Planner system
-//
-// WORKFLOW:
-// 1. User creates reusable templates (ship sizes/counts, activities, equipment)
-// 2. User creates mission plan by selecting a template, then specifying:
-//    - Actual specific ships (Carrack, Pisces, etc.)
-//    - Leader assignments
-//    - Date/time and mission details
-// 3. Mission is published to Discord as an event
-// 4. Expected participants auto-sync from Discord RSVPs
-// 5. Post-mission: Leaders mark confirmed participants (attendance tracking)
 
-import { ActivityType, OperationType } from './MissionTemplate';
+import {
+  ActivityType,
+  MissionPersonnelRequirement,
+  MissionShipRequirement,
+  OperationType
+} from './MissionPlanning';
 
 // Actual ship assignment (specific ship from compendium)
 export interface MissionShip {
@@ -86,11 +81,7 @@ export interface PlannedMission {
   duration?: number;          // Duration in minutes (optional)
   location?: string;          // In-game location/system
 
-  // Template Reference (pre-fills operation details)
-  templateId?: string;        // If created from a template
-  templateName?: string;      // Cached template name
-
-  // Operation Details (from template or manually set)
+  // Operation Details
   operationType: OperationType;
   primaryActivity: ActivityType;
   secondaryActivity?: ActivityType;
@@ -99,8 +90,12 @@ export interface PlannedMission {
   // Leadership
   leaders: MissionLeader[];
 
-  // Ship Roster (actual specific ships)
-  ships: MissionShip[];
+  // Mission Requirements
+  shipRequirements: MissionShipRequirement[];
+  personnelRequirements: MissionPersonnelRequirement[];
+
+  // Legacy concrete ship roster. New planner edits migrate this to shipRequirements.
+  ships?: MissionShip[];
 
   // Mission Brief
   objectives: string;         // Mission objectives
@@ -145,7 +140,8 @@ export interface PlannedMissionValidationErrors {
   operationType?: string;
   primaryActivity?: string;
   leaders?: string;
-  ships?: string;
+  shipRequirements?: string;
+  personnelRequirements?: string;
   objectives?: string;
   briefing?: string;
   general?: string;
@@ -175,6 +171,8 @@ export function createEmptyMission(): Partial<PlannedMission> {
     operationType: 'Space Operations',
     primaryActivity: 'Mining',
     leaders: [],
+    shipRequirements: [],
+    personnelRequirements: [],
     ships: [],
     objectives: '',
     briefing: '',

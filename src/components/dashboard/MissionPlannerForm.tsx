@@ -1,24 +1,28 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import Image from 'next/image';
+import React, { useEffect, useMemo, useState } from 'react';
+import { motion } from 'motion/react';
 import { MobiGlasPanel } from '@/components/ui/mobiglas';
 import MobiGlasButton from '../ui/mobiglas/MobiGlasButton';
 import {
+  MissionLeader,
   PlannedMission,
   PlannedMissionValidationErrors,
-  MissionLeader,
-  MissionShip,
   LEADERSHIP_ROLES,
 } from '@/types/PlannedMission';
-import { MissionTemplate, ActivityType, OperationType } from '@/types/MissionTemplate';
+import {
+  ACTIVITIES,
+  ActivityType,
+  OPERATION_TYPES,
+  PERSONNEL_PROFESSIONS,
+  PersonnelProfession,
+  SHIP_CATEGORIES,
+  SHIP_SIZES,
+  ShipCategory,
+  ShipSize,
+} from '@/types/MissionPlanning';
 import { LOCATION_OPTIONS } from '@/data/StarCitizenLocations';
-import MissionShipPickerModal from '@/components/ships/MissionShipPickerModal';
-import { shipDocumentToMissionShip } from '@/lib/ships/mappers';
-import type { ShipDocument } from '@/types/ship';
 
-// Icons
 const SpaceIcon = () => (
   <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
@@ -45,63 +49,74 @@ const TrashIcon = () => (
   </svg>
 );
 
-const RocketIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-  </svg>
-);
-
 const ShipIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
   </svg>
 );
 
-// Activity icons
 const ACTIVITY_ICONS: Record<ActivityType, JSX.Element> = {
-  'Mining': (
+  Mining: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
     </svg>
   ),
-  'Salvage': (
+  Salvage: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
     </svg>
   ),
-  'Escort': (
+  Escort: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
     </svg>
   ),
-  'Transport': (
+  Transport: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
     </svg>
   ),
-  'Medical': (
+  Medical: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
     </svg>
   ),
-  'Combat': (
+  Combat: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
     </svg>
-  )
+  ),
 };
 
-const ACTIVITIES: ActivityType[] = ['Mining', 'Salvage', 'Escort', 'Transport', 'Medical', 'Combat'];
+const SHIP_SIZE_ICONS: Record<ShipSize, JSX.Element> = {
+  Small: (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3" strokeWidth={2} />
+    </svg>
+  ),
+  Medium: (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="5" strokeWidth={2} />
+    </svg>
+  ),
+  Large: (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="7" strokeWidth={2} />
+    </svg>
+  ),
+  Capital: (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+    </svg>
+  ),
+};
 
 interface Leader {
   id: string;
   aydoHandle: string;
-  discordName?: string;
   discordId?: string;
   position?: string;
-  division?: string;
   clearanceLevel: number;
-  photo?: string;
 }
 
 interface MissionPlannerFormProps {
@@ -109,20 +124,17 @@ interface MissionPlannerFormProps {
   errors: PlannedMissionValidationErrors;
   isLoading: boolean;
   isEditing: boolean;
-  templates: MissionTemplate[];
   onInputChange: (field: keyof PlannedMission, value: any) => void;
   onSave: () => void;
   onCancel: () => void;
   onPublishToDiscord?: () => void;
 }
 
-// Helper to format ISO date string to datetime-local input format (in local timezone)
 function formatDateTimeForInput(isoString: string): string {
   if (!isoString) return '';
   try {
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return '';
-    // Format as YYYY-MM-DDTHH:mm in local timezone
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -139,20 +151,14 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
   errors,
   isLoading,
   isEditing,
-  templates,
   onInputChange,
   onSave,
   onCancel,
-  onPublishToDiscord
+  onPublishToDiscord,
 }) => {
-  const [showShipDropdown, setShowShipDropdown] = useState(false);
   const [leaders, setLeaders] = useState<Leader[]>([]);
   const [loadingLeaders, setLoadingLeaders] = useState(true);
 
-  // Check if a template is selected
-  const hasTemplate = Boolean(formData.templateId);
-
-  // Fetch leaders on mount
   useEffect(() => {
     async function fetchLeaders() {
       try {
@@ -170,97 +176,21 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
     fetchLeaders();
   }, []);
 
-  // Initialize ships array if empty
-  useEffect(() => {
-    if (!formData.ships) {
-      onInputChange('ships', []);
-    }
-  }, []);
-
-  // Handle template selection
-  const handleTemplateSelect = (templateId: string) => {
-    const template = templates.find(t => t.id === templateId);
-    if (template) {
-      onInputChange('templateId', template.id);
-      onInputChange('templateName', template.name);
-      onInputChange('operationType', template.operationType);
-      onInputChange('primaryActivity', template.primaryActivity);
-      onInputChange('secondaryActivity', template.secondaryActivity);
-      onInputChange('tertiaryActivity', template.tertiaryActivity);
-      onInputChange('equipmentNotes', template.requiredEquipment);
-    }
-  };
-
-  // Clear template selection
-  const clearTemplate = () => {
-    onInputChange('templateId', undefined);
-    onInputChange('templateName', undefined);
-  };
-
-  // Add ships to roster (supports multiple ships from dynamic ship picker)
-  const addShips = (newShips: ShipDocument[]) => {
-    const currentShips = [...(formData.ships || [])];
-
-    for (const ship of newShips) {
-      const existingIndex = currentShips.findIndex(s => s.shipName === ship.name);
-
-      if (existingIndex >= 0) {
-        currentShips[existingIndex] = {
-          ...currentShips[existingIndex],
-          quantity: currentShips[existingIndex].quantity + 1
-        };
-      } else {
-        currentShips.push(shipDocumentToMissionShip(ship));
-      }
-    }
-
-    onInputChange('ships', currentShips);
-  };
-
-  // Get existing ship names for the picker
-  const existingShipNames = useMemo(() =>
-    (formData.ships || []).map(s => s.shipName),
-    [formData.ships]
-  );
-
-  // Remove ship from roster
-  const removeShip = (shipIndex: number) => {
-    const ships = (formData.ships || []).filter((_, i) => i !== shipIndex);
-    onInputChange('ships', ships);
-  };
-
-  // Update ship quantity
-  const updateShipQuantity = (shipIndex: number, quantity: number) => {
-    if (quantity < 1) return;
-    const ships = [...(formData.ships || [])];
-    ships[shipIndex] = { ...ships[shipIndex], quantity };
-    onInputChange('ships', ships);
-  };
-
-  // Update ship notes
-  const updateShipNotes = (shipIndex: number, notes: string) => {
-    const ships = [...(formData.ships || [])];
-    ships[shipIndex] = { ...ships[shipIndex], notes };
-    onInputChange('ships', ships);
-  };
-
-  // Calculate total ships count (quantity-based since crew data comes from API)
   const totalShips = useMemo(() => {
-    return (formData.ships || []).reduce((total, ship) => total + ship.quantity, 0);
-  }, [formData.ships]);
+    return (formData.shipRequirements || []).reduce((total, requirement) => total + requirement.count, 0);
+  }, [formData.shipRequirements]);
 
-  // Add leader
+  const totalPersonnel = useMemo(() => {
+    return (formData.personnelRequirements || []).reduce((total, requirement) => total + requirement.count, 0);
+  }, [formData.personnelRequirements]);
+
   const addLeader = () => {
-    const newLeaders = [...(formData.leaders || [])];
-    newLeaders.push({
-      userId: '',
-      aydoHandle: '',
-      role: 'Mission Commander'
-    });
-    onInputChange('leaders', newLeaders);
+    onInputChange('leaders', [
+      ...(formData.leaders || []),
+      { userId: '', aydoHandle: '', role: 'Mission Commander' },
+    ]);
   };
 
-  // Update leader
   const updateLeader = (index: number, field: keyof MissionLeader, value: string) => {
     const newLeaders = [...(formData.leaders || [])];
 
@@ -271,7 +201,7 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
           ...newLeaders[index],
           userId: leader.id,
           aydoHandle: leader.aydoHandle,
-          discordId: leader.discordId || undefined
+          discordId: leader.discordId || undefined,
         };
       }
     } else {
@@ -281,23 +211,58 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
     onInputChange('leaders', newLeaders);
   };
 
-  // Remove leader
   const removeLeader = (index: number) => {
-    const newLeaders = formData.leaders?.filter((_, i) => i !== index) || [];
-    onInputChange('leaders', newLeaders);
+    onInputChange('leaders', formData.leaders?.filter((_, i) => i !== index) || []);
+  };
+
+  const addShipRequirement = () => {
+    onInputChange('shipRequirements', [
+      ...(formData.shipRequirements || []),
+      { size: 'Medium', category: 'Transport', count: 1 },
+    ]);
+  };
+
+  const updateShipRequirement = (
+    index: number,
+    field: 'size' | 'category' | 'count',
+    value: ShipSize | ShipCategory | number,
+  ) => {
+    const requirements = [...(formData.shipRequirements || [])];
+    requirements[index] = { ...requirements[index], [field]: value };
+    onInputChange('shipRequirements', requirements);
+  };
+
+  const removeShipRequirement = (index: number) => {
+    onInputChange('shipRequirements', formData.shipRequirements?.filter((_, i) => i !== index) || []);
+  };
+
+  const addPersonnelRequirement = () => {
+    onInputChange('personnelRequirements', [
+      ...(formData.personnelRequirements || []),
+      { profession: 'Pilot', count: 1 },
+    ]);
+  };
+
+  const updatePersonnelRequirement = (
+    index: number,
+    field: 'profession' | 'count',
+    value: PersonnelProfession | number,
+  ) => {
+    const requirements = [...(formData.personnelRequirements || [])];
+    requirements[index] = { ...requirements[index], [field]: value };
+    onInputChange('personnelRequirements', requirements);
+  };
+
+  const removePersonnelRequirement = (index: number) => {
+    onInputChange('personnelRequirements', formData.personnelRequirements?.filter((_, i) => i !== index) || []);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <MobiGlasPanel
         title={isEditing ? 'Edit Mission' : 'Plan New Mission'}
         rightContent={
-          <MobiGlasButton
-            onClick={onCancel}
-            variant="secondary"
-            size="sm"
-          >
+          <MobiGlasButton onClick={onCancel} variant="secondary" size="sm">
             Back to List
           </MobiGlasButton>
         }
@@ -312,129 +277,13 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
         )}
         <div className="text-[rgba(var(--mg-text),0.7)]">
           {isEditing
-            ? 'Update the mission details below. Changes will be saved when you click "Update Mission".'
-            : 'Create a detailed mission plan by selecting specific ships from the compendium, assigning leaders, and setting the mission details. Publish to Discord when ready.'
-          }
+            ? 'Update the mission details below. Changes will be saved when you click "Save Changes".'
+            : 'Create a mission plan by defining requirements, assigning leaders, and setting the briefing details. Publish to Discord when ready.'}
         </div>
       </MobiGlasPanel>
 
-      {/* Template Selection - REQUIRED */}
-      <MobiGlasPanel
-        title="Mission Template *"
-        rightContent={
-          hasTemplate && (
-            <button
-              onClick={clearTemplate}
-              className="text-xs text-[rgba(var(--mg-text),0.5)] hover:text-[rgba(var(--mg-danger),0.8)] transition-colors"
-            >
-              Change Template
-            </button>
-          )
-        }
-      >
-        {!hasTemplate ? (
-          <>
-            <div className="text-[rgba(var(--mg-text),0.6)] text-sm mb-4">
-              Select a template to define the operation type and activities for this mission.
-            </div>
-            {templates.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {templates.map(template => (
-                  <motion.button
-                    key={template.id}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleTemplateSelect(template.id)}
-                    className="p-4 rounded border text-left transition-all border-[rgba(var(--mg-primary),0.2)] bg-[rgba(var(--mg-panel-dark),0.3)] hover:border-[rgba(var(--mg-primary),0.5)] hover:bg-[rgba(var(--mg-primary),0.05)]"
-                  >
-                    <div className="text-sm font-medium text-[rgba(var(--mg-text),0.9)] truncate">
-                      {template.name}
-                    </div>
-                    <div className="text-xs text-[rgba(var(--mg-primary),0.8)] mt-1">
-                      {template.operationType}
-                    </div>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-[rgba(var(--mg-primary),0.2)] text-[rgba(var(--mg-primary),0.9)]">
-                        {template.primaryActivity}
-                      </span>
-                      {template.secondaryActivity && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-[rgba(var(--mg-secondary),0.2)] text-[rgba(var(--mg-secondary),0.9)]">
-                          {template.secondaryActivity}
-                        </span>
-                      )}
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-[rgba(var(--mg-text),0.5)] border border-dashed border-[rgba(var(--mg-primary),0.2)] rounded-lg">
-                <div>No templates available.</div>
-                <div className="text-xs mt-2">Create a mission template first to define operation types and activities.</div>
-              </div>
-            )}
-          </>
-        ) : (
-          // Show selected template info
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 rounded bg-[rgba(var(--mg-primary),0.1)] border border-[rgba(var(--mg-primary),0.3)]">
-              <div className="flex-1">
-                <div className="text-base font-medium text-[rgba(var(--mg-primary),1)]">
-                  {formData.templateName}
-                </div>
-              </div>
-            </div>
-
-            {/* Show operation type and activities as read-only info */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-3 rounded bg-[rgba(var(--mg-panel-dark),0.3)]">
-                <div className="text-xs text-[rgba(var(--mg-text),0.5)] mb-1">OPERATION TYPE</div>
-                <div className="flex items-center gap-2 text-sm text-[rgba(var(--mg-text),0.9)]">
-                  {formData.operationType === 'Space Operations' ? (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12h18" />
-                    </svg>
-                  )}
-                  <span>{formData.operationType}</span>
-                </div>
-              </div>
-              <div className="p-3 rounded bg-[rgba(var(--mg-panel-dark),0.3)]">
-                <div className="text-xs text-[rgba(var(--mg-text),0.5)] mb-1">PRIMARY</div>
-                <div className="flex items-center gap-2 text-sm text-[rgba(var(--mg-primary),0.9)]">
-                  {formData.primaryActivity && ACTIVITY_ICONS[formData.primaryActivity]}
-                  <span>{formData.primaryActivity}</span>
-                </div>
-              </div>
-              {formData.secondaryActivity && (
-                <div className="p-3 rounded bg-[rgba(var(--mg-panel-dark),0.3)]">
-                  <div className="text-xs text-[rgba(var(--mg-text),0.5)] mb-1">SECONDARY</div>
-                  <div className="flex items-center gap-2 text-sm text-[rgba(var(--mg-secondary),0.9)]">
-                    {ACTIVITY_ICONS[formData.secondaryActivity]}
-                    <span>{formData.secondaryActivity}</span>
-                  </div>
-                </div>
-              )}
-              {formData.tertiaryActivity && (
-                <div className="p-3 rounded bg-[rgba(var(--mg-panel-dark),0.3)]">
-                  <div className="text-xs text-[rgba(var(--mg-text),0.5)] mb-1">TERTIARY</div>
-                  <div className="flex items-center gap-2 text-sm text-[rgba(var(--mg-text),0.7)]">
-                    {ACTIVITY_ICONS[formData.tertiaryActivity]}
-                    <span>{formData.tertiaryActivity}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </MobiGlasPanel>
-
-      {/* Basic Info */}
       <MobiGlasPanel title="Mission Details">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Mission Name */}
           <div className="md:col-span-2">
             <label htmlFor="mission-name" className="mg-subtitle block mb-2">MISSION NAME *</label>
             <input
@@ -452,7 +301,6 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
             )}
           </div>
 
-          {/* Date/Time */}
           <div>
             <label htmlFor="mission-datetime" className="mg-subtitle block mb-2">SCHEDULED DATE & TIME *</label>
             <input
@@ -461,10 +309,7 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
               value={formData.scheduledDateTime ? formatDateTimeForInput(formData.scheduledDateTime) : ''}
               aria-required={true}
               onChange={(e) => {
-                // Store the datetime-local value directly, converting to ISO only when needed
-                // This prevents timezone shifting during editing
                 if (e.target.value) {
-                  // Create date from local input and convert to ISO
                   const localDate = new Date(e.target.value);
                   onInputChange('scheduledDateTime', localDate.toISOString());
                 } else {
@@ -478,13 +323,12 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
             )}
           </div>
 
-          {/* Duration */}
           <div>
             <label htmlFor="mission-duration" className="mg-subtitle block mb-2">ESTIMATED DURATION</label>
             <select
               id="mission-duration"
               value={formData.duration || ''}
-              onChange={(e) => onInputChange('duration', e.target.value ? parseInt(e.target.value) : undefined)}
+              onChange={(e) => onInputChange('duration', e.target.value ? parseInt(e.target.value, 10) : undefined)}
               className="mg-input w-full"
             >
               <option value="">Not specified</option>
@@ -498,7 +342,6 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
             </select>
           </div>
 
-          {/* Location */}
           <div className="md:col-span-2">
             <label htmlFor="mission-location" className="mg-subtitle block mb-2">LOCATION / SYSTEM</label>
             <select
@@ -516,23 +359,152 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
         </div>
       </MobiGlasPanel>
 
-      {/* Leadership */}
+      <MobiGlasPanel title="Operation Type">
+        <div className="grid grid-cols-2 gap-4">
+          {OPERATION_TYPES.map((type) => (
+            <motion.button
+              key={type}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => onInputChange('operationType', type)}
+              className={`p-6 rounded-lg border-2 flex flex-col items-center gap-3 transition-all ${
+                formData.operationType === type
+                  ? 'border-[rgba(var(--mg-primary),0.8)] bg-[rgba(var(--mg-primary),0.15)]'
+                  : 'border-[rgba(var(--mg-primary),0.2)] bg-[rgba(var(--mg-panel-dark),0.3)] hover:border-[rgba(var(--mg-primary),0.4)]'
+              }`}
+            >
+              <div className={formData.operationType === type ? 'text-[rgba(var(--mg-primary),1)]' : 'text-[rgba(var(--mg-text),0.6)]'}>
+                {type === 'Space Operations' ? <SpaceIcon /> : <GroundIcon />}
+              </div>
+              <span className={`font-medium ${formData.operationType === type ? 'text-[rgba(var(--mg-primary),1)]' : 'text-[rgba(var(--mg-text),0.8)]'}`}>
+                {type}
+              </span>
+            </motion.button>
+          ))}
+        </div>
+        {errors.operationType && (
+          <div className="text-[rgba(var(--mg-danger),0.8)] text-sm mt-2">{errors.operationType}</div>
+        )}
+      </MobiGlasPanel>
+
+      <MobiGlasPanel title="Mission Activities">
+        <div className="space-y-6">
+          <div className="text-[rgba(var(--mg-text),0.6)] text-sm">
+            Select primary, secondary, and tertiary activities. Each can only be selected once.
+          </div>
+
+          <div>
+            <label className="mg-subtitle block mb-3">PRIMARY ACTIVITY *</label>
+            <div className="flex flex-wrap gap-2">
+              {ACTIVITIES.map((activity) => {
+                const isDisabled = activity === formData.secondaryActivity || activity === formData.tertiaryActivity;
+                return (
+                  <motion.button
+                    key={activity}
+                    whileHover={!isDisabled ? { scale: 1.05 } : {}}
+                    whileTap={!isDisabled ? { scale: 0.95 } : {}}
+                    onClick={() => !isDisabled && onInputChange('primaryActivity', activity)}
+                    disabled={isDisabled}
+                    className={`px-4 py-2 rounded-full border flex items-center gap-2 transition-all ${
+                      formData.primaryActivity === activity
+                        ? 'border-[rgba(var(--mg-primary),0.8)] bg-[rgba(var(--mg-primary),0.2)] text-[rgba(var(--mg-primary),1)]'
+                        : isDisabled
+                        ? 'border-[rgba(var(--mg-text),0.1)] bg-[rgba(var(--mg-panel-dark),0.2)] text-[rgba(var(--mg-text),0.3)] cursor-not-allowed'
+                        : 'border-[rgba(var(--mg-primary),0.2)] bg-[rgba(var(--mg-panel-dark),0.3)] text-[rgba(var(--mg-text),0.7)] hover:border-[rgba(var(--mg-primary),0.4)]'
+                    }`}
+                  >
+                    {ACTIVITY_ICONS[activity]}
+                    <span>{activity}</span>
+                  </motion.button>
+                );
+              })}
+            </div>
+            {errors.primaryActivity && (
+              <div className="text-[rgba(var(--mg-danger),0.8)] text-sm mt-2">{errors.primaryActivity}</div>
+            )}
+          </div>
+
+          <div>
+            <label className="mg-subtitle block mb-3">SECONDARY ACTIVITY</label>
+            <div className="flex flex-wrap gap-2">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => onInputChange('secondaryActivity', undefined)}
+                className={`px-4 py-2 rounded-full border transition-all ${
+                  !formData.secondaryActivity
+                    ? 'border-[rgba(var(--mg-text),0.4)] bg-[rgba(var(--mg-panel-dark),0.4)] text-[rgba(var(--mg-text),0.7)]'
+                    : 'border-[rgba(var(--mg-primary),0.2)] text-[rgba(var(--mg-text),0.5)]'
+                }`}
+              >
+                None
+              </motion.button>
+              {ACTIVITIES.filter(a => a !== formData.primaryActivity && a !== formData.tertiaryActivity).map((activity) => (
+                <motion.button
+                  key={activity}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => onInputChange('secondaryActivity', activity)}
+                  className={`px-4 py-2 rounded-full border flex items-center gap-2 transition-all ${
+                    formData.secondaryActivity === activity
+                      ? 'border-[rgba(var(--mg-secondary),0.8)] bg-[rgba(var(--mg-secondary),0.2)] text-[rgba(var(--mg-secondary),1)]'
+                      : 'border-[rgba(var(--mg-primary),0.2)] bg-[rgba(var(--mg-panel-dark),0.3)] text-[rgba(var(--mg-text),0.7)] hover:border-[rgba(var(--mg-primary),0.4)]'
+                  }`}
+                >
+                  {ACTIVITY_ICONS[activity]}
+                  <span>{activity}</span>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="mg-subtitle block mb-3">TERTIARY ACTIVITY</label>
+            <div className="flex flex-wrap gap-2">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => onInputChange('tertiaryActivity', undefined)}
+                className={`px-4 py-2 rounded-full border transition-all ${
+                  !formData.tertiaryActivity
+                    ? 'border-[rgba(var(--mg-text),0.4)] bg-[rgba(var(--mg-panel-dark),0.4)] text-[rgba(var(--mg-text),0.7)]'
+                    : 'border-[rgba(var(--mg-primary),0.2)] text-[rgba(var(--mg-text),0.5)]'
+                }`}
+              >
+                None
+              </motion.button>
+              {ACTIVITIES.filter(a => a !== formData.primaryActivity && a !== formData.secondaryActivity).map((activity) => (
+                <motion.button
+                  key={activity}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => onInputChange('tertiaryActivity', activity)}
+                  className={`px-4 py-2 rounded-full border flex items-center gap-2 transition-all ${
+                    formData.tertiaryActivity === activity
+                      ? 'border-[rgba(var(--mg-accent),0.8)] bg-[rgba(var(--mg-accent),0.2)] text-[rgba(var(--mg-accent),1)]'
+                      : 'border-[rgba(var(--mg-primary),0.2)] bg-[rgba(var(--mg-panel-dark),0.3)] text-[rgba(var(--mg-text),0.7)] hover:border-[rgba(var(--mg-primary),0.4)]'
+                  }`}
+                >
+                  {ACTIVITY_ICONS[activity]}
+                  <span>{activity}</span>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </MobiGlasPanel>
+
       <MobiGlasPanel
         title="Leadership"
         rightContent={
-          <MobiGlasButton
-            onClick={addLeader}
-            variant="primary"
-            size="sm"
-            leftIcon={<PlusIcon />}
-          >
+          <MobiGlasButton onClick={addLeader} variant="primary" size="sm" leftIcon={<PlusIcon />}>
             Add Leader
           </MobiGlasButton>
         }
       >
         <div className="space-y-4">
           <div className="text-[rgba(var(--mg-text),0.6)] text-sm">
-            Assign unit leaders for this mission
+            Assign unit leaders for this mission.
           </div>
 
           {formData.leaders && formData.leaders.length > 0 ? (
@@ -596,137 +568,210 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
         </div>
       </MobiGlasPanel>
 
-      {/* Ship Roster */}
       <MobiGlasPanel
-        title="Ship Roster"
+        title="Ship Requirements"
         rightContent={
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm text-[rgba(var(--mg-text),0.7)]">
               <ShipIcon />
               <span>Ships: <strong className="text-[rgba(var(--mg-primary),1)]">{totalShips}</strong></span>
             </div>
-            <div>
-              <MobiGlasButton
-                onClick={() => setShowShipDropdown(!showShipDropdown)}
-                variant="primary"
-                size="sm"
-                leftIcon={<PlusIcon />}
-              >
-                Add Ship
-              </MobiGlasButton>
-            </div>
+            <MobiGlasButton onClick={addShipRequirement} variant="primary" size="sm" leftIcon={<PlusIcon />} withScanline>
+              Add Ship Slot
+            </MobiGlasButton>
           </div>
         }
       >
         <div className="space-y-4">
           <div className="text-[rgba(var(--mg-text),0.6)] text-sm">
-            Select the specific ships for this mission from the compendium
+            Define required ships by size and category. Leave empty for ground-only operations.
           </div>
 
-          {/* Ship Cards Grid */}
-          {formData.ships && formData.ships.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {formData.ships.map((ship, shipIndex) => (
+          {formData.shipRequirements && formData.shipRequirements.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {formData.shipRequirements.map((ship, index) => (
                 <motion.div
-                  key={`${ship.shipName}-${shipIndex}`}
-                  className="relative rounded-lg border border-[rgba(var(--mg-primary),0.3)] bg-[rgba(var(--mg-panel-dark),0.4)] overflow-hidden"
-                  initial={{ opacity: 0, scale: 0.9 }}
+                  key={index}
+                  className="border border-[rgba(var(--mg-primary),0.3)] rounded-lg p-4 bg-[rgba(var(--mg-panel-dark),0.3)] relative"
+                  initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  layout
+                  transition={{ duration: 0.2 }}
                 >
-                  {/* Ship Image */}
-                  <div className="aspect-video relative">
-                    {ship.image ? (
-                      <Image
-                        src={ship.image}
-                        alt={ship.shipName}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 50vw, 25vw"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center w-full h-full bg-[rgba(var(--mg-panel-dark),0.6)] border border-[rgba(var(--mg-primary),0.15)] rounded">
-                        <span className="text-xs text-[rgba(var(--mg-primary),0.3)]">No image</span>
-                      </div>
-                    )}
-                    {/* Quantity Controls */}
-                    <div className="absolute top-2 right-2 flex items-center gap-1 bg-[rgba(0,0,0,0.8)] rounded px-2 py-1">
-                      <button
-                        onClick={() => updateShipQuantity(shipIndex, ship.quantity - 1)}
-                        className="text-sm hover:text-[rgba(var(--mg-primary),1)] px-1"
-                        disabled={ship.quantity <= 1}
-                      >
-                        -
-                      </button>
-                      <span className="text-sm font-bold min-w-[20px] text-center">x{ship.quantity}</span>
-                      <button
-                        onClick={() => updateShipQuantity(shipIndex, ship.quantity + 1)}
-                        className="text-sm hover:text-[rgba(var(--mg-primary),1)] px-1"
-                      >
-                        +
-                      </button>
+                  <button
+                    onClick={() => removeShipRequirement(index)}
+                    className="absolute top-2 right-2 p-1.5 rounded bg-[rgba(var(--mg-danger),0.2)] text-[rgba(var(--mg-danger),0.8)] hover:bg-[rgba(var(--mg-danger),0.3)] transition-colors"
+                    title="Remove Ship Requirement"
+                  >
+                    <TrashIcon />
+                  </button>
+
+                  <div className="mb-4">
+                    <label className="mg-subtitle block mb-2 text-xs">SIZE</label>
+                    <div className="flex gap-2">
+                      {SHIP_SIZES.map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => updateShipRequirement(index, 'size', size)}
+                          className={`flex-1 py-2 rounded flex flex-col items-center gap-1 transition-all ${
+                            ship.size === size
+                              ? 'bg-[rgba(var(--mg-primary),0.2)] border border-[rgba(var(--mg-primary),0.5)] text-[rgba(var(--mg-primary),1)]'
+                              : 'bg-[rgba(var(--mg-panel-dark),0.4)] border border-transparent text-[rgba(var(--mg-text),0.6)] hover:border-[rgba(var(--mg-primary),0.3)]'
+                          }`}
+                        >
+                          {SHIP_SIZE_ICONS[size]}
+                          <span className="text-xs">{size}</span>
+                        </button>
+                      ))}
                     </div>
-                    {/* Remove Button */}
-                    <button
-                      onClick={() => removeShip(shipIndex)}
-                      className="absolute top-2 left-2 p-1.5 bg-[rgba(var(--mg-danger),0.8)] rounded hover:bg-[rgba(var(--mg-danger),1)] transition-colors"
-                    >
-                      <TrashIcon />
-                    </button>
-                    {/* Size Badge */}
-                    {ship.size && (
-                      <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-[rgba(0,0,0,0.8)] rounded text-xs">
-                        {ship.size}
-                      </div>
-                    )}
                   </div>
-                  {/* Ship Info */}
-                  <div className="p-3">
-                    <div className="text-sm font-medium text-[rgba(var(--mg-text),0.9)] truncate">
-                      {ship.shipName}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor={`mission-ship-category-${index}`} className="mg-subtitle block mb-1 text-xs">CATEGORY</label>
+                      <select
+                        id={`mission-ship-category-${index}`}
+                        value={ship.category}
+                        onChange={(e) => updateShipRequirement(index, 'category', e.target.value as ShipCategory)}
+                        className="mg-input w-full text-sm"
+                      >
+                        {SHIP_CATEGORIES.map((category) => (
+                          <option key={category} value={category}>{category}</option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="text-xs text-[rgba(var(--mg-text),0.5)] mb-2">
-                      {ship.manufacturer}
+                    <div>
+                      <label htmlFor={`mission-ship-count-${index}`} className="mg-subtitle block mb-1 text-xs">COUNT</label>
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => updateShipRequirement(index, 'count', Math.max(1, ship.count - 1))}
+                          className="px-3 py-2 bg-[rgba(var(--mg-panel-dark),0.4)] rounded-l border border-r-0 border-[rgba(var(--mg-primary),0.3)] hover:bg-[rgba(var(--mg-primary),0.1)]"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          id={`mission-ship-count-${index}`}
+                          value={ship.count}
+                          onChange={(e) => updateShipRequirement(index, 'count', parseInt(e.target.value, 10) || 1)}
+                          className="mg-input w-16 text-center rounded-none border-x-0"
+                        />
+                        <button
+                          onClick={() => updateShipRequirement(index, 'count', Math.min(20, ship.count + 1))}
+                          className="px-3 py-2 bg-[rgba(var(--mg-panel-dark),0.4)] rounded-r border border-l-0 border-[rgba(var(--mg-primary),0.3)] hover:bg-[rgba(var(--mg-primary),0.1)]"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
-                    {/* Notes Input */}
-                    <input
-                      type="text"
-                      value={ship.notes || ''}
-                      onChange={(e) => updateShipNotes(shipIndex, e.target.value)}
-                      className="mg-input w-full text-xs"
-                      placeholder="Notes (e.g., Lead ship)"
-                    />
                   </div>
                 </motion.div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 border border-dashed border-[rgba(var(--mg-primary),0.2)] rounded-lg">
-              <ShipIcon />
-              <div className="text-[rgba(var(--mg-text),0.5)] mt-2">
-                No ships assigned. Click &quot;Add Ship&quot; to select vessels from the compendium.
-              </div>
+            <div className="text-center py-8 text-[rgba(var(--mg-text),0.4)] border border-dashed border-[rgba(var(--mg-primary),0.2)] rounded-lg">
+              No ships specified. Click &quot;Add Ship Slot&quot; to add vessel requirements.
             </div>
           )}
-
-          {errors.ships && (
-            <div className="text-[rgba(var(--mg-danger),0.8)] text-sm">{errors.ships}</div>
+          {errors.shipRequirements && (
+            <div className="text-[rgba(var(--mg-danger),0.8)] text-sm">{errors.shipRequirements}</div>
           )}
         </div>
       </MobiGlasPanel>
 
-      {/* Mission Ship Picker Modal */}
-      <MissionShipPickerModal
-        isOpen={showShipDropdown}
-        onClose={() => setShowShipDropdown(false)}
-        onSelectShips={addShips}
-        existingShipNames={existingShipNames}
-      />
+      <MobiGlasPanel
+        title="Personnel Requirements"
+        rightContent={
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-[rgba(var(--mg-text),0.7)]">
+              Personnel: <strong className="text-[rgba(var(--mg-secondary),1)]">{totalPersonnel}</strong>
+            </div>
+            <MobiGlasButton onClick={addPersonnelRequirement} variant="primary" size="sm" leftIcon={<PlusIcon />} withScanline>
+              Add Role
+            </MobiGlasButton>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="text-[rgba(var(--mg-text),0.6)] text-sm">
+            Specify required personnel roles and counts for this mission.
+          </div>
 
-      {/* Mission Briefing */}
+          {formData.personnelRequirements && formData.personnelRequirements.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {formData.personnelRequirements.map((personnel, index) => (
+                <motion.div
+                  key={index}
+                  className="border border-[rgba(var(--mg-secondary),0.3)] rounded-lg p-4 bg-[rgba(var(--mg-panel-dark),0.3)] relative"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                >
+                  <button
+                    onClick={() => removePersonnelRequirement(index)}
+                    className="absolute top-2 right-2 p-1 rounded bg-[rgba(var(--mg-danger),0.2)] text-[rgba(var(--mg-danger),0.8)] hover:bg-[rgba(var(--mg-danger),0.3)] transition-colors"
+                    title="Remove Personnel Requirement"
+                  >
+                    <TrashIcon />
+                  </button>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label htmlFor={`mission-personnel-profession-${index}`} className="mg-subtitle block mb-1 text-xs">PROFESSION</label>
+                      <select
+                        id={`mission-personnel-profession-${index}`}
+                        value={personnel.profession}
+                        onChange={(e) => updatePersonnelRequirement(index, 'profession', e.target.value as PersonnelProfession)}
+                        className="mg-input w-full text-sm"
+                      >
+                        {PERSONNEL_PROFESSIONS.map((profession) => (
+                          <option key={profession} value={profession}>{profession}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor={`mission-personnel-count-${index}`} className="mg-subtitle block mb-1 text-xs">COUNT</label>
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => updatePersonnelRequirement(index, 'count', Math.max(1, personnel.count - 1))}
+                          className="px-3 py-2 bg-[rgba(var(--mg-panel-dark),0.4)] rounded-l border border-r-0 border-[rgba(var(--mg-secondary),0.3)] hover:bg-[rgba(var(--mg-secondary),0.1)]"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          max="50"
+                          id={`mission-personnel-count-${index}`}
+                          value={personnel.count}
+                          onChange={(e) => updatePersonnelRequirement(index, 'count', parseInt(e.target.value, 10) || 1)}
+                          className="mg-input w-full text-center rounded-none border-x-0"
+                        />
+                        <button
+                          onClick={() => updatePersonnelRequirement(index, 'count', Math.min(50, personnel.count + 1))}
+                          className="px-3 py-2 bg-[rgba(var(--mg-panel-dark),0.4)] rounded-r border border-l-0 border-[rgba(var(--mg-secondary),0.3)] hover:bg-[rgba(var(--mg-secondary),0.1)]"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-[rgba(var(--mg-text),0.4)] border border-dashed border-[rgba(var(--mg-secondary),0.2)] rounded-lg">
+              No personnel specified. Click &quot;Add Role&quot; to add required roles.
+            </div>
+          )}
+          {errors.personnelRequirements && (
+            <div className="text-[rgba(var(--mg-danger),0.8)] text-sm">{errors.personnelRequirements}</div>
+          )}
+        </div>
+      </MobiGlasPanel>
+
       <MobiGlasPanel title="Mission Briefing">
         <div className="space-y-4">
-          {/* Objectives */}
           <div>
             <label htmlFor="mission-objectives" className="mg-subtitle block mb-2">OBJECTIVES</label>
             <textarea
@@ -739,7 +784,6 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
             />
           </div>
 
-          {/* Full Briefing */}
           <div>
             <label htmlFor="mission-briefing" className="mg-subtitle block mb-2">DETAILED BRIEFING</label>
             <textarea
@@ -755,7 +799,6 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
             </div>
           </div>
 
-          {/* Equipment Notes */}
           <div>
             <label htmlFor="mission-equipment" className="mg-subtitle block mb-2">EQUIPMENT RECOMMENDATIONS</label>
             <textarea
@@ -770,7 +813,6 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
         </div>
       </MobiGlasPanel>
 
-      {/* Action Buttons */}
       <MobiGlasPanel title="Actions">
         <div className="flex flex-col sm:flex-row justify-between gap-4">
           <div>
@@ -791,22 +833,10 @@ const MissionPlannerForm: React.FC<MissionPlannerFormProps> = ({
             )}
           </div>
           <div className="flex gap-3">
-            <MobiGlasButton
-              onClick={onCancel}
-              variant="secondary"
-              size="md"
-              disabled={isLoading}
-            >
+            <MobiGlasButton onClick={onCancel} variant="secondary" size="md" disabled={isLoading}>
               {isEditing ? 'Discard Changes' : 'Cancel'}
             </MobiGlasButton>
-            <MobiGlasButton
-              onClick={onSave}
-              variant="primary"
-              size="md"
-              disabled={isLoading}
-              isLoading={isLoading}
-              withGlow={!isLoading}
-            >
+            <MobiGlasButton onClick={onSave} variant="primary" size="md" disabled={isLoading} isLoading={isLoading} withGlow={!isLoading}>
               {isEditing ? 'Save Changes' : 'Create Mission'}
             </MobiGlasButton>
           </div>

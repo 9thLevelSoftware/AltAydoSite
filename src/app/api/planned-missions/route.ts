@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth';
-import { ActivityType, OperationType } from '@/types/MissionTemplate';
+import {
+  ACTIVITIES,
+  ActivityType,
+  OPERATION_TYPES,
+  OperationType,
+  PERSONNEL_PROFESSIONS,
+  SHIP_CATEGORIES,
+  SHIP_SIZES,
+} from '@/types/MissionPlanning';
 import { PlannedMissionStatus } from '@/types/PlannedMission';
 import * as plannedMissionStorage from '@/lib/planned-mission-storage';
 import { getDiscordService } from '@/lib/discord';
@@ -66,6 +74,31 @@ const validateMissionShips = (ships: any[]) => {
   return true;
 };
 
+const validateShipRequirements = (requirements: any[]) => {
+  if (!Array.isArray(requirements)) return false;
+
+  for (const requirement of requirements) {
+    if (!requirement || typeof requirement !== 'object') return false;
+    if (!SHIP_SIZES.includes(requirement.size)) return false;
+    if (!SHIP_CATEGORIES.includes(requirement.category)) return false;
+    if (typeof requirement.count !== 'number' || requirement.count < 1 || requirement.count > 20) return false;
+  }
+
+  return true;
+};
+
+const validatePersonnelRequirements = (requirements: any[]) => {
+  if (!Array.isArray(requirements)) return false;
+
+  for (const requirement of requirements) {
+    if (!requirement || typeof requirement !== 'object') return false;
+    if (!PERSONNEL_PROFESSIONS.includes(requirement.profession)) return false;
+    if (typeof requirement.count !== 'number' || requirement.count < 1 || requirement.count > 50) return false;
+  }
+
+  return true;
+};
+
 // Validation for leaders
 const validateLeaders = (leaders: any[]) => {
   if (!Array.isArray(leaders)) return false;
@@ -99,7 +132,7 @@ const validatePlannedMissionData = (data: any) => {
     return { valid: false, error: 'Operation type is required' };
   }
 
-  const validOperationTypes: OperationType[] = ['Ground Operations', 'Space Operations'];
+  const validOperationTypes: OperationType[] = OPERATION_TYPES;
   if (!validOperationTypes.includes(data.operationType)) {
     return { valid: false, error: 'Invalid operation type' };
   }
@@ -108,7 +141,7 @@ const validatePlannedMissionData = (data: any) => {
     return { valid: false, error: 'Primary activity is required' };
   }
 
-  const validActivities: ActivityType[] = ['Mining', 'Salvage', 'Escort', 'Transport', 'Medical', 'Combat'];
+  const validActivities: ActivityType[] = ACTIVITIES;
   if (!validActivities.includes(data.primaryActivity)) {
     return { valid: false, error: 'Invalid primary activity' };
   }
@@ -129,6 +162,14 @@ const validatePlannedMissionData = (data: any) => {
   // Validate ships if provided
   if (data.ships && !validateMissionShips(data.ships)) {
     return { valid: false, error: 'Invalid ships data' };
+  }
+
+  if (data.shipRequirements && !validateShipRequirements(data.shipRequirements)) {
+    return { valid: false, error: 'Invalid ship requirements data' };
+  }
+
+  if (data.personnelRequirements && !validatePersonnelRequirements(data.personnelRequirements)) {
+    return { valid: false, error: 'Invalid personnel requirements data' };
   }
 
   // Validate status if provided
@@ -249,12 +290,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const safeMissionData = { ...missionData };
+    delete safeMissionData.id;
+    delete safeMissionData._id;
+    delete safeMissionData.createdAt;
+    delete safeMissionData.updatedAt;
+    delete safeMissionData.createdBy;
+
     // Set defaults
     const missionToCreate = {
-      ...missionData,
+      ...safeMissionData,
       createdBy: userId,
       status: missionData.status || 'DRAFT',
       leaders: missionData.leaders || [],
+      shipRequirements: missionData.shipRequirements || [],
+      personnelRequirements: missionData.personnelRequirements || [],
       ships: missionData.ships || [],
       images: missionData.images || [],
       objectives: missionData.objectives || '',
@@ -329,6 +379,20 @@ export async function PUT(request: NextRequest) {
 
     // Get existing mission to check for status change
     const existingMission = await plannedMissionStorage.getPlannedMissionById(missionData.id);
+
+    if (missionData.shipRequirements !== undefined && !validateShipRequirements(missionData.shipRequirements)) {
+      return NextResponse.json(
+        { error: 'Invalid ship requirements data' },
+        { status: 400 }
+      );
+    }
+
+    if (missionData.personnelRequirements !== undefined && !validatePersonnelRequirements(missionData.personnelRequirements)) {
+      return NextResponse.json(
+        { error: 'Invalid personnel requirements data' },
+        { status: 400 }
+      );
+    }
 
     // Validate if updating core fields
     if (missionData.name || missionData.scheduledDateTime || missionData.operationType || missionData.primaryActivity) {

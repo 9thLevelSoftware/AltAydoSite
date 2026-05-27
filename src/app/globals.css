@@ -1160,52 +1160,6 @@ img {
   letter-spacing: 0.05em;
 }
 
-/* Enhanced panel grid for template forms */
-.mg-panel-grid {
-  background-image:
-    linear-gradient(rgba(var(--mg-primary), 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(var(--mg-primary), 0.02) 1px, transparent 1px);
-  background-size: 20px 20px;
-  pointer-events: none;
-}
-
-/* Template list item enhancements */
-.template-list-item {
-  background: rgba(var(--mg-panel-dark), 0.3);
-  border: 1px solid rgba(var(--mg-primary), 0.2);
-  border-radius: 2px;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.template-list-item:hover {
-  border-color: rgba(var(--mg-primary), 0.4);
-  box-shadow: 0 0 12px rgba(var(--mg-primary), 0.1);
-  transform: translateY(-1px);
-}
-
-.template-list-item::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(var(--mg-primary), 0.3),
-    transparent
-  );
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.template-list-item:hover::before {
-  opacity: 1;
-}
-
 @keyframes scan-vertical {
   0% {
     transform: translateY(-100%);
