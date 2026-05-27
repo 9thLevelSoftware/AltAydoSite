@@ -29,6 +29,23 @@ function imageResponseWithoutContentLength(body: string, contentType = 'image/pn
   });
 }
 
+function cancellableImageResponse(headers: HeadersInit): { response: Response; wasCanceled: () => boolean } {
+  let canceled = false;
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1, 2, 3]));
+    },
+    cancel() {
+      canceled = true;
+    },
+  });
+
+  return {
+    response: new Response(body, { status: 200, headers }),
+    wasCanceled: () => canceled,
+  };
+}
+
 function testShip(
   overrides: Partial<Omit<ShipDocument, '_id' | 'createdAt'>> = {}
 ): Omit<ShipDocument, '_id' | 'createdAt'> {
@@ -161,6 +178,30 @@ describe('r2-image-mirror', () => {
 
     expect(result.mirrored).toBe(false);
     expect(result.entry.error).toContain('image exceeds 4 byte limit');
+    expect(uploadClient.uploadObject).not.toHaveBeenCalled();
+  });
+
+  it('cancels response bodies before rejecting oversized content-length downloads', async () => {
+    const uploadClient: ImageUploadClient = {
+      uploadObject: vi.fn(async () => undefined),
+    };
+    const { response, wasCanceled } = cancellableImageResponse({
+      'content-type': 'image/png',
+      'content-length': '100',
+    });
+
+    const result = await mirrorImageUrl({
+      sourceUrl: 'https://api.fleetyards.net/files/blobs/redirect/oversized.png',
+      keyPrefix: 'ships/ship-1',
+      fieldName: 'store',
+      uploadClient,
+      fetchImpl: vi.fn(async () => response),
+      config: createMirrorTestConfig({ maxImageBytes: 4 }),
+    });
+
+    expect(result.mirrored).toBe(false);
+    expect(result.entry.error).toContain('image exceeds 4 byte limit');
+    expect(wasCanceled()).toBe(true);
     expect(uploadClient.uploadObject).not.toHaveBeenCalled();
   });
 

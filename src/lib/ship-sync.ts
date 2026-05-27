@@ -189,24 +189,40 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
     // ── Step 6: Delta filtering -- skip ships unchanged and already mirrored ─
     const storedSyncStates = await getShipSyncStates();
     let deltaUnchanged = 0;
+    let dataChangedCandidates = 0;
+    let backfillCandidates = 0;
 
-    const changedCandidates = rawShips.filter((raw) => {
+    const dataChanges: typeof rawShips = [];
+    const backfillChanges: typeof rawShips = [];
+
+    for (const raw of rawShips) {
       const { id, upstreamUpdatedAt } = rawShipIdentity(raw);
       const existing = id ? storedSyncStates.get(id) : undefined;
 
       if (!id || !existing) {
-        return true;
+        dataChanges.push(raw);
+        dataChangedCandidates++;
+        continue;
       }
 
       const sourceTimestampChanged =
         !existing.fleetyardsUpdatedAt || existing.fleetyardsUpdatedAt !== upstreamUpdatedAt;
-      if (sourceTimestampChanged || needsImageMirrorBackfill(existing)) {
-        return true;
+      if (sourceTimestampChanged) {
+        dataChanges.push(raw);
+        dataChangedCandidates++;
+        continue;
+      }
+
+      if (needsImageMirrorBackfill(existing)) {
+        backfillChanges.push(raw);
+        backfillCandidates++;
+        continue;
       }
 
       deltaUnchanged++;
-      return false;
-    });
+    }
+
+    const changedCandidates = [...dataChanges, ...backfillChanges];
 
     const maxChangedShipsPerRun = getNonNegativeIntegerEnv(
       'SHIP_SYNC_MAX_CHANGED_SHIPS_PER_RUN',
@@ -223,6 +239,8 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
         module: 'ship-sync',
         processedChangedShips: changedRaw.length,
         deferredShips,
+        dataChangedCandidates,
+        backfillCandidates,
         maxChangedShipsPerRun,
       });
     }
@@ -230,6 +248,8 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
     logger.info('Ship sync delta filter complete', {
       module: 'ship-sync',
       newOrChanged: changedRaw.length,
+      dataChangedCandidates,
+      backfillCandidates,
       deferredShips,
       unchanged: deltaUnchanged,
     });

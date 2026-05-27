@@ -21,10 +21,53 @@ export const DISCORD_EVENT_ACTIVITY_SHIPS: Record<ActivityType, { shipName: stri
 
 const bannerCache = new Map<string, Promise<string | undefined>>();
 
+async function safelyConsumeOrCancel(response: Response): Promise<void> {
+  try {
+    if (response.body) {
+      await response.body.cancel();
+    } else {
+      await response.text();
+    }
+  } catch {
+    // Best-effort cleanup only; callers log the original fetch failure.
+  }
+}
+
+async function readImageBuffer(response: Response): Promise<Buffer> {
+  if (!response.body) {
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_SOURCE_IMAGE_BYTES) {
+        await reader.cancel();
+        throw new Error(`image exceeds ${MAX_SOURCE_IMAGE_BYTES} byte limit`);
+      }
+
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks, totalBytes);
+}
+
 async function fetchImageBuffer(imageUrl: string): Promise<Buffer | undefined> {
   try {
     const response = await fetch(imageUrl);
     if (!response.ok) {
+      await safelyConsumeOrCancel(response);
       logger.warn('Failed to fetch Discord event ship banner image', {
         module: 'discord-event-image',
         status: response.status,
@@ -34,6 +77,7 @@ async function fetchImageBuffer(imageUrl: string): Promise<Buffer | undefined> {
 
     const contentLength = Number(response.headers.get('content-length'));
     if (Number.isFinite(contentLength) && contentLength > MAX_SOURCE_IMAGE_BYTES) {
+      await safelyConsumeOrCancel(response);
       logger.warn('Discord event ship banner image is too large', {
         module: 'discord-event-image',
         contentLength,
@@ -42,17 +86,7 @@ async function fetchImageBuffer(imageUrl: string): Promise<Buffer | undefined> {
       return undefined;
     }
 
-    const imageBuffer = Buffer.from(await response.arrayBuffer());
-    if (imageBuffer.byteLength > MAX_SOURCE_IMAGE_BYTES) {
-      logger.warn('Discord event ship banner image is too large after download', {
-        module: 'discord-event-image',
-        imageBytes: imageBuffer.byteLength,
-        maxBytes: MAX_SOURCE_IMAGE_BYTES,
-      });
-      return undefined;
-    }
-
-    return imageBuffer;
+    return await readImageBuffer(response);
   } catch (error) {
     logger.warn('Failed to fetch Discord event ship banner image', {
       module: 'discord-event-image',
