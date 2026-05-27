@@ -14,6 +14,7 @@ import { PlannedMissionStatus } from '@/types/PlannedMission';
 import * as plannedMissionStorage from '@/lib/planned-mission-storage';
 import { getDiscordService } from '@/lib/discord';
 import { buildEventDescription } from '@/lib/discord-event-description';
+import { getDiscordEventImageForMission } from '@/lib/discord-event-image';
 import { logger } from '@/lib/logger';
 
 // Auto-publish mission to Discord
@@ -26,6 +27,7 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
     }
 
     const description = buildEventDescription(mission, baseUrl);
+    const image = await getDiscordEventImageForMission(mission);
 
     let endTime: string | undefined;
     if (mission.duration) {
@@ -39,7 +41,8 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
       description,
       scheduledStartTime: mission.scheduledDateTime,
       scheduledEndTime: endTime,
-      location: mission.location || 'Star Citizen'
+      location: mission.location || 'Star Citizen',
+      image
     });
 
     // Update mission with Discord event reference

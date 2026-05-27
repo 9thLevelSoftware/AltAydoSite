@@ -12,6 +12,9 @@ export interface SyncStatus {
   shipCount: number;
   status: string;
   syncVersion: number;
+  deferredShips?: number;
+  mirroredImages?: number;
+  failedImages?: number;
 }
 
 // ---------------------------------------------------------------------------

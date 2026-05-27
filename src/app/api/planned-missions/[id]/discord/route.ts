@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth';
 import * as plannedMissionStorage from '@/lib/planned-mission-storage';
-import { getDiscordService, DiscordEventUser } from '@/lib/discord';
+import { getDiscordService, DiscordEventUser, CreateDiscordEventParams } from '@/lib/discord';
 import { DiscordEventStatus } from '@/types/DiscordEvent';
-import { PlannedMissionStatus } from '@/types/PlannedMission';
+import { PlannedMissionResponse, PlannedMissionStatus } from '@/types/PlannedMission';
 import { buildEventDescription } from '@/lib/discord-event-description';
+import { getDiscordEventImageForMission } from '@/lib/discord-event-image';
 import { logger } from '@/lib/logger';
+
+const DEFAULT_DISCORD_EVENT_DURATION_MINUTES = 120;
 
 // Map Discord event status to mission status
 function mapDiscordStatusToMissionStatus(discordStatus: number, currentMissionStatus: PlannedMissionStatus): PlannedMissionStatus | null {
@@ -31,6 +34,45 @@ function mapDiscordStatusToMissionStatus(discordStatus: number, currentMissionSt
       break;
   }
   return null; // No status change needed
+}
+
+function getMissionEndTime(mission: PlannedMissionResponse): string {
+  const startDate = new Date(mission.scheduledDateTime);
+  const durationMinutes = typeof mission.duration === 'number' && mission.duration > 0
+    ? mission.duration
+    : DEFAULT_DISCORD_EVENT_DURATION_MINUTES;
+
+  return new Date(startDate.getTime() + durationMinutes * 60 * 1000).toISOString();
+}
+
+function isTerminalDiscordEventStatus(discordStatus: number): boolean {
+  return discordStatus === DiscordEventStatus.COMPLETED || discordStatus === DiscordEventStatus.CANCELED;
+}
+
+function buildDiscordEventUpdateParams(
+  mission: PlannedMissionResponse,
+  description: string,
+  discordStatus: number,
+  image?: string
+): Partial<CreateDiscordEventParams> {
+  const updateParams: Partial<CreateDiscordEventParams> = {
+    name: mission.name,
+    description,
+    scheduledEndTime: getMissionEndTime(mission),
+    location: mission.location || 'Star Citizen'
+  };
+
+  // Active external Discord events already have a start time in the past.
+  // Resending that value can make Discord reject an otherwise valid details update.
+  if (discordStatus !== DiscordEventStatus.ACTIVE) {
+    updateParams.scheduledStartTime = mission.scheduledDateTime;
+  }
+
+  if (image) {
+    updateParams.image = image;
+  }
+
+  return updateParams;
 }
 
 // POST - Publish mission to Discord (create event)
@@ -88,6 +130,7 @@ export async function POST(
 
     // Build description
     const description = buildEventDescription(mission, baseUrl);
+    const image = await getDiscordEventImageForMission(mission);
 
     // Calculate end time (duration or default 2 hours)
     let endTime: string | undefined;
@@ -103,7 +146,8 @@ export async function POST(
       description,
       scheduledStartTime: mission.scheduledDateTime,
       scheduledEndTime: endTime,
-      location: mission.location || 'Star Citizen'
+      location: mission.location || 'Star Citizen',
+      image
     });
 
     // Update mission with Discord event reference
@@ -266,6 +310,13 @@ export async function DELETE(
       );
     }
 
+    if (!mission.discordEvent.eventId) {
+      return NextResponse.json(
+        { error: 'Mission Discord event is missing an event ID' },
+        { status: 400 }
+      );
+    }
+
     // Get Discord service
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
@@ -341,6 +392,13 @@ export async function PATCH(
       );
     }
 
+    if (!mission.discordEvent.eventId) {
+      return NextResponse.json(
+        { error: 'Mission Discord event is missing an event ID' },
+        { status: 400 }
+      );
+    }
+
     // Get Discord service
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
@@ -353,25 +411,28 @@ export async function PATCH(
     // Get base URL from request
     const baseUrl = request.headers.get('origin') || process.env.NEXTAUTH_URL || '';
 
-    // Build updated description
-    const description = buildEventDescription(mission, baseUrl);
-
-    // Calculate end time
-    let endTime: string | undefined;
-    if (mission.duration) {
-      const startDate = new Date(mission.scheduledDateTime);
-      const endDate = new Date(startDate.getTime() + mission.duration * 60 * 1000);
-      endTime = endDate.toISOString();
+    const currentDiscordEvent = await discord.getScheduledEvent(mission.discordEvent.eventId);
+    if (!currentDiscordEvent) {
+      return NextResponse.json(
+        { error: 'Discord event was not found. The mission was saved locally but is no longer linked to an existing Discord event.' },
+        { status: 404 }
+      );
     }
 
+    if (isTerminalDiscordEventStatus(currentDiscordEvent.status)) {
+      return NextResponse.json(
+        { error: 'Discord event is already completed or canceled and cannot be updated. The mission was saved locally only.' },
+        { status: 409 }
+      );
+    }
+
+    // Build updated description
+    const description = buildEventDescription(mission, baseUrl);
+    const image = await getDiscordEventImageForMission(mission);
+    const updateParams = buildDiscordEventUpdateParams(mission, description, currentDiscordEvent.status, image);
+
     // Update Discord event
-    const updatedEvent = await discord.updateScheduledEvent(mission.discordEvent.eventId, {
-      name: mission.name,
-      description,
-      scheduledStartTime: mission.scheduledDateTime,
-      scheduledEndTime: endTime,
-      location: mission.location || 'Star Citizen'
-    });
+    const updatedEvent = await discord.updateScheduledEvent(mission.discordEvent.eventId, updateParams);
 
     logger.info('Discord event updated for mission', { route: '/api/planned-missions/[id]/discord', missionId: id });
 

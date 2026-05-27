@@ -1,0 +1,49 @@
+name: FleetYards Ship Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every 3 days at 07:17 UTC. GitHub scheduled workflows run on the
+    # default branch and use UTC cron syntax.
+    - cron: '17 7 */3 * *'
+
+jobs:
+  ship-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger ship database sync
+        env:
+          APP_URL: ${{ secrets.NEXTAUTH_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET GitHub secret is not configured."
+            exit 1
+          fi
+
+          APP_URL="${APP_URL:-https://aydocorp.space}"
+          APP_URL="${APP_URL%/}"
+
+          echo "Triggering FleetYards ship sync at ${APP_URL}..."
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL}/api/cron/ship-sync"
+
+      - name: Warm mirrored ship images
+        env:
+          APP_URL: ${{ secrets.NEXTAUTH_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          APP_URL="${APP_URL:-https://aydocorp.space}"
+          APP_URL="${APP_URL%/}"
+
+          echo "Warming mirrored ship images at ${APP_URL}..."
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL}/api/cron/warm-images"

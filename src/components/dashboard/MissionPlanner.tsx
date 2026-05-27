@@ -222,6 +222,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
 
       if (res.ok) {
         const savedMission = await res.json();
+        let discordSyncError: string | null = null;
 
         // If editing a mission with a Discord event, sync the changes to Discord
         if (selectedMission?.discordEvent && savedMission?.id) {
@@ -230,17 +231,27 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
               method: 'PATCH'
             });
             if (!discordRes.ok) {
-              console.warn('Failed to sync changes to Discord event');
+              const discordErrorBody = await discordRes.json().catch(() => null);
+              discordSyncError = discordErrorBody?.error || 'Failed to update Discord event';
+              console.warn('Failed to sync changes to Discord event:', discordSyncError);
             }
           } catch (discordError) {
             console.warn('Failed to sync changes to Discord:', discordError);
-            // Don't fail the save operation if Discord sync fails
+            discordSyncError = 'Network error while updating Discord event';
           }
         }
 
         await fetchMissions();
         setViewMode('list');
         resetForm();
+
+        if (discordSyncError) {
+          toast.error(`Mission saved, but Discord did not update: ${discordSyncError}`);
+        } else if (selectedMission?.discordEvent) {
+          toast.success('Mission saved and Discord event updated.');
+        } else {
+          toast.success(selectedMission ? 'Mission saved successfully.' : 'Mission created successfully.');
+        }
       } else {
         const data = await res.json();
         setErrors({ general: data.error || 'Failed to save mission' });

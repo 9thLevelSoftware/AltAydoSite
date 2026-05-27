@@ -18,6 +18,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import type { Sort } from 'mongodb';
 import type { ShipDocument, SyncStatusDocument } from '@/types/ship';
 import { logger } from '@/lib/logger';
+import { randomUUID } from 'crypto';
 
 /** UUID v4 pattern for distinguishing FleetYards UUIDs from slugs */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,6 +37,33 @@ async function getShipsCollection() {
 async function getSyncStatusCollection() {
   const { db } = await connectToDatabase();
   return db.collection('sync-status');
+}
+
+interface SyncLockDocument {
+  _id: string;
+  ownerId: string;
+  type: 'ship-sync';
+  acquiredAt: Date;
+  updatedAt: Date;
+  expiresAt: Date;
+}
+
+async function getSyncLocksCollection() {
+  const { db } = await connectToDatabase();
+  return db.collection<SyncLockDocument>('sync-locks');
+}
+
+export interface ShipSyncState {
+  fleetyardsId: string;
+  fleetyardsUpdatedAt: string;
+  images: ShipDocument['images'];
+  manufacturer: ShipDocument['manufacturer'];
+  imageMirrors?: ShipDocument['imageMirrors'];
+}
+
+export interface AcquiredSyncLock {
+  ownerId: string;
+  expiresAt: Date;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +184,42 @@ export async function getShipTimestamps(): Promise<Map<string, string>> {
 }
 
 /**
+ * Get the stored source/mirror state needed to decide whether a ship must be
+ * refreshed. This keeps delta decisions out of the hot public ship APIs.
+ */
+export async function getShipSyncStates(): Promise<Map<string, ShipSyncState>> {
+  try {
+    const shipsCollection = await getShipsCollection();
+    const docs = await shipsCollection
+      .find(
+        {},
+        {
+          projection: {
+            fleetyardsId: 1,
+            fleetyardsUpdatedAt: 1,
+            images: 1,
+            manufacturer: 1,
+            imageMirrors: 1,
+            _id: 0,
+          },
+        }
+      )
+      .toArray();
+
+    const map = new Map<string, ShipSyncState>();
+    for (const doc of docs) {
+      if (typeof doc.fleetyardsId === 'string') {
+        map.set(doc.fleetyardsId, doc as unknown as ShipSyncState);
+      }
+    }
+    return map;
+  } catch (error) {
+    logger.error('Error in getShipSyncStates', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
+    return new Map();
+  }
+}
+
+/**
  * Get the total number of ships in the collection.
  * Used for pre/post-sync sanity checks.
  */
@@ -241,6 +305,78 @@ export async function getLatestSyncStatus(): Promise<SyncStatusDocument | null> 
   } catch (error) {
     logger.error('Error in getLatestSyncStatus', error instanceof Error ? error : new Error(String(error)), { collection: 'sync-status' });
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sync Locking
+// ---------------------------------------------------------------------------
+
+/**
+ * Acquire a coarse MongoDB lock for the ship sync job.
+ *
+ * The lock prevents deploy hooks, manual triggers, and scheduled workflows from
+ * running overlapping FleetYards/R2 jobs. Expiry makes it self-healing if the
+ * process dies mid-sync.
+ */
+export async function acquireShipSyncLock(ttlMs = 2 * 60 * 60 * 1000): Promise<AcquiredSyncLock | null> {
+  const syncLocksCollection = await getSyncLocksCollection();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + ttlMs);
+  const ownerId = randomUUID();
+  const lockId = 'ship-sync';
+
+  const updateResult = await syncLocksCollection.updateOne(
+    {
+      _id: lockId,
+      $or: [
+        { expiresAt: { $lte: now } },
+        { expiresAt: { $exists: false } },
+      ],
+    },
+    {
+      $set: {
+        ownerId,
+        type: 'ship-sync',
+        acquiredAt: now,
+        updatedAt: now,
+        expiresAt,
+      },
+    }
+  );
+
+  if (updateResult.modifiedCount > 0) {
+    return { ownerId, expiresAt };
+  }
+
+  try {
+    await syncLocksCollection.insertOne({
+      _id: lockId,
+      ownerId,
+      type: 'ship-sync',
+      acquiredAt: now,
+      updatedAt: now,
+      expiresAt,
+    });
+    return { ownerId, expiresAt };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Release a previously acquired sync lock. The owner check prevents a stale
+ * worker from deleting a newer lock after expiry/reacquire.
+ */
+export async function releaseShipSyncLock(lock: AcquiredSyncLock): Promise<void> {
+  try {
+    const syncLocksCollection = await getSyncLocksCollection();
+    await syncLocksCollection.deleteOne({ _id: 'ship-sync', ownerId: lock.ownerId });
+  } catch (error) {
+    logger.warn('Failed to release ship sync lock', {
+      collection: 'sync-locks',
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

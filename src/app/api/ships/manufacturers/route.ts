@@ -20,7 +20,7 @@ export async function GET() {
     const manufacturers = await shipStorage.getManufacturers();
 
     const response = NextResponse.json({ items: manufacturers });
-    response.headers.set('Cache-Control', 'public, max-age=3600');
+    response.headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=86400');
     return response;
   } catch (error) {
     logger.error('Error fetching manufacturers', error instanceof Error ? error : new Error(String(error)), { route: '/api/ships/manufacturers' });

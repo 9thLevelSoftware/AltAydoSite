@@ -1,0 +1,48 @@
+name: Cloudflare R2 PR Check
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  r2-runtime-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployed app can use Cloudflare R2
+        env:
+          APP_URL: ${{ secrets.NEXTAUTH_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET GitHub secret is not configured."
+            exit 1
+          fi
+
+          APP_URL="${APP_URL:-https://aydocorp.space}"
+          APP_URL="${APP_URL%/}"
+          ENDPOINT="${APP_URL}/api/cron/cloudflare-r2-health"
+
+          echo "Checking Cloudflare R2 through deployed app at ${ENDPOINT}..."
+          http_status="$(curl --silent --show-error \
+            --output r2-health-response.json \
+            --write-out "%{http_code}" \
+            --request POST \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "${ENDPOINT}" || true)"
+
+          cat r2-health-response.json || true
+          echo
+
+          if [ "${http_status}" = "404" ]; then
+            echo "::warning::Cloudflare R2 health endpoint is not deployed yet. Deploy this change once to make this PR check fully active."
+            exit 0
+          fi
+
+          if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
+            echo "Cloudflare R2 health check failed with HTTP ${http_status}."
+            exit 1
+          fi
