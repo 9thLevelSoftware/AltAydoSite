@@ -10,6 +10,7 @@ import { getDiscordEventImageForMission } from '@/lib/discord-event-image';
 import { logger } from '@/lib/logger';
 
 const DEFAULT_DISCORD_EVENT_DURATION_MINUTES = 120;
+const MISSION_ADMIN_CLEARANCE_LEVEL = 4;
 
 function getMissionStartDate(mission: PlannedMissionResponse): Date | null {
   const startDate = new Date(mission.scheduledDateTime);
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Check permissions
     const canModify = await plannedMissionStorage.canUserModifyMission(userId, id);
-    if (!canModify && userClearance < 4) {
+    if (!canModify && userClearance < MISSION_ADMIN_CLEARANCE_LEVEL) {
       return NextResponse.json(
         { error: 'You do not have permission to publish this mission' },
         { status: 403 }
@@ -347,7 +348,7 @@ export async function DELETE(
 
     // Check permissions
     const canModify = await plannedMissionStorage.canUserModifyMission(userId, id);
-    if (!canModify && userClearance < 4) {
+    if (!canModify && userClearance < MISSION_ADMIN_CLEARANCE_LEVEL) {
       return NextResponse.json(
         { error: 'You do not have permission to unpublish this mission' },
         { status: 403 }
@@ -424,7 +425,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     // Check permissions
     const canModify = await plannedMissionStorage.canUserModifyMission(userId, id);
-    if (!canModify && userClearance < 4) {
+    if (!canModify && userClearance < MISSION_ADMIN_CLEARANCE_LEVEL) {
       return NextResponse.json(
         { error: 'You do not have permission to update this mission' },
         { status: 403 }

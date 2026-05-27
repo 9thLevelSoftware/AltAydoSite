@@ -17,6 +17,8 @@ import { buildEventDescription } from '@/lib/discord-event-description';
 import { getDiscordEventImageForMission } from '@/lib/discord-event-image';
 import { logger } from '@/lib/logger';
 
+const MISSION_ADMIN_CLEARANCE_LEVEL = 4;
+
 // Auto-publish mission to Discord
 async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ success: boolean; discordEvent?: any; error?: string }> {
   try {
@@ -374,7 +376,7 @@ export async function PUT(request: NextRequest) {
 
     // Check if user can modify this mission
     const canModify = await plannedMissionStorage.canUserModifyMission(userId, missionData.id);
-    if (!canModify && userClearance < 4) {
+    if (!canModify && userClearance < MISSION_ADMIN_CLEARANCE_LEVEL) {
       return NextResponse.json(
         { error: 'You do not have permission to modify this mission' },
         { status: 403 }
@@ -467,6 +469,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const userId = session.user.id;
+    const userClearance = session.user.clearanceLevel ?? 1;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -476,7 +479,7 @@ export async function DELETE(request: NextRequest) {
 
     // Check if user can delete this mission
     const canDelete = await plannedMissionStorage.canUserDeleteMission(userId, id);
-    if (!canDelete) {
+    if (!canDelete && userClearance < MISSION_ADMIN_CLEARANCE_LEVEL) {
       return NextResponse.json(
         { error: 'You do not have permission to delete this mission' },
         { status: 403 }

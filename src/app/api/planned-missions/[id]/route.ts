@@ -4,6 +4,8 @@ import { authOptions } from '@/app/api/auth/auth';
 import * as plannedMissionStorage from '@/lib/planned-mission-storage';
 import { logger } from '@/lib/logger';
 
+const MISSION_ADMIN_CLEARANCE_LEVEL = 4;
+
 // GET handler - Get a single planned mission by ID
 export async function GET(
   request: NextRequest,
@@ -62,7 +64,7 @@ export async function PUT(
 
     // Check if user can modify this mission
     const canModify = await plannedMissionStorage.canUserModifyMission(userId, id);
-    if (!canModify && userClearance < 4) {
+    if (!canModify && userClearance < MISSION_ADMIN_CLEARANCE_LEVEL) {
       return NextResponse.json(
         { error: 'You do not have permission to modify this mission' },
         { status: 403 }
@@ -102,6 +104,7 @@ export async function DELETE(
     }
 
     const userId = session.user.id;
+    const userClearance = session.user.clearanceLevel ?? 1;
     const { id } = await params;
 
     if (!id) {
@@ -110,7 +113,7 @@ export async function DELETE(
 
     // Check if user can delete this mission
     const canDelete = await plannedMissionStorage.canUserDeleteMission(userId, id);
-    if (!canDelete) {
+    if (!canDelete && userClearance < MISSION_ADMIN_CLEARANCE_LEVEL) {
       return NextResponse.json(
         { error: 'You do not have permission to delete this mission' },
         { status: 403 }

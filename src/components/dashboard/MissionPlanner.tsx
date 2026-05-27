@@ -744,14 +744,12 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                       >
                         <EditIcon />
                       </button>
-                      {mission.createdBy === session?.user?.id && (
-                        <button
-                          onClick={() => handleDelete(mission.id)}
-                          className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(var(--mg-danger),0.1)] text-[rgba(var(--mg-danger),0.8)] hover:bg-[rgba(var(--mg-danger),0.2)] transition-colors text-sm"
-                        >
-                          <TrashIcon />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleDelete(mission.id)}
+                        className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(var(--mg-danger),0.1)] text-[rgba(var(--mg-danger),0.8)] hover:bg-[rgba(var(--mg-danger),0.2)] transition-colors text-sm"
+                      >
+                        <TrashIcon />
+                      </button>
                     </>
                   )}
                 </div>

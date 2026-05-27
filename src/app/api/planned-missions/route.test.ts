@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
-import { POST, PUT } from './route';
+import { DELETE, POST, PUT } from './route';
 
 const mocks = vi.hoisted(() => ({
   getServerSession: vi.fn(),
   createPlannedMission: vi.fn(),
   getPlannedMissionById: vi.fn(),
   updatePlannedMission: vi.fn(),
+  deletePlannedMission: vi.fn(),
   canUserModifyMission: vi.fn(),
+  canUserDeleteMission: vi.fn(),
   getDiscordService: vi.fn(),
   createScheduledEvent: vi.fn(),
   getDiscordEventImageForMission: vi.fn(),
@@ -26,9 +28,9 @@ vi.mock('@/lib/planned-mission-storage', () => ({
   getPlannedMissionById: mocks.getPlannedMissionById,
   getAllPlannedMissionsPaginated: vi.fn(),
   updatePlannedMission: mocks.updatePlannedMission,
-  deletePlannedMission: vi.fn(),
+  deletePlannedMission: mocks.deletePlannedMission,
   canUserModifyMission: mocks.canUserModifyMission,
-  canUserDeleteMission: vi.fn(),
+  canUserDeleteMission: mocks.canUserDeleteMission,
 }));
 
 vi.mock('@/lib/discord', () => ({
@@ -74,6 +76,12 @@ function makePutRequest(body: unknown): NextRequest {
   }) as NextRequest;
 }
 
+function makeDeleteRequest(id = 'mission-1'): NextRequest {
+  return new Request(`http://localhost/api/planned-missions?id=${id}`, {
+    method: 'DELETE',
+  }) as NextRequest;
+}
+
 describe('planned missions POST', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -90,6 +98,8 @@ describe('planned missions POST', () => {
       updatedAt: '2026-05-27T00:00:00.000Z',
     }));
     mocks.canUserModifyMission.mockResolvedValue(true);
+    mocks.canUserDeleteMission.mockResolvedValue(true);
+    mocks.deletePlannedMission.mockResolvedValue(true);
     mocks.getPlannedMissionById.mockResolvedValue({
       id: 'mission-1',
       status: 'DRAFT',
@@ -237,5 +247,21 @@ describe('planned missions POST', () => {
     expect(mocks.updatePlannedMission).toHaveBeenCalledWith('mission-1', expect.objectContaining({
       primaryActivity: 'Salvage',
     }));
+  });
+
+  it('allows level 4 users to delete missions even when they are not the creator', async () => {
+    mocks.getServerSession.mockResolvedValueOnce({
+      user: {
+        id: 'director-1',
+        clearanceLevel: 4,
+      },
+    });
+    mocks.canUserDeleteMission.mockResolvedValueOnce(false);
+
+    const response = await DELETE(makeDeleteRequest());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true });
+    expect(mocks.deletePlannedMission).toHaveBeenCalledWith('mission-1');
   });
 });
