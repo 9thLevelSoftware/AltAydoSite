@@ -41,28 +41,28 @@ export const STANTON_SYSTEM: SystemData = {
       name: 'Hurston',
       moons: ['Ariel', 'Aberdeen', 'Magda', 'Ita'],
       landingZones: ['Lorville'],
-      stations: ['Everus Harbor']
+      stations: ['Everus Harbor'],
     },
     {
       name: 'Crusader',
       moons: ['Cellin', 'Daymar', 'Yela'],
       landingZones: ['Orison'],
-      stations: ['Port Olisar', 'Seraphim Station']
+      stations: ['Port Olisar', 'Seraphim Station'],
     },
     {
       name: 'ArcCorp',
       moons: ['Lyria', 'Wala'],
       landingZones: ['Area 18'],
-      stations: ['Baijini Point']
+      stations: ['Baijini Point'],
     },
     {
       name: 'microTech',
       moons: ['Calliope', 'Clio', 'Euterpe'],
       landingZones: ['New Babbage'],
-      stations: ['Port Tressler']
-    }
+      stations: ['Port Tressler'],
+    },
   ],
-  landmarks: ['Aaron Halo (Asteroid Belt)']
+  landmarks: ['Aaron Halo (Asteroid Belt)'],
 };
 
 // Pyro System - Lawless frontier
@@ -72,41 +72,64 @@ export const PYRO_SYSTEM: SystemData = {
   planets: [
     {
       name: 'Pyro I',
-      designation: 'Pyro I'
+      designation: 'Pyro I',
     },
     {
       name: 'Monox',
-      designation: 'Pyro II'
+      designation: 'Pyro II',
     },
     {
       name: 'Bloom',
-      designation: 'Pyro III'
+      designation: 'Pyro III',
     },
     {
       name: 'Pyro IV',
-      designation: 'Pyro IV (Moon of Pyro V)'
+      designation: 'Pyro IV (Moon of Pyro V)',
     },
     {
       name: 'Pyro V',
       designation: 'Pyro V',
-      moons: ['Adir', 'Ignis', 'Fairo', 'Fuego', 'Vatra', 'Vuur']
+      moons: ['Adir', 'Ignis', 'Fairo', 'Fuego', 'Vatra', 'Vuur'],
     },
     {
       name: 'Terminus',
       designation: 'Pyro VI',
-      stations: ['Ruin Station']
-    }
+      stations: ['Ruin Station'],
+    },
+  ],
+  stations: [{ name: 'Ruin Station', orbiting: 'Pyro VI' }],
+};
+
+// Nyx System - Unclaimed frontier
+export const NYX_SYSTEM: SystemData = {
+  name: 'Nyx',
+  star: 'Nyx (F-type main sequence)',
+  planets: [
+    {
+      name: 'Nyx I',
+    },
+    {
+      name: 'Nyx II',
+    },
+    {
+      name: 'Delamar',
+      landingZones: ['Levski'],
+    },
+    {
+      name: 'Nyx III',
+    },
   ],
   stations: [
-    { name: 'Ruin Station', orbiting: 'Pyro VI' }
-  ]
+    { name: "People's Service Station Alpha" },
+    { name: "People's Service Station Delta" },
+    { name: "People's Service Station Theta" },
+    { name: "People's Service Station Lambda" },
+  ],
+  landmarks: ['Glaciem Ring', 'Keeger Belt'],
 };
 
 // All systems combined
-export const STAR_SYSTEMS: SystemData[] = [
-  STANTON_SYSTEM,
-  PYRO_SYSTEM
-];
+export const STAR_SYSTEMS: SystemData[] = [STANTON_SYSTEM, PYRO_SYSTEM, NYX_SYSTEM];
 
 /**
  * Generate a flat list of location options for dropdown menus
@@ -120,7 +143,7 @@ export function getLocationOptions(): LocationOption[] {
     options.push({
       value: system.name,
       label: system.name,
-      type: 'system'
+      type: 'system',
     });
 
     for (const planet of system.planets) {
@@ -133,7 +156,7 @@ export function getLocationOptions(): LocationOption[] {
         value: planetLabel,
         label: planetLabel,
         type: 'planet',
-        parent: system.name
+        parent: system.name,
       });
 
       // Add landing zones
@@ -143,7 +166,7 @@ export function getLocationOptions(): LocationOption[] {
             value: `${system.name} - ${planet.name} - ${lz}`,
             label: `${system.name} - ${planet.name} - ${lz}`,
             type: 'landmark',
-            parent: planet.name
+            parent: planet.name,
           });
         }
       }
@@ -155,7 +178,7 @@ export function getLocationOptions(): LocationOption[] {
             value: `${system.name} - ${planet.name} - ${moon}`,
             label: `${system.name} - ${planet.name} - ${moon}`,
             type: 'moon',
-            parent: planet.name
+            parent: planet.name,
           });
         }
       }
@@ -167,7 +190,7 @@ export function getLocationOptions(): LocationOption[] {
             value: `${system.name} - ${planet.name} - ${station}`,
             label: `${system.name} - ${planet.name} - ${station}`,
             type: 'station',
-            parent: planet.name
+            parent: planet.name,
           });
         }
       }
@@ -183,7 +206,7 @@ export function getLocationOptions(): LocationOption[] {
           value: label,
           label: label,
           type: 'station',
-          parent: system.name
+          parent: system.name,
         });
       }
     }
@@ -195,7 +218,7 @@ export function getLocationOptions(): LocationOption[] {
           value: `${system.name} - ${landmark}`,
           label: `${system.name} - ${landmark}`,
           type: 'landmark',
-          parent: system.name
+          parent: system.name,
         });
       }
     }
@@ -231,7 +254,7 @@ export function getLocationsBySystem(): Map<string, LocationOption[]> {
  * Simple flat array of location strings for basic dropdowns
  */
 export function getSimpleLocationList(): string[] {
-  return getLocationOptions().map(opt => opt.value);
+  return getLocationOptions().map((opt) => opt.value);
 }
 
 // Export pre-computed options for performance
