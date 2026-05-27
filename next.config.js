@@ -34,6 +34,11 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'storage.fltyrd.net',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'images.aydocorp.space',
         pathname: '/**',
       },
@@ -93,7 +98,7 @@ const nextConfig = {
               "default-src 'self'",
               `script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com${isDev ? " 'unsafe-eval'" : ''}`,
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' blob: data: https://cdn.fleetyards.net https://api.fleetyards.net https://fleetyards.net https://images.aydocorp.space https://aydocorp.space https://cdn.discordapp.com",
+              "img-src 'self' blob: data: https://cdn.fleetyards.net https://api.fleetyards.net https://fleetyards.net https://storage.fltyrd.net https://images.aydocorp.space https://aydocorp.space https://cdn.discordapp.com",
               "font-src 'self'",
               "connect-src 'self' https://discord.com https://cdn.discordapp.com https://cloudflareinsights.com",
               "object-src 'none'",
