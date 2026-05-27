@@ -28,7 +28,7 @@ export function inferShipCategory(ship: MissionShip): ShipCategory {
     ship.shipName,
     ship.size,
     ship.manufacturer,
-    ...(ship.role || []),
+    ...(Array.isArray(ship.role) ? ship.role : []),
     ship.notes || '',
   ].join(' ').toLowerCase();
 
@@ -66,8 +66,9 @@ export function deriveShipRequirementsFromShips(ships?: MissionShip[]): MissionS
   if (!ships || ships.length === 0) return [];
 
   const grouped = new Map<string, MissionShipRequirement>();
+  const validShips = ships.filter((ship): ship is MissionShip => !!ship && typeof ship === 'object');
 
-  ships.forEach((ship) => {
+  validShips.forEach((ship) => {
     const size = normalizeShipSize(ship.size);
     const category = inferShipCategory(ship);
     const key = `${size}:${category}`;
@@ -110,8 +111,8 @@ export function getPersonnelRequirementCount(source: RequirementSource): number 
 
 export function createMissionCopyDraft(source: PlannedMission): Partial<PlannedMission> {
   return {
-    name: source.name,
-    scheduledDateTime: source.scheduledDateTime,
+    name: source.name ? `Copy of ${source.name}` : '',
+    scheduledDateTime: '',
     duration: source.duration,
     location: source.location,
     operationType: source.operationType,

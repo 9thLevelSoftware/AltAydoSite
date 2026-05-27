@@ -5,7 +5,7 @@ import {
   getMissionShipRequirements,
   inferShipCategory,
 } from './mission-requirements';
-import type { PlannedMission } from '@/types/PlannedMission';
+import type { MissionShip, PlannedMission } from '@/types/PlannedMission';
 
 function makeMission(overrides: Partial<PlannedMission> = {}): PlannedMission {
   return {
@@ -68,6 +68,17 @@ describe('mission requirements', () => {
     })).toBe('Fighter');
   });
 
+  it('tolerates malformed legacy ship role data during category inference', () => {
+    expect(inferShipCategory({
+      shipName: 'Freelancer MAX',
+      manufacturer: 'MISC',
+      size: 'medium',
+      role: 'Cargo' as unknown as string[],
+      fleetyardsId: 'f4',
+      quantity: 1,
+    })).toBe('Transport');
+  });
+
   it('groups legacy ships into normalized requirement rows', () => {
     const requirements = deriveShipRequirementsFromShips([
       { shipName: 'Prospector', manufacturer: 'MISC', size: 'small', role: ['Mining'], fleetyardsId: 'f1', quantity: 2 },
@@ -78,6 +89,19 @@ describe('mission requirements', () => {
     expect(requirements).toEqual([
       { size: 'Small', category: 'Industrial', count: 5 },
       { size: 'Large', category: 'Industrial', count: 1 },
+    ]);
+  });
+
+  it('ignores malformed legacy ship entries when deriving requirements', () => {
+    const requirements = deriveShipRequirementsFromShips([
+      null,
+      undefined,
+      'not a ship',
+      { shipName: 'Prospector', manufacturer: 'MISC', size: 'small', role: ['Mining'], fleetyardsId: 'f1', quantity: 2 },
+    ] as unknown as MissionShip[]);
+
+    expect(requirements).toEqual([
+      { size: 'Small', category: 'Industrial', count: 2 },
     ]);
   });
 
@@ -97,7 +121,8 @@ describe('mission requirements', () => {
   it('sanitizes copied missions into new draft data', () => {
     const draft = createMissionCopyDraft(makeMission());
 
-    expect(draft.name).toBe('Source Mission');
+    expect(draft.name).toBe('Copy of Source Mission');
+    expect(draft.scheduledDateTime).toBe('');
     expect(draft.status).toBe('DRAFT');
     expect(draft.shipRequirements).toEqual([{ size: 'Large', category: 'Industrial', count: 2 }]);
     expect(draft.personnelRequirements).toEqual([{ profession: 'Pilot', count: 2 }]);

@@ -78,6 +78,7 @@ const validateShipRequirements = (requirements: any[]) => {
   if (!Array.isArray(requirements)) return false;
 
   for (const requirement of requirements) {
+    if (!requirement || typeof requirement !== 'object') return false;
     if (!SHIP_SIZES.includes(requirement.size)) return false;
     if (!SHIP_CATEGORIES.includes(requirement.category)) return false;
     if (typeof requirement.count !== 'number' || requirement.count < 1 || requirement.count > 20) return false;
@@ -90,6 +91,7 @@ const validatePersonnelRequirements = (requirements: any[]) => {
   if (!Array.isArray(requirements)) return false;
 
   for (const requirement of requirements) {
+    if (!requirement || typeof requirement !== 'object') return false;
     if (!PERSONNEL_PROFESSIONS.includes(requirement.profession)) return false;
     if (typeof requirement.count !== 'number' || requirement.count < 1 || requirement.count > 50) return false;
   }
@@ -288,9 +290,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const safeMissionData = { ...missionData };
+    delete safeMissionData.id;
+    delete safeMissionData._id;
+    delete safeMissionData.createdAt;
+    delete safeMissionData.updatedAt;
+    delete safeMissionData.createdBy;
+
     // Set defaults
     const missionToCreate = {
-      ...missionData,
+      ...safeMissionData,
       createdBy: userId,
       status: missionData.status || 'DRAFT',
       leaders: missionData.leaders || [],
@@ -370,6 +379,20 @@ export async function PUT(request: NextRequest) {
 
     // Get existing mission to check for status change
     const existingMission = await plannedMissionStorage.getPlannedMissionById(missionData.id);
+
+    if (missionData.shipRequirements !== undefined && !validateShipRequirements(missionData.shipRequirements)) {
+      return NextResponse.json(
+        { error: 'Invalid ship requirements data' },
+        { status: 400 }
+      );
+    }
+
+    if (missionData.personnelRequirements !== undefined && !validatePersonnelRequirements(missionData.personnelRequirements)) {
+      return NextResponse.json(
+        { error: 'Invalid personnel requirements data' },
+        { status: 400 }
+      );
+    }
 
     // Validate if updating core fields
     if (missionData.name || missionData.scheduledDateTime || missionData.operationType || missionData.primaryActivity) {
