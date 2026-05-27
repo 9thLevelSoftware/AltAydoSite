@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { logger } from '@/lib/logger';
+import { shouldOptimizeShipImage } from '@/lib/ships/image';
 
 export const runtime = 'nodejs';
 
@@ -43,14 +44,24 @@ export async function GET(request: NextRequest) {
 
     // Collect unique image URLs (primary image per ship)
     const imageUrls: string[] = [];
+    let skippedUnoptimized = 0;
     for (const ship of ships) {
       const url = ship.images?.angledView || ship.images?.store;
       if (url && typeof url === 'string' && url.trim().length > 0) {
-        imageUrls.push(url.trim());
+        const trimmedUrl = url.trim();
+        if (shouldOptimizeShipImage(trimmedUrl)) {
+          imageUrls.push(trimmedUrl);
+        } else {
+          skippedUnoptimized++;
+        }
       }
     }
 
-    logger.info('Found ship images to warm', { route: '/api/cron/warm-images', count: imageUrls.length });
+    logger.info('Found ship images to warm', {
+      route: '/api/cron/warm-images',
+      count: imageUrls.length,
+      skippedUnoptimized,
+    });
 
     // Build the origin from the incoming request
     const origin = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
@@ -86,6 +97,7 @@ export async function GET(request: NextRequest) {
       success: true,
       totalShips: ships.length,
       uniqueImages: imageUrls.length,
+      skippedUnoptimized,
       warmed,
       failed,
       widths: WARM_WIDTHS,

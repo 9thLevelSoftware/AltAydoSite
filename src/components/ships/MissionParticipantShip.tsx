@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { resolveShipImage } from '@/lib/ships/image';
+import { resolveShipImage, shouldOptimizeShipImage } from '@/lib/ships/image';
 import { formatCrew, formatCargo } from '@/lib/ships/format';
 import { formatSize } from '@/lib/ships/format';
 import type { MissionParticipant } from '@/types/Mission';
@@ -42,6 +42,7 @@ export default function MissionParticipantShip({ participant, resolved }: Missio
               width={48}
               height={32}
               className="object-cover w-full h-full"
+              unoptimized={!shouldOptimizeShipImage(imgSrc)}
               onError={() => setImgError(true)}
             />
           </div>

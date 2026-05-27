@@ -203,7 +203,7 @@ describe('r2-image-mirror', () => {
   it('detects FleetYards URLs and missing mirror metadata as backfill work', () => {
     const baseShip = {
       images: {
-        store: 'https://cdn.fleetyards.net/uploads/model.jpg',
+        store: 'https://fleetyards.net/files/representations/redirect/model.jpg',
         angledView: null,
         angledViewMedium: null,
         sideView: null,
@@ -223,6 +223,7 @@ describe('r2-image-mirror', () => {
     } satisfies Pick<ShipDocument, 'images' | 'manufacturer'>;
 
     expect(isFleetYardsUrl(baseShip.images.store)).toBe(true);
+    expect(isFleetYardsUrl('https://cdn.fleetyards.net/uploads/model.jpg')).toBe(true);
     expect(needsImageMirrorBackfill(baseShip)).toBe(true);
 
     expect(
@@ -235,7 +236,7 @@ describe('r2-image-mirror', () => {
         imageMirrors: {
           images: {
             store: {
-              sourceUrl: 'https://cdn.fleetyards.net/uploads/model.jpg',
+              sourceUrl: 'https://fleetyards.net/files/representations/redirect/model.jpg',
               mirroredUrl: 'https://images.aydocorp.space/ships/ship-1/store.png',
               contentHash: 'hash',
               contentType: 'image/png',

@@ -9,6 +9,7 @@ import ShipImageGallery from '@/components/ships/ShipImageGallery';
 import ShipSpecs from '@/components/ships/ShipSpecs';
 import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
 import { formatProductionStatus } from '@/lib/ships/format';
+import { shouldOptimizeShipImage } from '@/lib/ships/image';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -182,6 +183,7 @@ export default function ShipDetailPanel({ shipId, onClose }: ShipDetailPanelProp
                       width={20}
                       height={20}
                       className="object-contain flex-shrink-0"
+                      unoptimized={!shouldOptimizeShipImage(ship.manufacturer.logo)}
                     />
                   ) : null}
                   <span className="bg-[rgba(var(--mg-primary),0.1)] text-[rgba(var(--mg-primary),0.8)] px-2 py-0.5 text-xs font-mono rounded-sm">

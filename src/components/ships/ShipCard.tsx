@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { motion } from 'motion/react';
 import MobiGlasPanel from '@/components/ui/mobiglas/MobiGlasPanel';
-import { resolveShipImage } from '@/lib/ships/image';
+import { resolveShipImage, shouldOptimizeShipImage } from '@/lib/ships/image';
 import { formatCrew, formatCargo, formatSpeed } from '@/lib/ships/format';
 import type { ShipDocument } from '@/types/ship';
 
@@ -44,6 +44,7 @@ export default function ShipCard({ ship, onClick }: ShipCardProps) {
               className="object-cover"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
               loading="lazy"
+              unoptimized={!shouldOptimizeShipImage(imgSrc)}
               onError={() => setImgError(true)}
             />
           ) : (
@@ -66,6 +67,7 @@ export default function ShipCard({ ship, onClick }: ShipCardProps) {
                 width={16}
                 height={16}
                 className="object-contain flex-shrink-0"
+                unoptimized={!shouldOptimizeShipImage(ship.manufacturer.logo)}
                 onError={() => setLogoError(true)}
               />
             ) : null}
