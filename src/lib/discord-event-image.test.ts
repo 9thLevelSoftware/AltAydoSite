@@ -1,7 +1,10 @@
 import sharp from 'sharp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACTIVITIES } from '@/types/MissionPlanning';
-import { DISCORD_EVENT_ACTIVITY_SHIPS, getDiscordEventImageForMission } from './discord-event-image';
+import {
+  DISCORD_EVENT_ACTIVITY_SHIPS,
+  getDiscordEventImageForMission,
+} from './discord-event-image';
 
 const mocks = vi.hoisted(() => ({
   getShipBySlug: vi.fn(),
@@ -23,7 +26,10 @@ function makeMission(primaryActivity: (typeof ACTIVITIES)[number]) {
   return { primaryActivity };
 }
 
-function cancellableResponse(headers: HeadersInit): { response: Response; wasCanceled: () => boolean } {
+function cancellableResponse(headers: HeadersInit): {
+  response: Response;
+  wasCanceled: () => boolean;
+} {
   let canceled = false;
   const body = new ReadableStream({
     start(controller) {
@@ -85,10 +91,19 @@ describe('discord event activity ship banners', () => {
       .png()
       .toBuffer();
 
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(new Uint8Array(sourcePng), {
-      status: 200,
-      headers: { 'content-type': 'image/png', 'content-length': String(sourcePng.byteLength) },
-    })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(new Uint8Array(sourcePng), {
+            status: 200,
+            headers: {
+              'content-type': 'image/png',
+              'content-length': String(sourcePng.byteLength),
+            },
+          })
+      )
+    );
 
     const dataUri = await getDiscordEventImageForMission(makeMission('Mining'));
 
@@ -128,10 +143,46 @@ describe('discord event activity ship banners', () => {
       'content-type': 'image/png',
       'content-length': String(11 * 1024 * 1024),
     });
-    vi.stubGlobal('fetch', vi.fn(async () => response));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => response)
+    );
 
     await expect(getDiscordEventImageForMission(makeMission('Mining'))).resolves.toBeUndefined();
 
     expect(wasCanceled()).toBe(true);
+  });
+
+  it('rejects oversized non-streaming banner image responses', async () => {
+    mocks.getShipBySlug.mockResolvedValueOnce({
+      name: 'Prospector',
+      images: {
+        store: null,
+        angledView: 'https://images.example.test/oversized-array-buffer.png',
+        angledViewMedium: null,
+        sideView: null,
+        sideViewMedium: null,
+        topView: null,
+        topViewMedium: null,
+        frontView: null,
+        frontViewMedium: null,
+        fleetchartImage: null,
+      },
+    });
+    const oversized = new Uint8Array(11 * 1024 * 1024);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            body: null,
+            headers: new Headers({ 'content-type': 'image/png' }),
+            arrayBuffer: async () => oversized.buffer,
+          }) as unknown as Response
+      )
+    );
+
+    await expect(getDiscordEventImageForMission(makeMission('Mining'))).resolves.toBeUndefined();
   });
 });

@@ -11,8 +11,16 @@ import { logger } from '@/lib/logger';
 
 const DEFAULT_DISCORD_EVENT_DURATION_MINUTES = 120;
 
+function getMissionStartDate(mission: PlannedMissionResponse): Date | null {
+  const startDate = new Date(mission.scheduledDateTime);
+  return Number.isNaN(startDate.getTime()) ? null : startDate;
+}
+
 // Map Discord event status to mission status
-function mapDiscordStatusToMissionStatus(discordStatus: number, currentMissionStatus: PlannedMissionStatus): PlannedMissionStatus | null {
+function mapDiscordStatusToMissionStatus(
+  discordStatus: number,
+  currentMissionStatus: PlannedMissionStatus
+): PlannedMissionStatus | null {
   switch (discordStatus) {
     case DiscordEventStatus.ACTIVE:
       // Discord event is live -> Mission should be ACTIVE
@@ -37,20 +45,23 @@ function mapDiscordStatusToMissionStatus(discordStatus: number, currentMissionSt
 }
 
 function getMissionEndTime(mission: PlannedMissionResponse): string {
-  const startDate = new Date(mission.scheduledDateTime);
-  if (Number.isNaN(startDate.getTime())) {
+  const startDate = getMissionStartDate(mission);
+  if (!startDate) {
     return new Date(Date.now() + DEFAULT_DISCORD_EVENT_DURATION_MINUTES * 60 * 1000).toISOString();
   }
 
-  const durationMinutes = typeof mission.duration === 'number' && mission.duration > 0
-    ? mission.duration
-    : DEFAULT_DISCORD_EVENT_DURATION_MINUTES;
+  const durationMinutes =
+    typeof mission.duration === 'number' && mission.duration > 0
+      ? mission.duration
+      : DEFAULT_DISCORD_EVENT_DURATION_MINUTES;
 
   return new Date(startDate.getTime() + durationMinutes * 60 * 1000).toISOString();
 }
 
 function isTerminalDiscordEventStatus(discordStatus: number): boolean {
-  return discordStatus === DiscordEventStatus.COMPLETED || discordStatus === DiscordEventStatus.CANCELED;
+  return (
+    discordStatus === DiscordEventStatus.COMPLETED || discordStatus === DiscordEventStatus.CANCELED
+  );
 }
 
 function buildDiscordEventUpdateParams(
@@ -63,12 +74,13 @@ function buildDiscordEventUpdateParams(
     name: mission.name,
     description,
     scheduledEndTime: getMissionEndTime(mission),
-    location: mission.location || 'Star Citizen'
+    location: mission.location || 'Star Citizen',
   };
+  const startDate = getMissionStartDate(mission);
 
   // Active external Discord events already have a start time in the past.
   // Resending that value can make Discord reject an otherwise valid details update.
-  if (discordStatus !== DiscordEventStatus.ACTIVE) {
+  if (discordStatus !== DiscordEventStatus.ACTIVE && startDate) {
     updateParams.scheduledStartTime = mission.scheduledDateTime;
   }
 
@@ -80,10 +92,7 @@ function buildDiscordEventUpdateParams(
 }
 
 // POST - Publish mission to Discord (create event)
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -123,10 +132,7 @@ export async function POST(
     // Get Discord service
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
-      return NextResponse.json(
-        { error: 'Discord is not configured' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Discord is not configured' }, { status: 500 });
     }
 
     // Get base URL from request
@@ -151,7 +157,7 @@ export async function POST(
       scheduledStartTime: mission.scheduledDateTime,
       scheduledEndTime: endTime,
       location: mission.location || 'Star Citizen',
-      image
+      image,
     });
 
     // Update mission with Discord event reference
@@ -160,37 +166,38 @@ export async function POST(
         eventId: discordEvent.id,
         guildId: discordEvent.guild_id,
         createdAt: new Date().toISOString(),
-        status: 'SCHEDULED'
+        status: 'SCHEDULED',
       },
-      status: 'SCHEDULED'
+      status: 'SCHEDULED',
     });
 
-    logger.info('Mission published to Discord', { route: '/api/planned-missions/[id]/discord', missionId: id, discordEventId: discordEvent.id });
+    logger.info('Mission published to Discord', {
+      route: '/api/planned-missions/[id]/discord',
+      missionId: id,
+      discordEventId: discordEvent.id,
+    });
 
     return NextResponse.json({
       success: true,
       discordEvent: {
         id: discordEvent.id,
         guild_id: discordEvent.guild_id,
-        name: discordEvent.name
+        name: discordEvent.name,
       },
-      mission: updatedMission
+      mission: updatedMission,
     });
-
   } catch (error) {
-    logger.error('Error publishing mission to Discord', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/discord' });
-    return NextResponse.json(
-      { error: 'Failed to publish to Discord' },
-      { status: 500 }
+    logger.error(
+      'Error publishing mission to Discord',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions/[id]/discord' }
     );
+    return NextResponse.json({ error: 'Failed to publish to Discord' }, { status: 500 });
   }
 }
 
 // GET - Get Discord event RSVPs (interested users)
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -220,10 +227,7 @@ export async function GET(
     // Get Discord service
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
-      return NextResponse.json(
-        { error: 'Discord is not configured' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Discord is not configured' }, { status: 500 });
     }
 
     // Fetch RSVPs from Discord
@@ -238,19 +242,26 @@ export async function GET(
     if (discordEvent?.status) {
       const newStatus = mapDiscordStatusToMissionStatus(discordEvent.status, mission.status);
       if (newStatus && newStatus !== mission.status) {
-        logger.info('Syncing mission status from Discord', { route: '/api/planned-missions/[id]/discord', missionId: id, oldStatus: mission.status, newStatus, discordEventStatus: discordEvent.status });
-        updatedMission = await plannedMissionStorage.updatePlannedMission(id, { status: newStatus }) || mission;
+        logger.info('Syncing mission status from Discord', {
+          route: '/api/planned-missions/[id]/discord',
+          missionId: id,
+          oldStatus: mission.status,
+          newStatus,
+          discordEventStatus: discordEvent.status,
+        });
+        updatedMission =
+          (await plannedMissionStorage.updatePlannedMission(id, { status: newStatus })) || mission;
         statusSynced = true;
       }
     }
 
     // Transform to a simpler format
-    const rsvps = rsvpUsers.map(u => ({
+    const rsvps = rsvpUsers.map((u) => ({
       discordId: u.user.id,
       username: u.user.username,
       globalName: u.user.global_name,
       nickname: u.member?.nick,
-      avatar: u.user.avatar
+      avatar: u.user.avatar,
     }));
 
     const res = NextResponse.json({
@@ -259,17 +270,17 @@ export async function GET(
       discordUserCount: discordEvent?.user_count || rsvps.length,
       eventStatus: discordEvent?.status,
       missionStatus: updatedMission.status,
-      statusSynced
+      statusSynced,
     });
     res.headers.set('Cache-Control', 'no-store, max-age=0');
     return res;
-
   } catch (error) {
-    logger.error('Error fetching Discord RSVPs', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/discord' });
-    return NextResponse.json(
-      { error: 'Failed to fetch RSVPs' },
-      { status: 500 }
+    logger.error(
+      'Error fetching Discord RSVPs',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions/[id]/discord' }
     );
+    return NextResponse.json({ error: 'Failed to fetch RSVPs' }, { status: 500 });
   }
 }
 
@@ -308,10 +319,7 @@ export async function DELETE(
 
     // Check if published
     if (!mission.discordEvent) {
-      return NextResponse.json(
-        { error: 'Mission is not published to Discord' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Mission is not published to Discord' }, { status: 400 });
     }
 
     if (!mission.discordEvent.eventId) {
@@ -324,10 +332,7 @@ export async function DELETE(
     // Get Discord service
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
-      return NextResponse.json(
-        { error: 'Discord is not configured' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Discord is not configured' }, { status: 500 });
     }
 
     // Delete Discord event
@@ -336,30 +341,30 @@ export async function DELETE(
     // Update mission to remove Discord reference
     const updatedMission = await plannedMissionStorage.updatePlannedMission(id, {
       discordEvent: undefined,
-      status: 'DRAFT'
+      status: 'DRAFT',
     });
 
-    logger.info('Mission unpublished from Discord', { route: '/api/planned-missions/[id]/discord', missionId: id });
+    logger.info('Mission unpublished from Discord', {
+      route: '/api/planned-missions/[id]/discord',
+      missionId: id,
+    });
 
     return NextResponse.json({
       success: true,
-      mission: updatedMission
+      mission: updatedMission,
     });
-
   } catch (error) {
-    logger.error('Error unpublishing mission from Discord', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/discord' });
-    return NextResponse.json(
-      { error: 'Failed to unpublish from Discord' },
-      { status: 500 }
+    logger.error(
+      'Error unpublishing mission from Discord',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions/[id]/discord' }
     );
+    return NextResponse.json({ error: 'Failed to unpublish from Discord' }, { status: 500 });
   }
 }
 
 // PATCH - Update Discord event (sync changes)
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -390,10 +395,7 @@ export async function PATCH(
 
     // Check if published
     if (!mission.discordEvent) {
-      return NextResponse.json(
-        { error: 'Mission is not published to Discord' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Mission is not published to Discord' }, { status: 400 });
     }
 
     if (!mission.discordEvent.eventId) {
@@ -406,10 +408,7 @@ export async function PATCH(
     // Get Discord service
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
-      return NextResponse.json(
-        { error: 'Discord is not configured' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Discord is not configured' }, { status: 500 });
     }
 
     // Get base URL from request
@@ -418,14 +417,20 @@ export async function PATCH(
     const currentDiscordEvent = await discord.getScheduledEvent(mission.discordEvent.eventId);
     if (!currentDiscordEvent) {
       return NextResponse.json(
-        { error: 'Discord event was not found. The mission was saved locally but is no longer linked to an existing Discord event.' },
+        {
+          error:
+            'Discord event was not found. The mission was saved locally but is no longer linked to an existing Discord event.',
+        },
         { status: 404 }
       );
     }
 
     if (isTerminalDiscordEventStatus(currentDiscordEvent.status)) {
       return NextResponse.json(
-        { error: 'Discord event is already completed or canceled and cannot be updated. The mission was saved locally only.' },
+        {
+          error:
+            'Discord event is already completed or canceled and cannot be updated. The mission was saved locally only.',
+        },
         { status: 409 }
       );
     }
@@ -433,26 +438,37 @@ export async function PATCH(
     // Build updated description
     const description = buildEventDescription(mission, baseUrl);
     const image = await getDiscordEventImageForMission(mission);
-    const updateParams = buildDiscordEventUpdateParams(mission, description, currentDiscordEvent.status, image);
+    const updateParams = buildDiscordEventUpdateParams(
+      mission,
+      description,
+      currentDiscordEvent.status,
+      image
+    );
 
     // Update Discord event
-    const updatedEvent = await discord.updateScheduledEvent(mission.discordEvent.eventId, updateParams);
+    const updatedEvent = await discord.updateScheduledEvent(
+      mission.discordEvent.eventId,
+      updateParams
+    );
 
-    logger.info('Discord event updated for mission', { route: '/api/planned-missions/[id]/discord', missionId: id });
+    logger.info('Discord event updated for mission', {
+      route: '/api/planned-missions/[id]/discord',
+      missionId: id,
+    });
 
     return NextResponse.json({
       success: true,
       discordEvent: {
         id: updatedEvent.id,
-        name: updatedEvent.name
-      }
+        name: updatedEvent.name,
+      },
     });
-
   } catch (error) {
-    logger.error('Error updating Discord event', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/discord' });
-    return NextResponse.json(
-      { error: 'Failed to update Discord event' },
-      { status: 500 }
+    logger.error(
+      'Error updating Discord event',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions/[id]/discord' }
     );
+    return NextResponse.json({ error: 'Failed to update Discord event' }, { status: 500 });
   }
 }

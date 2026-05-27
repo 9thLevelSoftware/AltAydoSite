@@ -89,7 +89,9 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
 
   if (!lock) {
     const latestStatus = await getLatestSyncStatus();
-    logger.warn('Ship sync skipped because another sync is already running', { module: 'ship-sync' });
+    logger.warn('Ship sync skipped because another sync is already running', {
+      module: 'ship-sync',
+    });
     return {
       type: 'ship-sync',
       syncVersion: latestStatus?.syncVersion ?? 0,
@@ -125,8 +127,7 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
     });
 
     // ── Step 3: Fetch all ships from FleetYards API ───────────────────────
-    const { ships: rawShips, pagesProcessed, errors: fetchErrors } =
-      await fetchAllShips();
+    const { ships: rawShips, pagesProcessed, errors: fetchErrors } = await fetchAllShips();
 
     // ── Step 4: Handle empty fetch (SYNC-05) ──────────────────────────────
     if (rawShips.length === 0) {
@@ -189,8 +190,6 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
     // ── Step 6: Delta filtering -- skip ships unchanged and already mirrored ─
     const storedSyncStates = await getShipSyncStates();
     let deltaUnchanged = 0;
-    let dataChangedCandidates = 0;
-    let backfillCandidates = 0;
 
     const dataChanges: typeof rawShips = [];
     const backfillChanges: typeof rawShips = [];
@@ -201,7 +200,6 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
 
       if (!id || !existing) {
         dataChanges.push(raw);
-        dataChangedCandidates++;
         continue;
       }
 
@@ -209,13 +207,11 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
         !existing.fleetyardsUpdatedAt || existing.fleetyardsUpdatedAt !== upstreamUpdatedAt;
       if (sourceTimestampChanged) {
         dataChanges.push(raw);
-        dataChangedCandidates++;
         continue;
       }
 
       if (needsImageMirrorBackfill(existing)) {
         backfillChanges.push(raw);
-        backfillCandidates++;
         continue;
       }
 
@@ -223,6 +219,8 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
     }
 
     const changedCandidates = [...dataChanges, ...backfillChanges];
+    const dataChangedCandidates = dataChanges.length;
+    const backfillCandidates = backfillChanges.length;
 
     const maxChangedShipsPerRun = getNonNegativeIntegerEnv(
       'SHIP_SYNC_MAX_CHANGED_SHIPS_PER_RUN',
@@ -327,7 +325,9 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
 
     const deferredErrors =
       deferredShips > 0
-        ? [`Deferred ${deferredShips} changed ships due to SHIP_SYNC_MAX_CHANGED_SHIPS_PER_RUN limit`]
+        ? [
+            `Deferred ${deferredShips} changed ships due to SHIP_SYNC_MAX_CHANGED_SHIPS_PER_RUN limit`,
+          ]
         : [];
 
     // ── Step 12: Build and save sync status audit record ─────────────────
@@ -345,7 +345,12 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
       failedImages,
       durationMs: duration,
       status,
-      errors: compactErrors([...fetchErrors, ...validationErrors, ...mirrorErrors, ...deferredErrors]),
+      errors: compactErrors([
+        ...fetchErrors,
+        ...validationErrors,
+        ...mirrorErrors,
+        ...deferredErrors,
+      ]),
       pagesProcessed,
     };
 
@@ -405,7 +410,9 @@ export function startShipSyncCron(): void {
   const enabled = process.env.SHIP_SYNC_IN_PROCESS_CRON_ENABLED === 'true';
 
   if (!enabled) {
-    logger.info('Ship sync in-process cron disabled; external scheduler is expected', { module: 'ship-sync' });
+    logger.info('Ship sync in-process cron disabled; external scheduler is expected', {
+      module: 'ship-sync',
+    });
     return;
   }
 
@@ -414,7 +421,10 @@ export function startShipSyncCron(): void {
   const cron = require('node-cron');
 
   if (!cron.validate(schedule)) {
-    logger.error('Invalid cron schedule for ship sync', undefined, { module: 'ship-sync', schedule });
+    logger.error('Invalid cron schedule for ship sync', undefined, {
+      module: 'ship-sync',
+      schedule,
+    });
     return;
   }
 
@@ -423,7 +433,9 @@ export function startShipSyncCron(): void {
     try {
       await syncShipsFromFleetYards();
     } catch (error) {
-      logger.error('Ship sync cron failed', error instanceof Error ? error : undefined, { module: 'ship-sync' });
+      logger.error('Ship sync cron failed', error instanceof Error ? error : undefined, {
+        module: 'ship-sync',
+      });
     }
   });
 
