@@ -116,6 +116,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       const res = await fetch(`/api/planned-missions/${missionId}/discord`);
       if (res.ok) {
         const data = await res.json();
+        if (data.discordAvailable === false) {
+          return;
+        }
         setRsvpData(prev => ({
           ...prev,
           [missionId]: {
@@ -741,12 +744,14 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                       >
                         <EditIcon />
                       </button>
-                      <button
-                        onClick={() => handleDelete(mission.id)}
-                        className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(var(--mg-danger),0.1)] text-[rgba(var(--mg-danger),0.8)] hover:bg-[rgba(var(--mg-danger),0.2)] transition-colors text-sm"
-                      >
-                        <TrashIcon />
-                      </button>
+                      {mission.createdBy === session?.user?.id && (
+                        <button
+                          onClick={() => handleDelete(mission.id)}
+                          className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(var(--mg-danger),0.1)] text-[rgba(var(--mg-danger),0.8)] hover:bg-[rgba(var(--mg-danger),0.2)] transition-colors text-sm"
+                        >
+                          <TrashIcon />
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

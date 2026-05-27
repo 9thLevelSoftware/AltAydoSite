@@ -217,4 +217,25 @@ describe('planned missions POST', () => {
       tertiaryActivity: null,
     }));
   });
+
+  it('allows level 4 users to update missions even when they are not assigned modifiers', async () => {
+    mocks.getServerSession.mockResolvedValueOnce({
+      user: {
+        id: 'director-1',
+        clearanceLevel: 4,
+      },
+    });
+    mocks.canUserModifyMission.mockResolvedValueOnce(false);
+
+    const response = await PUT(makePutRequest({
+      ...validMissionPayload,
+      id: 'mission-1',
+      primaryActivity: 'Salvage',
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.updatePlannedMission).toHaveBeenCalledWith('mission-1', expect.objectContaining({
+      primaryActivity: 'Salvage',
+    }));
+  });
 });

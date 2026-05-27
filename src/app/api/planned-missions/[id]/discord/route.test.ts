@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 import { DiscordEventStatus } from '@/types/DiscordEvent';
-import { PATCH } from './route';
+import { GET, PATCH } from './route';
 
 const mocks = vi.hoisted(() => ({
   getServerSession: vi.fn(),
   getPlannedMissionById: vi.fn(),
   canUserModifyMission: vi.fn(),
   updatePlannedMission: vi.fn(),
+  getDiscordService: vi.fn(),
+  getEventUsers: vi.fn(),
   getScheduledEvent: vi.fn(),
   updateScheduledEvent: vi.fn(),
   buildEventDescription: vi.fn(),
@@ -29,11 +31,7 @@ vi.mock('@/lib/planned-mission-storage', () => ({
 }));
 
 vi.mock('@/lib/discord', () => ({
-  getDiscordService: vi.fn(() => ({
-    isConfigured: () => true,
-    getScheduledEvent: mocks.getScheduledEvent,
-    updateScheduledEvent: mocks.updateScheduledEvent,
-  })),
+  getDiscordService: mocks.getDiscordService,
 }));
 
 vi.mock('@/lib/discord-event-description', () => ({
@@ -56,6 +54,12 @@ function makePatchRequest(): NextRequest {
   return new Request('http://localhost/api/planned-missions/mission-1/discord', {
     method: 'PATCH',
     headers: { origin: 'http://localhost' },
+  }) as NextRequest;
+}
+
+function makeGetRequest(): NextRequest {
+  return new Request('http://localhost/api/planned-missions/mission-1/discord', {
+    method: 'GET',
   }) as NextRequest;
 }
 
@@ -87,6 +91,13 @@ describe('planned mission Discord PATCH', () => {
     mocks.getServerSession.mockResolvedValue({ user: { id: 'user-1' } });
     mocks.canUserModifyMission.mockResolvedValue(true);
     mocks.getPlannedMissionById.mockResolvedValue(makeMission());
+    mocks.getDiscordService.mockReturnValue({
+      isConfigured: () => true,
+      getEventUsers: mocks.getEventUsers,
+      getScheduledEvent: mocks.getScheduledEvent,
+      updateScheduledEvent: mocks.updateScheduledEvent,
+    });
+    mocks.getEventUsers.mockResolvedValue([]);
     mocks.getScheduledEvent.mockResolvedValue({
       id: 'discord-event-1',
       guild_id: 'guild-1',
@@ -213,5 +224,129 @@ describe('planned mission Discord PATCH', () => {
     expect(response.status).toBe(400);
     expect(mocks.getScheduledEvent).not.toHaveBeenCalled();
     expect(mocks.updateScheduledEvent).not.toHaveBeenCalled();
+  });
+
+  it('allows level 4 users to PATCH Discord events even when they are not mission-specific modifiers', async () => {
+    mocks.getServerSession.mockResolvedValueOnce({
+      user: {
+        id: 'director-1',
+        clearanceLevel: 4,
+      },
+    });
+    mocks.canUserModifyMission.mockResolvedValueOnce(false);
+
+    const response = await PATCH(makePatchRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateScheduledEvent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('planned mission Discord GET', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getServerSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mocks.getPlannedMissionById.mockResolvedValue(makeMission());
+    mocks.getDiscordService.mockReturnValue({
+      isConfigured: () => true,
+      getEventUsers: mocks.getEventUsers,
+      getScheduledEvent: mocks.getScheduledEvent,
+      updateScheduledEvent: mocks.updateScheduledEvent,
+    });
+    mocks.getEventUsers.mockResolvedValue([
+      {
+        user: {
+          id: 'discord-user-1',
+          username: 'PilotOne',
+          global_name: 'Pilot One',
+          avatar: null,
+        },
+        member: {
+          nick: 'P1',
+        },
+      },
+    ]);
+    mocks.getScheduledEvent.mockResolvedValue({
+      id: 'discord-event-1',
+      guild_id: 'guild-1',
+      name: 'Old Discord Event',
+      status: DiscordEventStatus.SCHEDULED,
+      user_count: 1,
+    });
+  });
+
+  it('returns RSVP data when Discord is available', async () => {
+    const response = await GET(makeGetRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data).toMatchObject({
+      count: 1,
+      discordUserCount: 1,
+      rsvps: [
+        {
+          discordId: 'discord-user-1',
+          username: 'PilotOne',
+          globalName: 'Pilot One',
+          nickname: 'P1',
+        },
+      ],
+    });
+    expect(data.discordAvailable).toBeUndefined();
+  });
+
+  it('returns a non-failing unavailable payload when Discord is not configured', async () => {
+    mocks.getDiscordService.mockReturnValueOnce({
+      isConfigured: () => false,
+      getEventUsers: mocks.getEventUsers,
+      getScheduledEvent: mocks.getScheduledEvent,
+      updateScheduledEvent: mocks.updateScheduledEvent,
+    });
+
+    const response = await GET(makeGetRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      count: 0,
+      discordUserCount: 0,
+      missionStatus: 'SCHEDULED',
+      statusSynced: false,
+      discordAvailable: false,
+      discordError: 'Discord is not configured',
+    });
+    expect(mocks.getEventUsers).not.toHaveBeenCalled();
+  });
+
+  it('returns a non-failing unavailable payload when Discord RSVP fetch throws', async () => {
+    mocks.getEventUsers.mockRejectedValueOnce(new Error('Discord API error: 403 - missing access'));
+
+    const response = await GET(makeGetRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      count: 0,
+      discordUserCount: 0,
+      missionStatus: 'SCHEDULED',
+      statusSynced: false,
+      discordAvailable: false,
+      discordError: 'Discord RSVP data is temporarily unavailable',
+    });
+  });
+
+  it('returns a non-failing unavailable payload when the linked Discord event no longer exists', async () => {
+    mocks.getEventUsers.mockResolvedValueOnce([]);
+    mocks.getScheduledEvent.mockResolvedValueOnce(null);
+
+    const response = await GET(makeGetRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      count: 0,
+      discordUserCount: 0,
+      missionStatus: 'SCHEDULED',
+      statusSynced: false,
+      discordAvailable: false,
+      discordError: 'Discord event was not found',
+    });
   });
 });

@@ -53,6 +53,7 @@ export async function PUT(
     }
 
     const userId = session.user.id;
+    const userClearance = session.user.clearanceLevel ?? 1;
     const { id } = await params;
 
     if (!id) {
@@ -61,7 +62,7 @@ export async function PUT(
 
     // Check if user can modify this mission
     const canModify = await plannedMissionStorage.canUserModifyMission(userId, id);
-    if (!canModify) {
+    if (!canModify && userClearance < 4) {
       return NextResponse.json(
         { error: 'You do not have permission to modify this mission' },
         { status: 403 }

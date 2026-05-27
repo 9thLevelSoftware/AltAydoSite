@@ -91,6 +91,25 @@ function buildDiscordEventUpdateParams(
   return updateParams;
 }
 
+function discordRsvpUnavailableResponse(
+  mission: PlannedMissionResponse,
+  discordError: string,
+  eventStatus?: number
+) {
+  const res = NextResponse.json({
+    rsvps: [],
+    count: 0,
+    discordUserCount: 0,
+    eventStatus,
+    missionStatus: mission.status,
+    statusSynced: false,
+    discordAvailable: false,
+    discordError,
+  });
+  res.headers.set('Cache-Control', 'no-store, max-age=0');
+  return res;
+}
+
 // POST - Publish mission to Discord (create event)
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -100,6 +119,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const userId = session.user.id;
+    const userClearance = session.user.clearanceLevel ?? 1;
     const { id } = await params;
 
     if (!id) {
@@ -114,7 +134,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Check permissions
     const canModify = await plannedMissionStorage.canUserModifyMission(userId, id);
-    if (!canModify) {
+    if (!canModify && userClearance < 4) {
       return NextResponse.json(
         { error: 'You do not have permission to publish this mission' },
         { status: 403 }
@@ -227,14 +247,30 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Get Discord service
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
-      return NextResponse.json({ error: 'Discord is not configured' }, { status: 500 });
+      return discordRsvpUnavailableResponse(mission, 'Discord is not configured');
     }
 
-    // Fetch RSVPs from Discord
-    const rsvpUsers: DiscordEventUser[] = await discord.getEventUsers(mission.discordEvent.eventId);
+    let rsvpUsers: DiscordEventUser[];
+    let discordEvent: Awaited<ReturnType<typeof discord.getScheduledEvent>>;
 
-    // Also get updated event info
-    const discordEvent = await discord.getScheduledEvent(mission.discordEvent.eventId);
+    try {
+      // Fetch RSVPs from Discord and also get updated event info.
+      rsvpUsers = await discord.getEventUsers(mission.discordEvent.eventId);
+      discordEvent = await discord.getScheduledEvent(mission.discordEvent.eventId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn('Discord RSVP data unavailable', {
+        route: '/api/planned-missions/[id]/discord',
+        missionId: id,
+        discordEventId: mission.discordEvent.eventId,
+        error: message,
+      });
+      return discordRsvpUnavailableResponse(mission, 'Discord RSVP data is temporarily unavailable');
+    }
+
+    if (!discordEvent) {
+      return discordRsvpUnavailableResponse(mission, 'Discord event was not found');
+    }
 
     // Sync mission status with Discord event status
     let updatedMission = mission;
@@ -296,6 +332,7 @@ export async function DELETE(
     }
 
     const userId = session.user.id;
+    const userClearance = session.user.clearanceLevel ?? 1;
     const { id } = await params;
 
     if (!id) {
@@ -310,7 +347,7 @@ export async function DELETE(
 
     // Check permissions
     const canModify = await plannedMissionStorage.canUserModifyMission(userId, id);
-    if (!canModify) {
+    if (!canModify && userClearance < 4) {
       return NextResponse.json(
         { error: 'You do not have permission to unpublish this mission' },
         { status: 403 }
@@ -372,6 +409,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const userId = session.user.id;
+    const userClearance = session.user.clearanceLevel ?? 1;
     const { id } = await params;
 
     if (!id) {
@@ -386,7 +424,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     // Check permissions
     const canModify = await plannedMissionStorage.canUserModifyMission(userId, id);
-    if (!canModify) {
+    if (!canModify && userClearance < 4) {
       return NextResponse.json(
         { error: 'You do not have permission to update this mission' },
         { status: 403 }
