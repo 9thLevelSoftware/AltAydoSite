@@ -67,18 +67,6 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
   }
 
   try {
-    const missionTemplates = db.collection('mission-templates');
-    await Promise.all([
-      missionTemplates.createIndex({ createdBy: 1, createdAt: -1 }).catch(() => {}),
-      missionTemplates.createIndex({ operationType: 1, createdAt: -1 }).catch(() => {}),
-      missionTemplates.createIndex({ primaryActivity: 1, createdAt: -1 }).catch(() => {}),
-      missionTemplates.createIndex({ isPublic: 1, createdAt: -1 }).catch(() => {}),
-    ]);
-  } catch (err) {
-    logger.warn('Index setup (mission-templates) skipped or failed', { module: 'mongo-indexes', collection: 'mission-templates', error: String(err) });
-  }
-
-  try {
     const ships = db.collection('ships');
     await Promise.all([
       // Primary lookup by FleetYards UUID (unique)

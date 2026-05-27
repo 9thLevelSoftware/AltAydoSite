@@ -1,4 +1,8 @@
 import { PlannedMission } from '@/types/PlannedMission';
+import {
+  getMissionPersonnelRequirements,
+  getMissionShipRequirements
+} from '@/lib/mission-requirements';
 
 const DISCORD_MAX_LENGTH = 1000;
 
@@ -42,16 +46,21 @@ function buildSections(mission: PlannedMission, baseUrl?: string): string[] {
     sections.push(`**Leadership:**\n${leaderList}`);
   }
 
-  // 4. Ship Roster
-  if (mission.ships && mission.ships.length > 0) {
-    const shipLines = mission.ships.map(s => {
-      let line = `${s.quantity}x ${s.shipName}`;
-      if (s.assignedToName) {
-        line += ` (${s.assignedToName})`;
-      }
-      return line;
-    });
-    sections.push(`**Ships:**\n${shipLines.join('\n')}`);
+  // 4. Requirements
+  const shipRequirements = getMissionShipRequirements(mission);
+  if (shipRequirements.length > 0) {
+    const shipLines = shipRequirements.map(requirement =>
+      `${requirement.count}x ${requirement.size} ${requirement.category}`
+    );
+    sections.push(`**Ship Requirements:**\n${shipLines.join('\n')}`);
+  }
+
+  const personnelRequirements = getMissionPersonnelRequirements(mission);
+  if (personnelRequirements.length > 0) {
+    const personnelLines = personnelRequirements.map(requirement =>
+      `${requirement.count}x ${requirement.profession}`
+    );
+    sections.push(`**Personnel Requirements:**\n${personnelLines.join('\n')}`);
   }
 
   // 5. Equipment Notes
@@ -78,7 +87,7 @@ function buildSections(mission: PlannedMission, baseUrl?: string): string[] {
 
 /**
  * Progressively truncate sections to fit within maxLength.
- * Drops from the bottom up: briefing → equipment → ship list overflow.
+ * Drops from the bottom up: briefing -> equipment -> personnel -> ship list overflow.
  * Always preserves: objectives, type/activities, leadership, and briefing link.
  */
 function truncateToDiscordLimit(sections: string[], maxLength: number): string {
@@ -98,13 +107,18 @@ function truncateToDiscordLimit(sections: string[], maxLength: number): string {
     current = current.filter(s => !s.startsWith('**Equipment:**'));
   }
 
-  // Step 3: Cap ship list to 5 ships + "and X more..."
+  // Step 3: Drop personnel requirements
   if (measure(current) > maxLength) {
-    const shipIdx = current.findIndex(s => s.startsWith('**Ships:**'));
+    current = current.filter(s => !s.startsWith('**Personnel Requirements:**'));
+  }
+
+  // Step 4: Cap ship requirements to 5 rows + "and X more..."
+  if (measure(current) > maxLength) {
+    const shipIdx = current.findIndex(s => s.startsWith('**Ship Requirements:**'));
     if (shipIdx !== -1) {
       const shipSection = current[shipIdx];
       const lines = shipSection.split('\n');
-      const header = lines[0]; // "**Ships:**"
+      const header = lines[0];
       const shipLines = lines.slice(1);
       if (shipLines.length > 5) {
         const remaining = shipLines.length - 5;
@@ -113,12 +127,12 @@ function truncateToDiscordLimit(sections: string[], maxLength: number): string {
     }
   }
 
-  // Step 4: If still over, drop ships entirely
+  // Step 5: If still over, drop ship requirements entirely
   if (measure(current) > maxLength) {
-    current = current.filter(s => !s.startsWith('**Ships:**'));
+    current = current.filter(s => !s.startsWith('**Ship Requirements:**'));
   }
 
-  // Step 5: Hard truncate as last resort (keep link at bottom)
+  // Step 6: Hard truncate as last resort
   let result = current.join('\n\n');
   if (result.length > maxLength) {
     result = result.slice(0, maxLength - 3) + '...';

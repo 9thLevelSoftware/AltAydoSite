@@ -10,6 +10,8 @@ function makeMission(overrides: Partial<PlannedMission> = {}): PlannedMission {
     operationType: 'Space Operations',
     primaryActivity: 'Mining',
     leaders: [],
+    shipRequirements: [],
+    personnelRequirements: [],
     ships: [],
     objectives: '',
     briefing: '',
@@ -33,10 +35,13 @@ describe('buildEventDescription', () => {
         { userId: 'u1', aydoHandle: 'PlayerOne', role: 'Mission Commander' },
         { userId: 'u2', aydoHandle: 'PlayerTwo', role: 'Security Lead' },
       ],
-      ships: [
-        { shipName: 'Carrack', manufacturer: 'Anvil', size: 'Large', fleetyardsId: 'f1', quantity: 2 },
-        { shipName: 'Prospector', manufacturer: 'MISC', size: 'Small', fleetyardsId: 'f2', quantity: 3 },
-        { shipName: 'Hammerhead', manufacturer: 'Aegis', size: 'Large', fleetyardsId: 'f3', quantity: 1, assignedToName: 'PlayerTwo' },
+      shipRequirements: [
+        { size: 'Large', category: 'Transport', count: 2 },
+        { size: 'Small', category: 'Industrial', count: 3 },
+      ],
+      personnelRequirements: [
+        { profession: 'Pilot', count: 2 },
+        { profession: 'Engineer', count: 1 },
       ],
       equipmentNotes: 'Bring mining consumables and Pembroke armor for EVA',
       briefing: 'Meet at Port Olisar. Form up in convoy formation.',
@@ -50,9 +55,12 @@ describe('buildEventDescription', () => {
     expect(desc).toContain('**Activities:** Mining, Escort');
     expect(desc).toContain('Mission Commander: PlayerOne');
     expect(desc).toContain('Security Lead: PlayerTwo');
-    expect(desc).toContain('2x Carrack');
-    expect(desc).toContain('3x Prospector');
-    expect(desc).toContain('1x Hammerhead (PlayerTwo)');
+    expect(desc).toContain('**Ship Requirements:**');
+    expect(desc).toContain('2x Large Transport');
+    expect(desc).toContain('3x Small Industrial');
+    expect(desc).toContain('**Personnel Requirements:**');
+    expect(desc).toContain('2x Pilot');
+    expect(desc).toContain('1x Engineer');
     expect(desc).toContain('**Equipment:**');
     expect(desc).toContain('Pembroke armor');
     expect(desc).toContain('**Briefing:**');
@@ -60,10 +68,10 @@ describe('buildEventDescription', () => {
     expect(desc).toContain('📋 **Full Briefing:** https://site.com/dashboard/mission-planner?missionId=mission-123');
   });
 
-  it('omits ships section when no ships', () => {
+  it('omits ship requirements section when no requirements or legacy ships', () => {
     const mission = makeMission({ objectives: 'Patrol route' });
     const desc = buildEventDescription(mission);
-    expect(desc).not.toContain('**Ships:**');
+    expect(desc).not.toContain('**Ship Requirements:**');
   });
 
   it('omits equipment section when no equipmentNotes', () => {
@@ -95,18 +103,20 @@ describe('buildEventDescription', () => {
     expect(desc).toContain('**Type:** Space Operations');
     expect(desc).toContain('**Activities:** Mining');
     expect(desc).not.toContain('**Objectives:**');
-    expect(desc).not.toContain('**Ships:**');
+    expect(desc).not.toContain('**Ship Requirements:**');
     expect(desc).not.toContain('**Leadership:**');
   });
 
-  it('formats ship with assignedToName in parentheses', () => {
+  it('derives requirements from legacy ships when requirements are missing', () => {
     const mission = makeMission({
       ships: [
         { shipName: 'Caterpillar', manufacturer: 'Drake', size: 'Large', fleetyardsId: 'f1', quantity: 1, assignedToName: 'Ace' },
       ],
     });
     const desc = buildEventDescription(mission);
-    expect(desc).toContain('1x Caterpillar (Ace)');
+    expect(desc).toContain('**Ship Requirements:**');
+    expect(desc).toContain('1x Large Transport');
+    expect(desc).not.toContain('Caterpillar');
   });
 
   it('stays under 1000 characters', () => {
@@ -115,9 +125,10 @@ describe('buildEventDescription', () => {
       leaders: Array.from({ length: 5 }, (_, i) => ({
         userId: `u${i}`, aydoHandle: `Leader${i}LongName`, role: `Role ${i} Extended`,
       })),
-      ships: Array.from({ length: 15 }, (_, i) => ({
-        shipName: `ShipModelName${i}`, manufacturer: 'Mfr', size: 'Large',
-        fleetyardsId: `f${i}`, quantity: i + 1, assignedToName: `Pilot${i}`,
+      shipRequirements: Array.from({ length: 15 }, (_, i) => ({
+        size: 'Large',
+        category: i % 2 === 0 ? 'Fighter' : 'Transport',
+        count: i + 1,
       })),
       equipmentNotes: 'E'.repeat(200),
       briefing: 'B'.repeat(300),
@@ -132,8 +143,10 @@ describe('buildEventDescription', () => {
       objectives: 'O'.repeat(200),
       briefing: 'B'.repeat(300),
       equipmentNotes: 'E'.repeat(200),
-      ships: Array.from({ length: 8 }, (_, i) => ({
-        shipName: `Ship${i}`, manufacturer: 'M', size: 'S', fleetyardsId: `f${i}`, quantity: 1,
+      shipRequirements: Array.from({ length: 8 }, (_, i) => ({
+        size: 'Small',
+        category: i % 2 === 0 ? 'Fighter' : 'Transport',
+        count: 1,
       })),
     });
 
@@ -145,27 +158,28 @@ describe('buildEventDescription', () => {
   });
 
   it('caps ship list to 5 with overflow message when needed', () => {
-    // Build a mission where ships alone would push over the limit
+    // Build a mission where ship requirements alone would push over the limit
     // after briefing and equipment are already dropped
     const mission = makeMission({
       objectives: 'O'.repeat(300),
       leaders: Array.from({ length: 5 }, (_, i) => ({
         userId: `u${i}`, aydoHandle: `Leader${i}`, role: `Role${i}`,
       })),
-      ships: Array.from({ length: 12 }, (_, i) => ({
-        shipName: `VeryLongShipModelNameHere${i}`, manufacturer: 'M', size: 'S',
-        fleetyardsId: `f${i}`, quantity: i + 1, assignedToName: `PilotWithAVeryLongName${i}`,
+      shipRequirements: Array.from({ length: 12 }, (_, i) => ({
+        size: i % 2 === 0 ? 'Capital' : 'Large',
+        category: i % 3 === 0 ? 'Industrial' : 'Transport',
+        count: i + 1,
       })),
     });
 
     const desc = buildEventDescription(mission, 'https://aydocorp.space');
     expect(desc.length).toBeLessThanOrEqual(1000);
 
-    // Ships should be either capped or dropped entirely
-    if (desc.includes('**Ships:**') && desc.includes('more...')) {
-      const shipSection = desc.split('**Ships:**\n')[1]?.split('\n\n')[0] || '';
+    // Ship requirements should be either capped or dropped entirely
+    if (desc.includes('**Ship Requirements:**') && desc.includes('more...')) {
+      const shipSection = desc.split('**Ship Requirements:**\n')[1]?.split('\n\n')[0] || '';
       const shipLines = shipSection.split('\n').filter(l => l.trim());
-      expect(shipLines.length).toBeLessThanOrEqual(6); // 5 ships + "and X more..."
+      expect(shipLines.length).toBeLessThanOrEqual(6); // 5 rows + "and X more..."
     }
   });
 
