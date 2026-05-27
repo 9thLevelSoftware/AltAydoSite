@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { UserShip } from '@/types/user';
-import { resolveShipImage } from '@/lib/ships/image';
+import { resolveShipImage, shouldOptimizeShipImage } from '@/lib/ships/image';
 import { shipDocumentToUserShip } from '@/lib/ships/mappers';
 import { MobiGlasButton } from '@/components/ui/mobiglas';
 import FleetShipPickerModal from '@/components/ships/FleetShipPickerModal';
@@ -139,6 +139,7 @@ const UserFleetBuilder: React.FC<UserFleetBuilderProps> = ({
                               width={192}
                               height={192}
                               className={`w-full h-full object-contain transition-opacity duration-300 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                              unoptimized={!shouldOptimizeShipImage(imageSrc)}
                               onError={() => handleImageError(shipId)}
                               onLoad={() => handleImageLoad(shipId)}
                               priority={index < 2}
@@ -161,6 +162,7 @@ const UserFleetBuilder: React.FC<UserFleetBuilderProps> = ({
                                 width={16}
                                 height={16}
                                 className="object-contain flex-shrink-0"
+                                unoptimized={!shouldOptimizeShipImage(resolved.manufacturer.logo)}
                               />
                             )}
                             <p className="text-sm text-[rgba(var(--mg-text),0.7)]">{ship.manufacturer}</p>

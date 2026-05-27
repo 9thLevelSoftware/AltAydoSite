@@ -34,6 +34,8 @@ vi.mock('@/lib/ships/r2-image-mirror', () => ({
 }));
 
 const SHIP_ID = '719f60e4-ae48-4941-80f1-17528fd7dd06';
+const BACKFILL_ID = '11111111-1111-4111-8111-111111111111';
+const UPDATED_ID = '22222222-2222-4222-8222-222222222222';
 
 function rawShip(overrides: Partial<FleetYardsShipResponse> = {}): FleetYardsShipResponse {
   return {
@@ -275,6 +277,44 @@ describe('syncShipsFromFleetYards', () => {
     expect(result.updatedShips).toBe(1);
     expect(mirrorShipAssetsMock).toHaveBeenCalledTimes(1);
     expect(upsertShipsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('prioritizes source data changes over retry-only image backfills when capped', async () => {
+    process.env.SHIP_SYNC_MAX_CHANGED_SHIPS_PER_RUN = '1';
+    fetchAllShipsMock.mockResolvedValue({
+      ships: [
+        rawShip({ id: BACKFILL_ID, name: 'Backfill Ship', slug: 'backfill-ship' }),
+        rawShip({
+          id: UPDATED_ID,
+          name: 'Updated Ship',
+          slug: 'updated-ship',
+          updatedAt: '2026-04-04T00:00:00Z',
+        }),
+      ],
+      pagesProcessed: 1,
+      errors: [],
+    });
+    getShipSyncStatesMock.mockResolvedValue(
+      new Map([
+        [BACKFILL_ID, storedShipState({ fleetyardsId: BACKFILL_ID })],
+        [UPDATED_ID, storedShipState({ fleetyardsId: UPDATED_ID, fleetyardsUpdatedAt: '2026-04-03T23:10:15Z' })],
+      ])
+    );
+    needsImageMirrorBackfillMock.mockImplementation((existing) => {
+      const state = existing as { fleetyardsId?: string } | undefined;
+      return state?.fleetyardsId === BACKFILL_ID;
+    });
+    upsertShipsMock.mockResolvedValue({ newShips: 0, updatedShips: 1, unchangedShips: 0 });
+
+    const result = await syncShipsFromFleetYards();
+
+    expect(result.status).toBe('partial');
+    expect(result.deferredShips).toBe(1);
+    expect(mirrorShipAssetsMock).toHaveBeenCalledTimes(1);
+    expect(mirrorShipAssetsMock.mock.calls[0][0].fleetyardsId).toBe(UPDATED_ID);
+    expect(upsertShipsMock).toHaveBeenCalledWith([
+      expect.objectContaining({ fleetyardsId: UPDATED_ID }),
+    ]);
   });
 
   it('records validation errors instead of crashing on non-object FleetYards records', async () => {

@@ -6,6 +6,7 @@ import type {
   ShipImageMirrorEntry,
 } from '@/types/ship';
 import { logger } from '@/lib/logger';
+import { isFleetYardsImageUrl } from '@/lib/ships/image';
 
 export const SHIP_IMAGE_FIELDS: ShipImageField[] = [
   'store',
@@ -196,11 +197,33 @@ function createErrorEntry(sourceUrl: string | null, previous: ShipImageMirrorEnt
   };
 }
 
-function createAbortSignal(timeoutMs: number): AbortSignal | undefined {
+function createAbortSignal(timeoutMs: number): { signal?: AbortSignal; cleanup?: () => void } {
   if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-    return AbortSignal.timeout(timeoutMs);
+    return { signal: AbortSignal.timeout(timeoutMs) };
   }
-  return undefined;
+
+  if (typeof AbortController !== 'undefined') {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    return {
+      signal: controller.signal,
+      cleanup: () => clearTimeout(timeoutId),
+    };
+  }
+
+  return {};
+}
+
+async function safelyConsumeOrCancel(response: Response): Promise<void> {
+  try {
+    if (response.body) {
+      await response.body.cancel();
+    } else {
+      await response.text();
+    }
+  } catch {
+    // Best-effort cleanup only; preserve the original mirror failure.
+  }
 }
 
 async function downloadImage(
@@ -208,29 +231,41 @@ async function downloadImage(
   fetchImpl: typeof fetch,
   config: R2MirrorConfig
 ): Promise<{ buffer: Buffer; contentType: string }> {
-  const response = await fetchImpl(sourceUrl, {
-    headers: { Accept: 'image/avif,image/webp,image/*,*/*;q=0.8' },
-    redirect: 'follow',
-    signal: createAbortSignal(config.downloadTimeoutMs),
-  });
+  const abort = createAbortSignal(config.downloadTimeoutMs);
 
-  if (!response.ok) {
-    throw new Error(`download failed with HTTP ${response.status}`);
+  try {
+    const response = await fetchImpl(sourceUrl, {
+      headers: { Accept: 'image/avif,image/webp,image/*,*/*;q=0.8' },
+      redirect: 'follow',
+      signal: abort.signal,
+    });
+
+    if (!response.ok) {
+      await safelyConsumeOrCancel(response);
+      throw new Error(`download failed with HTTP ${response.status}`);
+    }
+
+    const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() || '';
+    if (!isSupportedImageContentType(contentType)) {
+      await safelyConsumeOrCancel(response);
+      throw new Error(`unsupported image content-type "${contentType || 'unknown'}"`);
+    }
+
+    const contentLength = response.headers.get('content-length');
+    if (contentLength) {
+      const bytes = Number(contentLength);
+      if (Number.isFinite(bytes) && bytes > config.maxImageBytes) {
+        await safelyConsumeOrCancel(response);
+        throw new Error(`image exceeds ${config.maxImageBytes} byte limit`);
+      }
+    }
+
+    const buffer = await readResponseBuffer(response, config.maxImageBytes);
+
+    return { buffer, contentType };
+  } finally {
+    abort.cleanup?.();
   }
-
-  const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() || '';
-  if (!isSupportedImageContentType(contentType)) {
-    throw new Error(`unsupported image content-type "${contentType || 'unknown'}"`);
-  }
-
-  const contentLength = response.headers.get('content-length');
-  if (contentLength && Number(contentLength) > config.maxImageBytes) {
-    throw new Error(`image exceeds ${config.maxImageBytes} byte limit`);
-  }
-
-  const buffer = await readResponseBuffer(response, config.maxImageBytes);
-
-  return { buffer, contentType };
 }
 
 async function readResponseBuffer(response: Response, maxBytes: number): Promise<Buffer> {
@@ -268,13 +303,7 @@ async function readResponseBuffer(response: Response, maxBytes: number): Promise
 }
 
 export function isFleetYardsUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    return hostname === 'api.fleetyards.net' || hostname === 'cdn.fleetyards.net';
-  } catch {
-    return false;
-  }
+  return isFleetYardsImageUrl(url);
 }
 
 function getReusableMirrorUrl(sourceUrl: string, previous: ShipImageMirrorEntry | undefined): string | null {

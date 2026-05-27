@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { motion } from 'motion/react';
-import { resolveShipImage } from '@/lib/ships/image';
+import { resolveShipImage, shouldOptimizeShipImage } from '@/lib/ships/image';
 import { formatCrew, formatCargo, formatSpeed } from '@/lib/ships/format';
 import type { ShipDocument } from '@/types/ship';
 
@@ -35,6 +35,7 @@ export default function ShipCardList({ ship, onClick }: ShipCardListProps) {
             className="object-cover"
             sizes="64px"
             loading="lazy"
+            unoptimized={!shouldOptimizeShipImage(imgSrc)}
             onError={() => setImgError(true)}
           />
         ) : (
@@ -58,6 +59,7 @@ export default function ShipCardList({ ship, onClick }: ShipCardListProps) {
             width={14}
             height={14}
             className="object-contain flex-shrink-0"
+            unoptimized={!shouldOptimizeShipImage(ship.manufacturer.logo)}
             onError={() => setLogoError(true)}
           />
         ) : null}

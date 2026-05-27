@@ -29,6 +29,11 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'fleetyards.net',
+        pathname: '/files/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'images.aydocorp.space',
         pathname: '/**',
       },
@@ -86,11 +91,11 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+              `script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com${isDev ? " 'unsafe-eval'" : ''}`,
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' blob: data: https://cdn.fleetyards.net https://api.fleetyards.net https://images.aydocorp.space https://aydocorp.space https://cdn.discordapp.com",
+              "img-src 'self' blob: data: https://cdn.fleetyards.net https://api.fleetyards.net https://fleetyards.net https://images.aydocorp.space https://aydocorp.space https://cdn.discordapp.com",
               "font-src 'self'",
-              "connect-src 'self' https://discord.com https://cdn.discordapp.com",
+              "connect-src 'self' https://discord.com https://cdn.discordapp.com https://cloudflareinsights.com",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",

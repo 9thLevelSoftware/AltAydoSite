@@ -23,6 +23,23 @@ function makeMission(primaryActivity: (typeof ACTIVITIES)[number]) {
   return { primaryActivity };
 }
 
+function cancellableResponse(headers: HeadersInit): { response: Response; wasCanceled: () => boolean } {
+  let canceled = false;
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1, 2, 3]));
+    },
+    cancel() {
+      canceled = true;
+    },
+  });
+
+  return {
+    response: new Response(body, { status: 200, headers }),
+    wasCanceled: () => canceled,
+  };
+}
+
 describe('discord event activity ship banners', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -89,5 +106,32 @@ describe('discord event activity ship banners', () => {
     mocks.getShipBySlug.mockResolvedValueOnce(null);
 
     await expect(getDiscordEventImageForMission(makeMission('Mining'))).resolves.toBeUndefined();
+  });
+
+  it('cancels oversized banner image responses before returning undefined', async () => {
+    mocks.getShipBySlug.mockResolvedValueOnce({
+      name: 'Prospector',
+      images: {
+        store: null,
+        angledView: 'https://images.example.test/oversized-prospector.png',
+        angledViewMedium: null,
+        sideView: null,
+        sideViewMedium: null,
+        topView: null,
+        topViewMedium: null,
+        frontView: null,
+        frontViewMedium: null,
+        fleetchartImage: null,
+      },
+    });
+    const { response, wasCanceled } = cancellableResponse({
+      'content-type': 'image/png',
+      'content-length': String(11 * 1024 * 1024),
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => response));
+
+    await expect(getDiscordEventImageForMission(makeMission('Mining'))).resolves.toBeUndefined();
+
+    expect(wasCanceled()).toBe(true);
   });
 });

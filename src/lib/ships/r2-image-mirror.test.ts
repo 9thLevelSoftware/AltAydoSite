@@ -29,6 +29,23 @@ function imageResponseWithoutContentLength(body: string, contentType = 'image/pn
   });
 }
 
+function cancellableImageResponse(headers: HeadersInit): { response: Response; wasCanceled: () => boolean } {
+  let canceled = false;
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1, 2, 3]));
+    },
+    cancel() {
+      canceled = true;
+    },
+  });
+
+  return {
+    response: new Response(body, { status: 200, headers }),
+    wasCanceled: () => canceled,
+  };
+}
+
 function testShip(
   overrides: Partial<Omit<ShipDocument, '_id' | 'createdAt'>> = {}
 ): Omit<ShipDocument, '_id' | 'createdAt'> {
@@ -164,6 +181,30 @@ describe('r2-image-mirror', () => {
     expect(uploadClient.uploadObject).not.toHaveBeenCalled();
   });
 
+  it('cancels response bodies before rejecting oversized content-length downloads', async () => {
+    const uploadClient: ImageUploadClient = {
+      uploadObject: vi.fn(async () => undefined),
+    };
+    const { response, wasCanceled } = cancellableImageResponse({
+      'content-type': 'image/png',
+      'content-length': '100',
+    });
+
+    const result = await mirrorImageUrl({
+      sourceUrl: 'https://api.fleetyards.net/files/blobs/redirect/oversized.png',
+      keyPrefix: 'ships/ship-1',
+      fieldName: 'store',
+      uploadClient,
+      fetchImpl: vi.fn(async () => response),
+      config: createMirrorTestConfig({ maxImageBytes: 4 }),
+    });
+
+    expect(result.mirrored).toBe(false);
+    expect(result.entry.error).toContain('image exceeds 4 byte limit');
+    expect(wasCanceled()).toBe(true);
+    expect(uploadClient.uploadObject).not.toHaveBeenCalled();
+  });
+
   it('mirrors ship image fields in parallel', async () => {
     let activeFetches = 0;
     let maxActiveFetches = 0;
@@ -203,7 +244,7 @@ describe('r2-image-mirror', () => {
   it('detects FleetYards URLs and missing mirror metadata as backfill work', () => {
     const baseShip = {
       images: {
-        store: 'https://cdn.fleetyards.net/uploads/model.jpg',
+        store: 'https://fleetyards.net/files/representations/redirect/model.jpg',
         angledView: null,
         angledViewMedium: null,
         sideView: null,
@@ -223,6 +264,7 @@ describe('r2-image-mirror', () => {
     } satisfies Pick<ShipDocument, 'images' | 'manufacturer'>;
 
     expect(isFleetYardsUrl(baseShip.images.store)).toBe(true);
+    expect(isFleetYardsUrl('https://cdn.fleetyards.net/uploads/model.jpg')).toBe(true);
     expect(needsImageMirrorBackfill(baseShip)).toBe(true);
 
     expect(
@@ -235,7 +277,7 @@ describe('r2-image-mirror', () => {
         imageMirrors: {
           images: {
             store: {
-              sourceUrl: 'https://cdn.fleetyards.net/uploads/model.jpg',
+              sourceUrl: 'https://fleetyards.net/files/representations/redirect/model.jpg',
               mirroredUrl: 'https://images.aydocorp.space/ships/ship-1/store.png',
               contentHash: 'hash',
               contentType: 'image/png',

@@ -81,3 +81,20 @@ export function resolveShipImage(
 export function getShipPlaceholder(): string {
   return '';
 }
+
+export function isFleetYardsImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return hostname === 'api.fleetyards.net' ||
+      hostname === 'cdn.fleetyards.net' ||
+      hostname === 'fleetyards.net';
+  } catch {
+    return false;
+  }
+}
+
+export function shouldOptimizeShipImage(url: string | null | undefined): boolean {
+  return !!url && !isFleetYardsImageUrl(url);
+}

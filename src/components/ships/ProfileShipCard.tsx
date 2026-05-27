@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { AnimatePresence, motion } from 'motion/react';
-import { resolveShipImage } from '@/lib/ships/image';
+import { resolveShipImage, shouldOptimizeShipImage } from '@/lib/ships/image';
 import { formatCrew, formatCargo, formatSpeed, formatProductionStatus, formatSize } from '@/lib/ships/format';
 import type { UserShip } from '@/types/user';
 import type { ShipDocument } from '@/types/ship';
@@ -47,6 +47,7 @@ export default function ProfileShipCard({ ship, resolved }: ProfileShipCardProps
               height={60}
               loading="lazy"
               className="object-cover w-full h-full"
+              unoptimized={!shouldOptimizeShipImage(imgSrc)}
               onError={() => setImgError(true)}
             />
           ) : (
@@ -71,6 +72,7 @@ export default function ProfileShipCard({ ship, resolved }: ProfileShipCardProps
                 width={14}
                 height={14}
                 className="object-contain flex-shrink-0"
+                unoptimized={!shouldOptimizeShipImage(resolved.manufacturer.logo)}
               />
             )}
             <span className="text-[rgba(var(--mg-text),0.5)] text-xs truncate">

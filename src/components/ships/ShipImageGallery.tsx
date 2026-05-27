@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import Image from 'next/image';
 import { AnimatePresence, motion } from 'motion/react';
-import { resolveShipImage, getShipPlaceholder } from '@/lib/ships/image';
+import { resolveShipImage, getShipPlaceholder, shouldOptimizeShipImage } from '@/lib/ships/image';
 import type { ShipImages, ShipImageView } from '@/lib/ships/image';
 
 // ---------------------------------------------------------------------------
@@ -64,6 +64,7 @@ export default function ShipImageGallery({ images, shipName }: ShipImageGalleryP
               className="object-contain"
               sizes="480px"
               loading="eager"
+              unoptimized={!shouldOptimizeShipImage(mainSrc)}
               onError={handleMainError}
             />
           </motion.div>
@@ -74,6 +75,7 @@ export default function ShipImageGallery({ images, shipName }: ShipImageGalleryP
       <div className="flex justify-center gap-2">
         {views.map(({ view, label }) => {
           const isActive = activeView === view;
+          const thumbSrc = resolveShipImage(images, view);
           return (
             <button
               key={view}
@@ -91,12 +93,13 @@ export default function ShipImageGallery({ images, shipName }: ShipImageGalleryP
                 `}
               >
                 <Image
-                  src={resolveShipImage(images, view)}
+                  src={thumbSrc}
                   alt={`${shipName} - ${label}`}
                   fill
                   className="object-cover"
                   sizes="64px"
                   loading="eager"
+                  unoptimized={!shouldOptimizeShipImage(thumbSrc)}
                   onError={(e) => {
                     const target = e.currentTarget as HTMLImageElement;
                     target.src = getShipPlaceholder();

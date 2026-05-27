@@ -162,6 +162,26 @@ describe('planned mission Discord PATCH', () => {
     });
   });
 
+  it('uses a safe fallback end time when the stored mission date is invalid', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-01T00:00:00.000Z'));
+    try {
+      mocks.getPlannedMissionById.mockResolvedValueOnce(
+        makeMission({ scheduledDateTime: 'not-a-date', duration: 180 })
+      );
+
+      const response = await PATCH(makePatchRequest(), makeParams());
+
+      expect(response.status).toBe(200);
+      const [, updateParams] = mocks.updateScheduledEvent.mock.calls[0];
+      expect(updateParams).toMatchObject({
+        scheduledEndTime: '2026-06-01T02:00:00.000Z',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not PATCH terminal Discord events', async () => {
     mocks.getScheduledEvent.mockResolvedValueOnce({
       id: 'discord-event-1',

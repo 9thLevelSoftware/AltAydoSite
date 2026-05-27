@@ -38,6 +38,10 @@ function mapDiscordStatusToMissionStatus(discordStatus: number, currentMissionSt
 
 function getMissionEndTime(mission: PlannedMissionResponse): string {
   const startDate = new Date(mission.scheduledDateTime);
+  if (Number.isNaN(startDate.getTime())) {
+    return new Date(Date.now() + DEFAULT_DISCORD_EVENT_DURATION_MINUTES * 60 * 1000).toISOString();
+  }
+
   const durationMinutes = typeof mission.duration === 'number' && mission.duration > 0
     ? mission.duration
     : DEFAULT_DISCORD_EVENT_DURATION_MINUTES;
