@@ -76,7 +76,7 @@ function cleanBaseUrl(url: string): string {
   return withProtocol.replace(/\/$/, '');
 }
 
-function loadR2MirrorConfig(): R2MirrorConfig {
+export function loadR2MirrorConfig(): R2MirrorConfig {
   const accountId = process.env.CLOUDFLARE_R2_ACCOUNT_ID?.trim();
   const accessKeyId = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID?.trim();
   const secretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY?.trim();
@@ -118,23 +118,27 @@ function loadR2MirrorConfig(): R2MirrorConfig {
   };
 }
 
+export function createR2S3Client(config: R2MirrorConfig): S3Client {
+  const clientConfig: S3ClientConfig = {
+    region: 'auto',
+    endpoint: config.endpoint,
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    },
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+  };
+
+  return new S3Client(clientConfig);
+}
+
 class R2ImageUploadClient implements ImageUploadClient {
   private readonly client: S3Client;
   private readonly bucketName: string;
 
   constructor(config: R2MirrorConfig) {
-    const clientConfig: S3ClientConfig = {
-      region: 'auto',
-      endpoint: config.endpoint,
-      credentials: {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-      },
-      requestChecksumCalculation: 'WHEN_REQUIRED',
-      responseChecksumValidation: 'WHEN_REQUIRED',
-    };
-
-    this.client = new S3Client(clientConfig);
+    this.client = createR2S3Client(config);
     this.bucketName = config.bucketName;
   }
 
@@ -224,12 +228,43 @@ async function downloadImage(
     throw new Error(`image exceeds ${config.maxImageBytes} byte limit`);
   }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.length > config.maxImageBytes) {
-    throw new Error(`image exceeds ${config.maxImageBytes} byte limit`);
-  }
+  const buffer = await readResponseBuffer(response, config.maxImageBytes);
 
   return { buffer, contentType };
+}
+
+async function readResponseBuffer(response: Response, maxBytes: number): Promise<Buffer> {
+  if (!response.body) {
+    const fallbackBuffer = Buffer.from(await response.arrayBuffer());
+    if (fallbackBuffer.length > maxBytes) {
+      throw new Error(`image exceeds ${maxBytes} byte limit`);
+    }
+    return fallbackBuffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new Error(`image exceeds ${maxBytes} byte limit`);
+      }
+
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks, totalBytes);
 }
 
 export function isFleetYardsUrl(url: string | null | undefined): boolean {
@@ -342,7 +377,7 @@ export async function mirrorImageUrl(
 
 export async function mirrorShipAssets(
   ship: Omit<ShipDocument, '_id' | 'createdAt'>,
-  existing?: Pick<ShipDocument, 'images' | 'manufacturer' | 'imageMirrors'>,
+  existing?: Partial<Pick<ShipDocument, 'images' | 'manufacturer' | 'imageMirrors'>>,
   options?: {
     uploadClient?: ImageUploadClient;
     fetchImpl?: typeof fetch;
@@ -370,7 +405,7 @@ export async function mirrorShipAssets(
         fallbackShip.images[field] = previousDisplayUrl;
       }
     }
-    if (existing?.manufacturer.logo && !isFleetYardsUrl(existing.manufacturer.logo)) {
+    if (existing?.manufacturer?.logo && !isFleetYardsUrl(existing.manufacturer.logo)) {
       fallbackShip.manufacturer.logo = existing.manufacturer.logo;
     }
     return {
@@ -396,19 +431,25 @@ export async function mirrorShipAssets(
   let failedImages = 0;
   const errors: string[] = [];
 
-  for (const field of SHIP_IMAGE_FIELDS) {
-    const sourceUrl = ship.images[field];
-    const result = await mirrorImageUrl({
-      sourceUrl,
-      keyPrefix,
-      fieldName: field,
-      previous: existing?.imageMirrors?.images?.[field],
-      previousDisplayUrl: existing?.images?.[field],
-      uploadClient: options?.uploadClient,
-      fetchImpl: options?.fetchImpl,
-      config,
-    });
+  const imageResults = await Promise.all(
+    SHIP_IMAGE_FIELDS.map(async (field) => {
+      const sourceUrl = ship.images[field];
+      const result = await mirrorImageUrl({
+        sourceUrl,
+        keyPrefix,
+        fieldName: field,
+        previous: existing?.imageMirrors?.images?.[field],
+        previousDisplayUrl: existing?.images?.[field],
+        uploadClient: options?.uploadClient,
+        fetchImpl: options?.fetchImpl,
+        config,
+      });
 
+      return { field, result };
+    })
+  );
+
+  for (const { field, result } of imageResults) {
     mirroredShip.images[field] = result.displayUrl || null;
     mirroredShip.imageMirrors!.images[field] = result.entry;
 
@@ -456,30 +497,32 @@ function countConfiguredImageUrls(ship: Omit<ShipDocument, '_id' | 'createdAt'>)
 }
 
 export function needsImageMirrorBackfill(
-  existing: Pick<ShipDocument, 'images' | 'manufacturer' | 'imageMirrors'> | undefined
+  existing: Partial<Pick<ShipDocument, 'images' | 'manufacturer' | 'imageMirrors'>> | undefined
 ): boolean {
   if (!existing) return true;
 
-  if (SHIP_IMAGE_FIELDS.some((field) => isFleetYardsUrl(existing.images[field]))) {
+  if (!existing.images || !existing.manufacturer || !existing.imageMirrors?.images) {
     return true;
   }
 
-  if (isFleetYardsUrl(existing.manufacturer.logo)) {
+  if (SHIP_IMAGE_FIELDS.some((field) => isFleetYardsUrl(existing.images?.[field]))) {
     return true;
   }
 
-  if (!existing.imageMirrors) {
+  if (isFleetYardsUrl(existing.manufacturer?.logo)) {
     return true;
   }
 
   for (const field of SHIP_IMAGE_FIELDS) {
     const displayUrl = existing.images[field];
-    if (displayUrl && !existing.imageMirrors.images[field]?.mirroredUrl) {
+    const mirrorEntry = existing.imageMirrors.images[field];
+    if (displayUrl && (!mirrorEntry?.mirroredUrl || mirrorEntry.error)) {
       return true;
     }
   }
 
-  if (existing.manufacturer.logo && !existing.imageMirrors.manufacturerLogo?.mirroredUrl) {
+  const logoEntry = existing.imageMirrors.manufacturerLogo;
+  if (existing.manufacturer.logo && (!logoEntry?.mirroredUrl || logoEntry.error)) {
     return true;
   }
 

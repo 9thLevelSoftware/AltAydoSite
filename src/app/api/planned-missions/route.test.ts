@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   getPlannedMissionById: vi.fn(),
   updatePlannedMission: vi.fn(),
   canUserModifyMission: vi.fn(),
+  getDiscordService: vi.fn(),
+  createScheduledEvent: vi.fn(),
+  getDiscordEventImageForMission: vi.fn(),
 }));
 
 vi.mock('next-auth', () => ({
@@ -29,13 +32,15 @@ vi.mock('@/lib/planned-mission-storage', () => ({
 }));
 
 vi.mock('@/lib/discord', () => ({
-  getDiscordService: vi.fn(() => ({
-    isConfigured: () => false,
-  })),
+  getDiscordService: mocks.getDiscordService,
 }));
 
 vi.mock('@/lib/discord-event-description', () => ({
   buildEventDescription: vi.fn(() => 'Mission description'),
+}));
+
+vi.mock('@/lib/discord-event-image', () => ({
+  getDiscordEventImageForMission: mocks.getDiscordEventImageForMission,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -93,6 +98,15 @@ describe('planned missions POST', () => {
       ...mission,
       id: 'mission-1',
     }));
+    mocks.getDiscordService.mockReturnValue({
+      isConfigured: () => false,
+      createScheduledEvent: mocks.createScheduledEvent,
+    });
+    mocks.createScheduledEvent.mockResolvedValue({
+      id: 'discord-event-1',
+      guild_id: 'guild-1',
+    });
+    mocks.getDiscordEventImageForMission.mockResolvedValue(undefined);
   });
 
   it('returns a validation error instead of throwing for malformed ship requirement entries', async () => {
@@ -138,6 +152,33 @@ describe('planned missions POST', () => {
     expect(createdMission.createdAt).toBeUndefined();
     expect(createdMission.updatedAt).toBeUndefined();
     expect(createdMission.createdBy).toBe('user-1');
+  });
+
+  it('passes the primary-activity banner image when auto-publishing a scheduled mission', async () => {
+    mocks.getDiscordService.mockReturnValueOnce({
+      isConfigured: () => true,
+      createScheduledEvent: mocks.createScheduledEvent,
+    });
+    mocks.getDiscordEventImageForMission.mockResolvedValueOnce('data:image/jpeg;base64,banner');
+
+    const response = await POST(makeRequest({
+      ...validMissionPayload,
+      status: 'SCHEDULED',
+      duration: 90,
+      location: 'Lorville',
+    }));
+
+    expect(response.status).toBe(201);
+    expect(mocks.getDiscordEventImageForMission).toHaveBeenCalledWith(expect.objectContaining({
+      primaryActivity: 'Mining',
+    }));
+    expect(mocks.createScheduledEvent).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Valid Mission',
+      scheduledStartTime: '2026-06-01T20:00:00.000Z',
+      scheduledEndTime: '2026-06-01T21:30:00.000Z',
+      location: 'Lorville',
+      image: 'data:image/jpeg;base64,banner',
+    }));
   });
 
   it('validates ship requirements on requirement-only PUT updates', async () => {

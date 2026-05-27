@@ -48,6 +48,10 @@ function compactErrors(errors: string[]): string[] {
 }
 
 function rawShipIdentity(raw: unknown): { id?: string; upstreamUpdatedAt: string; name: string } {
+  if (!raw || typeof raw !== 'object') {
+    return { upstreamUpdatedAt: '', name: 'unknown' };
+  }
+
   const record = raw as Record<string, unknown>;
   return {
     id: typeof record.id === 'string' ? record.id : undefined,

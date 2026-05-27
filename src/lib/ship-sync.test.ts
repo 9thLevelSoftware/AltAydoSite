@@ -277,6 +277,23 @@ describe('syncShipsFromFleetYards', () => {
     expect(upsertShipsMock).toHaveBeenCalledTimes(1);
   });
 
+  it('records validation errors instead of crashing on non-object FleetYards records', async () => {
+    fetchAllShipsMock.mockResolvedValue({
+      ships: [null as unknown as FleetYardsShipResponse],
+      pagesProcessed: 1,
+      errors: [],
+    });
+
+    const result = await syncShipsFromFleetYards();
+
+    expect(result.status).toBe('failed');
+    expect(result.skippedShips).toBe(1);
+    expect(result.errors[0]).toContain('Validation failed for "unknown"');
+    expect(mirrorShipAssetsMock).not.toHaveBeenCalled();
+    expect(upsertShipsMock).not.toHaveBeenCalled();
+    expect(releaseShipSyncLockMock).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'lock-owner' }));
+  });
+
   it('returns a lockSkipped status without fetching when another sync holds the lock', async () => {
     acquireShipSyncLockMock.mockResolvedValue(null);
     getLatestSyncStatusMock.mockResolvedValue({

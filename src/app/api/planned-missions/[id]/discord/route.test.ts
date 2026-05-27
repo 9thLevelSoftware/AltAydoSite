@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getScheduledEvent: vi.fn(),
   updateScheduledEvent: vi.fn(),
   buildEventDescription: vi.fn(),
+  getDiscordEventImageForMission: vi.fn(),
 }));
 
 vi.mock('next-auth', () => ({
@@ -37,6 +38,10 @@ vi.mock('@/lib/discord', () => ({
 
 vi.mock('@/lib/discord-event-description', () => ({
   buildEventDescription: mocks.buildEventDescription,
+}));
+
+vi.mock('@/lib/discord-event-image', () => ({
+  getDiscordEventImageForMission: mocks.getDiscordEventImageForMission,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -93,6 +98,7 @@ describe('planned mission Discord PATCH', () => {
       name: 'Updated Mission',
     });
     mocks.buildEventDescription.mockReturnValue('Updated Discord description');
+    mocks.getDiscordEventImageForMission.mockResolvedValue('data:image/jpeg;base64,banner');
   });
 
   it('omits scheduledStartTime when updating an active Discord event', async () => {
@@ -114,6 +120,7 @@ describe('planned mission Discord PATCH', () => {
       description: 'Updated Discord description',
       scheduledEndTime: '2026-06-01T23:00:00.000Z',
       location: 'Area18',
+      image: 'data:image/jpeg;base64,banner',
     });
     expect(updateParams).not.toHaveProperty('scheduledStartTime');
   });
@@ -127,7 +134,19 @@ describe('planned mission Discord PATCH', () => {
     expect(updateParams).toMatchObject({
       scheduledStartTime: '2026-06-01T20:00:00.000Z',
       scheduledEndTime: '2026-06-01T23:00:00.000Z',
+      image: 'data:image/jpeg;base64,banner',
     });
+  });
+
+  it('omits image when activity banner resolution fails', async () => {
+    mocks.getDiscordEventImageForMission.mockResolvedValueOnce(undefined);
+
+    const response = await PATCH(makePatchRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+
+    const [, updateParams] = mocks.updateScheduledEvent.mock.calls[0];
+    expect(updateParams).not.toHaveProperty('image');
   });
 
   it('uses the default Discord duration when mission duration is cleared', async () => {
@@ -154,6 +173,24 @@ describe('planned mission Discord PATCH', () => {
     const response = await PATCH(makePatchRequest(), makeParams());
 
     expect(response.status).toBe(409);
+    expect(mocks.updateScheduledEvent).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when the stored Discord event is missing an event ID', async () => {
+    mocks.getPlannedMissionById.mockResolvedValueOnce(
+      makeMission({
+        discordEvent: {
+          guildId: 'guild-1',
+          createdAt: '2026-05-01T00:00:00.000Z',
+          status: 'SCHEDULED',
+        },
+      })
+    );
+
+    const response = await PATCH(makePatchRequest(), makeParams());
+
+    expect(response.status).toBe(400);
+    expect(mocks.getScheduledEvent).not.toHaveBeenCalled();
     expect(mocks.updateScheduledEvent).not.toHaveBeenCalled();
   });
 });
