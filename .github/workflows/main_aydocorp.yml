@@ -148,10 +148,24 @@ jobs:
           done
 
           echo "Triggering FleetYards ship sync..."
-          curl --silent --show-error --fail-with-body \
+          sync_body="$(mktemp)"
+          sync_status="000"
+          if sync_status="$(curl --silent --show-error \
+            --output "${sync_body}" \
+            --write-out "%{http_code}" \
             --request POST \
             --header "Authorization: Bearer ${CRON_SECRET}" \
-            "${APP_URL}/api/cron/ship-sync"
+            "${APP_URL}/api/cron/ship-sync")"; then
+            cat "${sync_body}"
+            if [ "${sync_status}" -lt 200 ] || [ "${sync_status}" -ge 300 ]; then
+              echo "::warning::Ship sync returned HTTP ${sync_status}; deploy already completed."
+            fi
+          else
+            sync_exit=$?
+            cat "${sync_body}" || true
+            echo "::warning::Ship sync request failed with curl exit ${sync_exit}; deploy already completed."
+          fi
+          rm -f "${sync_body}"
 
           echo "Warming mirrored ship images..."
           warm_body="$(mktemp)"

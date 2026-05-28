@@ -27,10 +27,28 @@ jobs:
           APP_URL="${APP_URL%/}"
 
           echo "Triggering FleetYards ship sync at ${APP_URL}..."
-          curl --silent --show-error --fail-with-body \
+          sync_body="$(mktemp)"
+          sync_status="000"
+          if sync_status="$(curl --silent --show-error \
+            --output "${sync_body}" \
+            --write-out "%{http_code}" \
             --request POST \
             --header "Authorization: Bearer ${CRON_SECRET}" \
-            "${APP_URL}/api/cron/ship-sync"
+            "${APP_URL}/api/cron/ship-sync")"; then
+            cat "${sync_body}"
+            if [ "${sync_status}" -lt 200 ] || [ "${sync_status}" -ge 300 ]; then
+              echo "Ship sync returned HTTP ${sync_status}."
+              rm -f "${sync_body}"
+              exit 1
+            fi
+          else
+            sync_exit=$?
+            cat "${sync_body}" || true
+            rm -f "${sync_body}"
+            echo "Ship sync request failed with curl exit ${sync_exit}."
+            exit "${sync_exit}"
+          fi
+          rm -f "${sync_body}"
 
       - name: Warm mirrored ship images
         env:
