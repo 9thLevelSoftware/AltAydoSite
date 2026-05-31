@@ -26,15 +26,52 @@ jobs:
           APP_URL="${APP_URL:-https://aydocorp.space}"
           APP_URL="${APP_URL%/}"
 
+          read_sync_status() {
+            python3 - "$1" <<'PY'
+          import json
+          import sys
+
+          try:
+              with open(sys.argv[1], encoding="utf-8") as handle:
+                  data = json.load(handle)
+          except Exception:
+              print("0 unknown null")
+              raise SystemExit(0)
+
+          try:
+              sync_version = int(data.get("syncVersion") or 0)
+          except Exception:
+              sync_version = 0
+
+          status = data.get("status") or "unknown"
+          last_sync_at = data.get("lastSyncAt") or "null"
+          print(f"{sync_version} {status} {last_sync_at}")
+          PY
+          }
+
+          baseline_body="$(mktemp)"
+          baseline_version="0"
+          if curl --silent --show-error --fail \
+            --output "${baseline_body}" \
+            --header "Cache-Control: no-cache" \
+            "${APP_URL}/api/ships/sync-status?baseline=$(date +%s%N)"; then
+            baseline_line="$(read_sync_status "${baseline_body}")"
+            baseline_version="${baseline_line%% *}"
+          else
+            echo "::warning::Could not read baseline ship sync status; assuming version 0."
+          fi
+          rm -f "${baseline_body}"
+
           echo "Triggering FleetYards ship sync at ${APP_URL}..."
           sync_body="$(mktemp)"
           sync_status="000"
           if sync_status="$(curl --silent --show-error \
+            --max-time 30 \
             --output "${sync_body}" \
             --write-out "%{http_code}" \
             --request POST \
             --header "Authorization: Bearer ${CRON_SECRET}" \
-            "${APP_URL}/api/cron/ship-sync")"; then
+            "${APP_URL}/api/cron/ship-sync?mode=async")"; then
             cat "${sync_body}"
             if [ "${sync_status}" -lt 200 ] || [ "${sync_status}" -ge 300 ]; then
               echo "Ship sync returned HTTP ${sync_status}."
@@ -49,6 +86,51 @@ jobs:
             exit "${sync_exit}"
           fi
           rm -f "${sync_body}"
+
+          echo "Waiting for ship sync to publish a new status after version ${baseline_version}..."
+          completed="false"
+          for attempt in {1..45}; do
+            poll_body="$(mktemp)"
+            poll_status="000"
+            if poll_status="$(curl --silent --show-error \
+              --output "${poll_body}" \
+              --write-out "%{http_code}" \
+              --header "Cache-Control: no-cache" \
+              "${APP_URL}/api/ships/sync-status?poll=$(date +%s%N)")"; then
+              if [ "${poll_status}" -ge 200 ] && [ "${poll_status}" -lt 300 ]; then
+                status_line="$(read_sync_status "${poll_body}")"
+                sync_version="$(echo "${status_line}" | awk '{print $1}')"
+                ship_status="$(echo "${status_line}" | awk '{print $2}')"
+                last_sync_at="$(echo "${status_line}" | cut -d' ' -f3-)"
+                echo "Ship sync status attempt ${attempt}: version=${sync_version}, status=${ship_status}, lastSyncAt=${last_sync_at}"
+
+                if [ "${sync_version}" -gt "${baseline_version}" ]; then
+                  rm -f "${poll_body}"
+                  if [ "${ship_status}" = "failed" ]; then
+                    echo "Ship sync completed with failed status."
+                    exit 1
+                  fi
+                  completed="true"
+                  break
+                fi
+              else
+                echo "::warning::Sync status poll returned HTTP ${poll_status}."
+              fi
+            else
+              poll_exit=$?
+              echo "::warning::Sync status poll failed with curl exit ${poll_exit}."
+            fi
+            rm -f "${poll_body}"
+
+            if [ "${attempt}" -lt 45 ]; then
+              sleep 20
+            fi
+          done
+
+          if [ "${completed}" != "true" ]; then
+            echo "Ship sync did not publish a new status within polling window."
+            exit 1
+          fi
 
       - name: Warm mirrored ship images
         env:
