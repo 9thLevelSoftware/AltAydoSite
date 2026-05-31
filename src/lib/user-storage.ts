@@ -1,5 +1,6 @@
 import { User } from '@/types/user';
 import crypto from 'crypto';
+import type { Db } from 'mongodb';
 import { getDb } from './mongodb';
 import * as localStorage from './local-storage';
 import { StaleDocumentError } from './storage-errors';
@@ -12,6 +13,22 @@ export { StaleDocumentError } from './storage-errors';
 let usingFallback = false;
 // Flag to prevent repeated connection attempts if we know it's down
 let connectionChecked = false;
+
+const caseInsensitiveCollation = { locale: 'en', strength: 2 } as const;
+
+async function findUserByLegacyField(
+  db: Db,
+  field: 'email' | 'aydoHandle',
+  value: string
+) {
+  return await db.collection('users').findOne(
+    { [field]: value },
+    {
+      projection: { _id: 0 },
+      collation: caseInsensitiveCollation,
+    }
+  );
+}
 
 async function shouldUseFallback(): Promise<boolean> {
   if (usingFallback) return true;
@@ -61,12 +78,17 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   try {
     const db = await getDb();
     const emailLower = email.toLowerCase();
-    // SEC-03: Use normalized field only (no $regex) to prevent ReDoS.
-    // All records have emailLower since Phase 8 migration.
-    const doc = await db.collection('users').findOne(
+    let doc = await db.collection('users').findOne(
       { emailLower },
       { projection: { _id: 0 } }
     );
+
+    if (!doc) {
+      // Legacy production records may predate normalized fields. Collation keeps
+      // the lookup case-insensitive without reintroducing regex-based matching.
+      doc = await findUserByLegacyField(db, 'email', email);
+    }
+
     if (!doc) return null;
     if ((doc as any).__v === undefined) (doc as any).__v = 0;
     return doc as unknown as User;
@@ -87,12 +109,17 @@ export async function getUserByHandle(aydoHandle: string): Promise<User | null> 
   try {
     const db = await getDb();
     const aydoHandleLower = aydoHandle.toLowerCase();
-    // SEC-03: Use normalized field only (no $regex) to prevent ReDoS.
-    // All records have aydoHandleLower since Phase 8 migration.
-    const doc = await db.collection('users').findOne(
+    let doc = await db.collection('users').findOne(
       { aydoHandleLower },
       { projection: { _id: 0 } }
     );
+
+    if (!doc) {
+      // Legacy production records may predate normalized fields. Collation keeps
+      // the lookup case-insensitive without reintroducing regex-based matching.
+      doc = await findUserByLegacyField(db, 'aydoHandle', aydoHandle);
+    }
+
     if (!doc) return null;
     if ((doc as any).__v === undefined) (doc as any).__v = 0;
     return doc as unknown as User;

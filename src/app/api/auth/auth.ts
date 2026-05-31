@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 // SECURITY FIX: Hardcoded admin user removed for production security
 // Admin users must be created in the database with secure, unique passwords
 // Never hardcode credentials in source code
+const DATABASE_CONNECTION_ERROR = 'Database connection error';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -57,6 +58,15 @@ export const authOptions: NextAuthOptions = {
           // Try to find user by handle
           user = await userStorage.getUserByHandle(credentials.aydoHandle);
 
+          if (process.env.NODE_ENV === 'production' && userStorage.isUsingFallbackStorage()) {
+            logger.error(
+              'Credentials authentication unavailable because user storage is in fallback mode',
+              undefined,
+              { module: 'auth' }
+            );
+            throw new Error(DATABASE_CONNECTION_ERROR);
+          }
+
           if (!user) {
             return null;
           }
@@ -84,7 +94,11 @@ export const authOptions: NextAuthOptions = {
             rsiAccountName: user.rsiAccountName || null
           };
         } catch (error) {
-          logger.error('Authentication error', error instanceof Error ? error : new Error(String(error)), { module: 'auth' });
+          const authError = error instanceof Error ? error : new Error(String(error));
+          logger.error('Authentication error', authError, { module: 'auth' });
+          if (authError.message === DATABASE_CONNECTION_ERROR) {
+            throw authError;
+          }
           throw new Error('Authentication error');
         }
       }

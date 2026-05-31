@@ -24,6 +24,8 @@ yarn-error.log*
 
 # local env files
 .env*.local
+mongodb-connection.txt
+**/mongodb-connection.txt
 
 # vercel
 .vercel
