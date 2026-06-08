@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Personnel File Chip — Mockup</title>
+    <style>
+      :root {
+        --mg-primary: 0, 215, 255;
+        --mg-accent: 30, 250, 255;
+        --mg-text: 180, 240, 255;
+        --mg-success: 80, 255, 180;
+        --mg-danger: 255, 110, 110;
+        --mg-panel-dark: 0, 12, 24;
+        --mg-background: 0, 0, 0;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        background: #000;
+        color: #fff;
+        font-family: 'Quantify', 'Inter', system-ui, sans-serif;
+        min-height: 100vh;
+        padding: 0;
+      }
+      .bg-grid {
+        position: fixed; inset: 0; pointer-events: none; z-index: 0;
+        background:
+          radial-gradient(ellipse at 20% 10%, rgba(0,80,120,0.18), transparent 60%),
+          radial-gradient(ellipse at 80% 90%, rgba(0,40,80,0.25), transparent 60%);
+      }
+      .scan {
+        position: fixed; top: 0; left: 0; right: 0; height: 1px;
+        background: linear-gradient(to right, transparent, rgba(var(--mg-primary),0.5), transparent);
+        box-shadow: 0 0 8px rgba(var(--mg-primary),0.3);
+        animation: scan 6s linear infinite;
+        z-index: 30;
+      }
+      @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+
+      .frame {
+        position: relative; z-index: 10;
+        max-width: 1100px; margin: 0 auto;
+        padding: 32px 24px;
+      }
+      .label {
+        font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase;
+        color: rgba(var(--mg-text), 0.55);
+        margin: 28px 0 8px;
+      }
+      .label .tag {
+        display: inline-block; padding: 2px 8px; margin-right: 8px;
+        border: 1px solid rgba(var(--mg-primary), 0.4);
+        color: rgba(var(--mg-primary), 1);
+        font-size: 10px;
+      }
+
+      /* Top bar container */
+      .topbar {
+        width: 100%;
+        background: rgba(0,10,20,0.6);
+        border-bottom: 1px solid rgba(var(--mg-primary), 0.1);
+        padding: 6px 0;
+      }
+      .topbar-inner {
+        max-width: 1100px; margin: 0 auto;
+        padding: 0 24px;
+        display: flex; justify-content: flex-end; align-items: center; gap: 14px;
+      }
+
+      /* OLD design */
+      .old {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 11px; letter-spacing: 0.12em;
+      }
+      .old .welcome { color: rgba(var(--mg-text), 0.7); }
+      .old .name {
+        color: rgba(var(--mg-primary), 1);
+        text-decoration: none;
+        border-bottom: 1px dotted rgba(var(--mg-primary), 0.5);
+      }
+      .old .signout {
+        background: none; border: 0; color: #fff; cursor: pointer;
+        font-size: 11px; letter-spacing: 0.12em;
+      }
+
+      /* NEW design: Personnel File chip */
+      .pf-chip {
+        position: relative;
+        display: inline-flex;
+        align-items: stretch;
+        overflow: hidden;
+        border: 1px solid rgba(var(--mg-primary), 0.4);
+        background: rgba(var(--mg-panel-dark), 0.55);
+        font-family: 'Quantify', sans-serif;
+        text-decoration: none;
+        color: inherit;
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+      .pf-chip:hover {
+        background: rgba(var(--mg-primary), 0.08);
+        border-color: rgba(var(--mg-primary), 0.75);
+        box-shadow: 0 0 14px rgba(var(--mg-primary), 0.35), inset 0 0 10px rgba(var(--mg-primary), 0.08);
+      }
+
+      /* scanline sweep */
+      .pf-chip .pf-scan {
+        position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+      }
+      .pf-chip .pf-scan span {
+        position: absolute; left: 0; width: 100%; height: 1px;
+        background: linear-gradient(to right, transparent, rgba(var(--mg-primary), 0.7), transparent);
+        animation: pfsweep 5s linear infinite;
+      }
+      @keyframes pfsweep {
+        0% { transform: translateY(-10%); }
+        50% { transform: translateY(110%); }
+        100% { transform: translateY(-10%); }
+      }
+
+      /* corners */
+      .pf-chip .pf-corner {
+        position: absolute; width: 8px; height: 8px;
+        border-color: rgba(var(--mg-primary), 0.9);
+        pointer-events: none;
+      }
+      .pf-chip .pf-corner.tl { top: 0; left: 0; border-top: 1px solid; border-left: 1px solid; }
+      .pf-chip .pf-corner.tr { top: 0; right: 0; border-top: 1px solid; border-right: 1px solid; }
+      .pf-chip .pf-corner.bl { bottom: 0; left: 0; border-bottom: 1px solid; border-left: 1px solid; }
+      .pf-chip .pf-corner.br { bottom: 0; right: 0; border-bottom: 1px solid; border-right: 1px solid; }
+
+      /* icon well */
+      .pf-chip .pf-iconwell {
+        position: relative;
+        display: flex; align-items: center; justify-content: center;
+        width: 36px;
+        background: rgba(var(--mg-primary), 0.06);
+        border-right: 1px solid rgba(var(--mg-primary), 0.25);
+      }
+      .pf-chip .pf-iconwell svg {
+        width: 16px; height: 16px;
+        color: rgba(var(--mg-primary), 0.9);
+        transition: color 0.3s;
+      }
+      .pf-chip:hover .pf-iconwell svg { color: rgba(var(--mg-primary), 1); }
+      .pf-chip .pf-pip {
+        position: absolute; top: 6px; right: 6px;
+        width: 6px; height: 6px; border-radius: 50%;
+        background: rgba(var(--mg-success), 1);
+        box-shadow: 0 0 4px rgba(var(--mg-success), 0.9);
+        animation: pip 2.2s ease-in-out infinite;
+      }
+      @keyframes pip {
+        0%, 100% { opacity: 0.45; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.15); }
+      }
+
+      /* text */
+      .pf-chip .pf-text {
+        display: flex; flex-direction: column; justify-content: center;
+        padding: 6px 10px; gap: 4px; min-width: 0;
+      }
+      .pf-chip .pf-label {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+        color: rgba(var(--mg-text), 0.55);
+        white-space: nowrap;
+        transition: color 0.3s;
+      }
+      .pf-chip:hover .pf-label { color: rgba(var(--mg-text), 0.85); }
+      .pf-chip .pf-label::before {
+        content: ''; display: inline-block; width: 4px; height: 4px;
+        background: rgba(var(--mg-primary), 0.7);
+      }
+      .pf-chip .pf-name {
+        font-size: 12px; letter-spacing: 0.12em;
+        color: rgba(var(--mg-primary), 1);
+        max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+
+      /* arrow */
+      .pf-chip .pf-arrow {
+        display: flex; align-items: center; justify-content: center;
+        width: 28px;
+        border-left: 1px solid rgba(var(--mg-primary), 0.25);
+        background: rgba(var(--mg-primary), 0.04);
+        transition: background 0.3s;
+      }
+      .pf-chip:hover .pf-arrow { background: rgba(var(--mg-primary), 0.12); }
+      .pf-chip .pf-arrow svg {
+        width: 12px; height: 12px;
+        color: rgba(var(--mg-primary), 0.85);
+        animation: nudge 1.6s ease-in-out infinite alternate;
+        transition: color 0.3s;
+      }
+      .pf-chip:hover .pf-arrow svg { color: rgba(var(--mg-primary), 1); }
+      @keyframes nudge { from { transform: translateX(0); } to { transform: translateX(2px); } }
+
+      /* de-emphasized sign-out */
+      .pf-signout {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: none; border: 0;
+        font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+        color: rgba(var(--mg-text), 0.4);
+        cursor: pointer;
+        font-family: 'Quantify', sans-serif;
+        transition: color 0.2s;
+      }
+      .pf-signout:hover { color: rgba(var(--mg-danger), 0.9); }
+      .pf-signout svg { width: 12px; height: 12px; }
+
+      /* full-page demo for context */
+      .hero {
+        max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px;
+        position: relative; z-index: 10;
+      }
+      .hero h1 {
+        font-size: 28px; letter-spacing: 0.16em; margin: 0 0 8px;
+        color: rgba(var(--mg-primary), 1);
+        text-shadow: 0 0 10px rgba(var(--mg-primary), 0.3);
+      }
+      .hero p {
+        color: rgba(var(--mg-text), 0.7); max-width: 720px; line-height: 1.7;
+        font-size: 13px; letter-spacing: 0.06em;
+      }
+
+      /* grid layout for comparison */
+      .compare {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px;
+      }
+      @media (max-width: 760px) { .compare { grid-template-columns: 1fr; } }
+      .col {
+        border: 1px solid rgba(var(--mg-primary), 0.2);
+        background: rgba(var(--mg-panel-dark), 0.4);
+        padding: 16px;
+      }
+      .col h3 {
+        margin: 0 0 12px; font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase;
+        color: rgba(var(--mg-text), 0.65);
+      }
+      .col .topbar { margin: 0 -16px 0; }
+
+      /* hover-target note */
+      .hover-note {
+        font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+        color: rgba(var(--mg-text), 0.4); margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <div class="scan"></div>
+
+    <!-- Top bar — the bit we're changing -->
+    <div class="topbar">
+      <div class="topbar-inner">
+        <!-- NEW chip -->
+        <a href="#new" class="pf-chip" title="Access your personnel file" aria-label="Access your personnel file">
+          <span class="pf-scan"><span></span></span>
+          <span class="pf-corner tl"></span>
+          <span class="pf-corner tr"></span>
+          <span class="pf-corner bl"></span>
+          <span class="pf-corner br"></span>
+
+          <span class="pf-iconwell">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <rect x="3" y="5" width="18" height="14" rx="1" />
+              <circle cx="9" cy="11" r="2" />
+              <path d="M14 9.5h4M14 13h4M6 16.2c.4-1.4 1.6-2.4 3-2.4s2.6 1 3 2.4" stroke-linecap="round" />
+            </svg>
+            <span class="pf-pip"></span>
+          </span>
+
+          <span class="pf-text">
+            <span class="pf-label">Personnel File</span>
+            <span class="pf-name">Cmdr. J. Vandenberg</span>
+          </span>
+
+          <span class="pf-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+        </a>
+
+        <button class="pf-signout" title="Sign out of your account">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" stroke-linecap="round" />
+            <path d="M10 17l-5-5 5-5M5 12h11" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          Sign Out
+        </button>
+      </div>
+    </div>
+
+    <div class="frame">
+      <div class="hero">
+        <h1>PROFILE LINK — DESIGN PROPOSAL</h1>
+        <p>
+          The current "Welcome, [Name]" pattern hides the click affordance. The new chip is
+          framed as an in-universe <strong style="color:rgba(var(--mg-primary),1)">Personnel File</strong>
+          data card — clear label, ID-card icon, status pip, animated chevron, scanline sweep,
+          and corner brackets. Hover the chip in the bar above to see the glow brighten and the
+          arrow nudge right.
+        </p>
+
+        <div class="label"><span class="tag">A</span> Side-by-side: current vs proposed</div>
+        <div class="compare">
+          <div class="col">
+            <h3>Current — invisible affordance</h3>
+            <div class="topbar">
+              <div class="topbar-inner">
+                <div class="old">
+                  <span class="welcome">Welcome,</span>
+                  <a href="#" class="name">Cmdr. J. Vandenberg</a>
+                </div>
+                <button class="old signout">Sign Out</button>
+              </div>
+            </div>
+            <p class="hover-note">↳ Users don't realize the name is a link</p>
+          </div>
+          <div class="col">
+            <h3>Proposed — clear "click to view profile"</h3>
+            <div class="topbar">
+              <div class="topbar-inner">
+                <a href="#" class="pf-chip" title="Access your personnel file">
+                  <span class="pf-scan"><span></span></span>
+                  <span class="pf-corner tl"></span>
+                  <span class="pf-corner tr"></span>
+                  <span class="pf-corner bl"></span>
+                  <span class="pf-corner br"></span>
+                  <span class="pf-iconwell">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                      <rect x="3" y="5" width="18" height="14" rx="1" />
+                      <circle cx="9" cy="11" r="2" />
+                      <path d="M14 9.5h4M14 13h4M6 16.2c.4-1.4 1.6-2.4 3-2.4s2.6 1 3 2.4" stroke-linecap="round" />
+                    </svg>
+                    <span class="pf-pip"></span>
+                  </span>
+                  <span class="pf-text">
+                    <span class="pf-label">Personnel File</span>
+                    <span class="pf-name">Cmdr. J. Vandenberg</span>
+                  </span>
+                  <span class="pf-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                </a>
+                <button class="pf-signout">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" stroke-linecap="round" />
+                    <path d="M10 17l-5-5 5-5M5 12h11" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  Sign Out
+                </button>
+              </div>
+            </div>
+            <p class="hover-note">↳ Hover the chip — glow, scanline, arrow nudge all confirm "click me"</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
