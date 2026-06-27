@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
 import sharp from 'sharp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACTIVITIES } from '@/types/MissionPlanning';
@@ -16,12 +17,19 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+const OLD_GENERATED_SALVAGE_BANNER_SHA256 =
+  '29b665c06b1ae28d1213b954226a50809d75186218cb74154c2faca6a4a1d562';
+
 function makeMission(primaryActivity: (typeof ACTIVITIES)[number]) {
   return { primaryActivity };
 }
 
 function getPublicAssetPath(publicPath: string): string {
   return path.join(process.cwd(), 'public', publicPath.replace(/^\/+/, ''));
+}
+
+function getFileSha256(filePath: string): string {
+  return createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 }
 
 describe('discord event activity banners', () => {
@@ -53,6 +61,12 @@ describe('discord event activity banners', () => {
       expect(metadata.width).toBe(800);
       expect(metadata.height).toBe(300);
     }
+  });
+
+  it('does not ship the old generated salvage banner asset', () => {
+    const filePath = getPublicAssetPath(DISCORD_EVENT_ACTIVITY_BANNERS.Salvage.publicPath);
+
+    expect(getFileSha256(filePath)).not.toBe(OLD_GENERATED_SALVAGE_BANNER_SHA256);
   });
 
   it('uses the matching primary-activity action banner as an 800x300 JPEG data URI', async () => {
