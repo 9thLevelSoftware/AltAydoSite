@@ -5,67 +5,6 @@ import { getToken } from 'next-auth/jwt';
 // Protected routes that require authentication
 const protectedRoutes = ['/dashboard', '/userprofile', '/admin'];
 
-/**
- * Generate a cryptographically random, base64-encoded nonce for CSP.
- * Uses Web Crypto + btoa, both available in the Edge runtime (no Buffer).
- */
-function generateNonce(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
-/**
- * Build the Content-Security-Policy. In production, inline scripts are allowed
- * ONLY via a per-request nonce (no 'unsafe-inline'); same-origin chunk scripts
- * are covered by 'self', and the Cloudflare Insights beacon by its explicit
- * host. 'strict-dynamic' is intentionally NOT used: it would disable the host
- * allowlist and block the un-nonced Cloudflare-injected beacon. In development,
- * 'unsafe-inline'/'unsafe-eval' are retained because Next's HMR requires them.
- */
-function buildCsp(nonce: string, isDev: boolean): string {
-  const scriptSrc = isDev
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com"
-    : `script-src 'self' 'nonce-${nonce}' https://static.cloudflareinsights.com`;
-
-  return [
-    "default-src 'self'",
-    scriptSrc,
-    // Inline styles are required by framer-motion/animation; styles are not the
-    // script-injection vector being closed here, so 'unsafe-inline' is retained.
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' blob: data: https://cdn.fleetyards.net https://api.fleetyards.net https://fleetyards.net https://storage.fltyrd.net https://images.aydocorp.space https://aydocorp.space https://cdn.discordapp.com",
-    "font-src 'self'",
-    "connect-src 'self' https://discord.com https://cdn.discordapp.com https://cloudflareinsights.com",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ].join('; ');
-}
-
-/**
- * Attach the nonce-based CSP to a pass-through response. The nonce is also set
- * on the forwarded request headers so Next.js injects it into its own inline
- * bootstrap/hydration scripts. CSP is defined here (not in next.config.js) so
- * the value can carry a per-request nonce.
- */
-function withCsp(request: NextRequest): NextResponse {
-  const nonce = generateNonce();
-  const isDev = process.env.NODE_ENV !== 'production';
-  const csp = buildCsp(nonce, isDev);
-
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-nonce', nonce);
-  requestHeaders.set('Content-Security-Policy', csp);
-
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
-  response.headers.set('Content-Security-Policy', csp);
-  return response;
-}
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -107,7 +46,7 @@ export async function middleware(request: NextRequest) {
       }
 
       // User is authenticated (and authorized for admin routes), allow it
-      return withCsp(request);
+      return NextResponse.next();
     } catch (error) {
       console.error('Error in authentication middleware:', error);
       // On error, redirect to login as a fallback
@@ -118,8 +57,8 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Not a protected route, continue as normal (still apply the CSP nonce).
-  return withCsp(request);
+  // Not a protected route, continue as normal
+  return NextResponse.next();
 }
 
 // Specify which routes this middleware should run on

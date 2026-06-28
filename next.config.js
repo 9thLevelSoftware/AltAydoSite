@@ -92,17 +92,39 @@ const nextConfig = {
     // In development, webpack needs 'unsafe-eval' for hot reloading
     const isDev = process.env.NODE_ENV !== 'production';
 
-    // Content-Security-Policy is intentionally NOT defined here. It is set
-    // per-request in src/middleware.ts so it can carry a cryptographic nonce
-    // that removes 'unsafe-inline' from script-src in production. Defining a
-    // static CSP here as well would emit a second, conflicting CSP header.
-    // The remaining (static) security headers stay in this config.
-    void isDev;
+    // RESIDUAL RISK (CSP script-src 'unsafe-inline'):
+    // Production still allows 'unsafe-inline' for scripts. A nonce-based CSP was
+    // implemented in middleware and empirically REVERTED: Next.js bakes inline
+    // hydration scripts (self.__next_f.push, the $RT/$RB/$RV resume runtime) into
+    // statically prerendered pages at build time, before any per-request nonce
+    // exists. A per-request nonce in the CSP header therefore does not match those
+    // prerendered inline scripts, so every static page (login, signup, services,
+    // join, contact, references, ...) fails to hydrate in production. Making nonce
+    // CSP viable here requires opting the whole app into dynamic rendering (reading
+    // headers()/nonce in the root layout), which removes static generation for the
+    // marketing pages — a deliberate architectural tradeoff, tracked separately.
+    // Until that decision is made, 'unsafe-inline' is retained with the
+    // cloudflareinsights source kept explicit.
 
     return [
       {
         source: '/:all*',
         headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              `script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com${isDev ? " 'unsafe-eval'" : ''}`,
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' blob: data: https://cdn.fleetyards.net https://api.fleetyards.net https://fleetyards.net https://storage.fltyrd.net https://images.aydocorp.space https://aydocorp.space https://cdn.discordapp.com",
+              "font-src 'self'",
+              "connect-src 'self' https://discord.com https://cdn.discordapp.com https://cloudflareinsights.com",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+            ].join('; '),
+          },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
