@@ -5,12 +5,20 @@ import { ensureMongoIndexes } from '@/lib/mongo-indexes';
 // Check for either MongoDB URI or CosmosDB connection string
 const mongoUri = process.env.MONGODB_URI || process.env.COSMOSDB_CONNECTION_STRING;
 
-// Strict validation for production environments
+// Validate configuration WITHOUT throwing at module-evaluation time. A throw
+// here would crash `next build` (which imports every route module to collect
+// page data) in any environment that lacks a connection string, e.g. CI builds.
+// Fail-closed is still enforced at request time: connectToDatabase() throws when
+// `uri` is empty, so production routes return an error instead of running
+// unconfigured. In production a missing string is logged as an error so the
+// misconfiguration is visible at startup.
 if (!mongoUri) {
   if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'CRITICAL: MongoDB/CosmosDB connection string is required in production. ' +
-        'Set MONGODB_URI or COSMOSDB_CONNECTION_STRING in environment variables.'
+    logger.error(
+      'CRITICAL: MongoDB/CosmosDB connection string is missing in production. ' +
+        'Set MONGODB_URI or COSMOSDB_CONNECTION_STRING. Database-backed requests will fail closed.',
+      undefined,
+      { module: 'mongodb' }
     );
   } else {
     logger.warn('No database connection string found, app will use fallback storage', {
