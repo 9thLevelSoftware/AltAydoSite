@@ -19,21 +19,46 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Node.js version
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
+          cache: 'npm'
 
-      - name: npm install, build, and test
+      - name: Install deps and build
         run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
+          npm ci
+          npm run build
+
+      - name: Prepare deployment artifact
+        run: |
+          set -e
+          mkdir -p deploy
+
+          # Copy built Next.js application
+          cp -R .next deploy/.next
+          cp -R public deploy/public
+          cp -R node_modules deploy/node_modules
+          cp package.json deploy/package.json
+          cp package-lock.json deploy/package-lock.json
+          cp next.config.js deploy/next.config.js
+
+          # Copy server.js if it exists (for standalone mode)
+          if [ -f .next/standalone/server.js ]; then
+            cp .next/standalone/server.js deploy/server.js
+          fi
+
+          # Avoid shipping unnecessary large folders
+          find deploy -name "archive" -type d -prune -exec rm -rf {} + || true
+          find deploy -name "Build Logs" -type d -prune -exec rm -rf {} + || true
+
+          # Create zip
+          (cd deploy && zip -qr ../release.zip .)
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          path: release.zip
 
   deploy:
     runs-on: ubuntu-latest
@@ -47,7 +72,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
-      
+
+      - name: Unzip artifact for deployment
+        run: unzip -q release.zip
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -62,4 +90,3 @@ jobs:
           app-name: 'AydoTest'
           slot-name: 'Production'
           package: .
-          

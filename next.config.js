@@ -15,6 +15,10 @@ const nextConfig = {
   },
   images: {
     dangerouslyAllowSVG: true,
+    // Harden SVG handling: scope what an optimized SVG can do and force it to be
+    // downloaded rather than rendered inline if served directly.
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    contentDispositionType: 'attachment',
     minimumCacheTTL: 604800, // Cache optimized images for 7 days (ship images rarely change)
     remotePatterns: [
       {
@@ -88,25 +92,17 @@ const nextConfig = {
     // In development, webpack needs 'unsafe-eval' for hot reloading
     const isDev = process.env.NODE_ENV !== 'production';
 
+    // Content-Security-Policy is intentionally NOT defined here. It is set
+    // per-request in src/middleware.ts so it can carry a cryptographic nonce
+    // that removes 'unsafe-inline' from script-src in production. Defining a
+    // static CSP here as well would emit a second, conflicting CSP header.
+    // The remaining (static) security headers stay in this config.
+    void isDev;
+
     return [
       {
         source: '/:all*',
         headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              `script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com${isDev ? " 'unsafe-eval'" : ''}`,
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' blob: data: https://cdn.fleetyards.net https://api.fleetyards.net https://fleetyards.net https://storage.fltyrd.net https://images.aydocorp.space https://aydocorp.space https://cdn.discordapp.com",
-              "font-src 'self'",
-              "connect-src 'self' https://discord.com https://cdn.discordapp.com https://cloudflareinsights.com",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-              "frame-ancestors 'none'",
-            ].join('; '),
-          },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },

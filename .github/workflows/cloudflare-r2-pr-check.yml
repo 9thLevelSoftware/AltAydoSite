@@ -9,11 +9,48 @@ on:
 jobs:
   r2-runtime-health:
     runs-on: ubuntu-latest
+    env:
+      # Run the app on a local port so we exercise the PR's code, not production.
+      APP_PORT: 3000
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+      CLOUDFLARE_R2_BUCKET_URL: ${{ secrets.CLOUDFLARE_R2_BUCKET_URL }}
+      CLOUDFLARE_R2_SHIP_IMAGE_PREFIX: ${{ secrets.CLOUDFLARE_R2_SHIP_IMAGE_PREFIX }}
     steps:
-      - name: Verify deployed app can use Cloudflare R2
-        env:
-          APP_URL: ${{ secrets.NEXTAUTH_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      - name: Check out PR commit
+        uses: actions/checkout@v4
+        with:
+          # Build and test the exact code proposed by the PR, not the merge ref
+          # or whatever is currently deployed to production.
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build PR
+        run: npm run build
+
+      - name: Stage standalone server assets
+        run: |
+          set -euo pipefail
+          # next.config.js uses `output: 'standalone'` for production builds, so
+          # `next start` is unsupported. The standalone bundle does not include
+          # static assets or the public folder, so copy them next to server.js.
+          cp -r .next/static .next/standalone/.next/static
+          if [ -d public ]; then
+            cp -r public .next/standalone/public
+          fi
+
+      - name: Verify PR build can use Cloudflare R2
         run: |
           set -euo pipefail
 
@@ -22,11 +59,35 @@ jobs:
             exit 1
           fi
 
-          APP_URL="${APP_URL:-https://aydocorp.space}"
-          APP_URL="${APP_URL%/}"
-          ENDPOINT="${APP_URL}/api/cron/cloudflare-r2-health"
+          # Start the freshly built PR app (standalone server) in the background.
+          PORT="${APP_PORT}" HOSTNAME=127.0.0.1 node .next/standalone/server.js > app-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "${server_pid}" 2>/dev/null || true' EXIT
 
-          echo "Checking Cloudflare R2 through deployed app at ${ENDPOINT}..."
+          ENDPOINT="http://127.0.0.1:${APP_PORT}/api/cron/cloudflare-r2-health"
+
+          echo "Waiting for PR app to become ready on port ${APP_PORT}..."
+          ready=0
+          for attempt in $(seq 1 30); do
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              echo "App server process exited before becoming ready."
+              cat app-server.log || true
+              exit 1
+            fi
+            if curl --silent --output /dev/null --fail "http://127.0.0.1:${APP_PORT}/"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "${ready}" -ne 1 ]; then
+            echo "PR app did not become ready in time."
+            cat app-server.log || true
+            exit 1
+          fi
+
+          echo "Checking Cloudflare R2 through PR build at ${ENDPOINT}..."
           http_status="$(curl --silent --show-error \
             --output r2-health-response.json \
             --write-out "%{http_code}" \
@@ -36,11 +97,6 @@ jobs:
 
           cat r2-health-response.json || true
           echo
-
-          if [ "${http_status}" = "404" ]; then
-            echo "::warning::Cloudflare R2 health endpoint is not deployed yet. Deploy this change once to make this PR check fully active."
-            exit 0
-          fi
 
           if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
             echo "Cloudflare R2 health check failed with HTTP ${http_status}."
