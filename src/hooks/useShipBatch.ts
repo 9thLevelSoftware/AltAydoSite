@@ -42,14 +42,20 @@ export function useShipBatch(ids: string[]): UseShipBatchReturn {
   // Ref to track the latest AbortController for cleanup
   const abortRef = useRef<AbortController | null>(null);
 
+  // Normalize (filter empty + dedupe) and serialize into a collision-safe key.
+  // JSON.stringify avoids the `join(',')` ambiguity (e.g. ['a,b'] vs ['a','b']
+  // both serialize to the same comma-joined string) and is the real dependency
+  // the effect reacts to, so no eslint-disable is needed below.
+  const validIdsKey = JSON.stringify([...new Set(ids.filter((id) => id.trim().length > 0))]);
+
   useEffect(() => {
     // Cancel any in-flight request
     if (abortRef.current) {
       abortRef.current.abort();
     }
 
-    // Filter out empty strings and deduplicate
-    const validIds = [...new Set(ids.filter((id) => id.trim().length > 0))];
+    // Reconstruct the normalized IDs from the serialized key
+    const validIds: string[] = JSON.parse(validIdsKey);
 
     // No valid IDs -- return empty Map immediately
     if (validIds.length === 0) {
@@ -86,9 +92,7 @@ export function useShipBatch(ids: string[]): UseShipBatchReturn {
 
           if (!response.ok) {
             const body = await response.json().catch(() => null);
-            throw new Error(
-              body?.error || `Failed to fetch ships batch (${response.status})`
-            );
+            throw new Error(body?.error || `Failed to fetch ships batch (${response.status})`);
           }
 
           const result: { items: ShipDocument[] } = await response.json();
@@ -105,8 +109,10 @@ export function useShipBatch(ids: string[]): UseShipBatchReturn {
         if (err instanceof DOMException && err.name === 'AbortError') {
           return;
         }
-        const message =
-          err instanceof Error ? err.message : 'Failed to fetch ships batch';
+        const message = err instanceof Error ? err.message : 'Failed to fetch ships batch';
+        // Clear any stale results so a genuine failure doesn't leave
+        // previously-resolved ships visible to consumers.
+        setShips(new Map());
         setError(message);
       } finally {
         // Only update loading if this controller is still current
@@ -121,8 +127,7 @@ export function useShipBatch(ids: string[]): UseShipBatchReturn {
     return () => {
       controller.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids.join(',')]);
+  }, [validIdsKey]);
 
   return { ships, isLoading, error };
 }

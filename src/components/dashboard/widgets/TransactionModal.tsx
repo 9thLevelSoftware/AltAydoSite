@@ -7,7 +7,9 @@ import { MobiGlasButton } from '@/components/ui/mobiglas';
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (transaction: Omit<Transaction, 'id' | 'submittedAt' | 'submittedBy'>) => void;
+  onSubmit: (
+    transaction: Omit<Transaction, 'id' | 'submittedAt' | 'submittedBy'>
+  ) => Promise<void> | void;
 }
 
 const transactionCategories: TransactionCategory[] = [
@@ -19,7 +21,7 @@ const transactionCategories: TransactionCategory[] = [
   'SHIP_PURCHASE',
   'FUEL_EXPENSE',
   'MAINTENANCE',
-  'OTHER'
+  'OTHER',
 ];
 
 export default function TransactionModal({ isOpen, onClose, onSubmit }: TransactionModalProps) {
@@ -30,28 +32,56 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
     type: 'DEPOSIT' as TransactionType,
     amount: '',
     category: 'OTHER' as TransactionCategory,
-    description: ''
+    description: '',
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const amountValue = Number(newTransaction.amount);
+  const isAmountValid = newTransaction.amount !== '' && amountValue > 0;
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      ...newTransaction,
-      amount: Number(newTransaction.amount)
-    });
-    setNewTransaction({
-      type: 'DEPOSIT',
-      amount: '',
-      category: 'OTHER',
-      description: ''
-    });
-    onClose();
+
+    if (!isAmountValid || !newTransaction.description) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      await onSubmit({
+        ...newTransaction,
+        amount: amountValue,
+      });
+      // Only reset and close once the submit has resolved successfully.
+      setNewTransaction({
+        type: 'DEPOSIT',
+        amount: '',
+        category: 'OTHER',
+        description: '',
+      });
+      onClose();
+    } catch (err) {
+      // Keep the modal open so the user can retry without losing their input.
+      setSubmitError(
+        err instanceof Error ? err.message : 'Failed to submit transaction. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div ref={modalRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center">
+        <div
+          ref={modalRef}
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center"
+        >
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -66,29 +96,39 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
             className="mg-panel relative w-full max-w-lg p-6 rounded-sm bg-[rgba(var(--mg-panel-dark),0.95)] border border-[rgba(var(--mg-primary),0.3)] shadow-lg"
           >
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[rgba(var(--mg-primary),0.5)] to-transparent" />
-            
+
             <h2 className="mg-title text-xl mb-6 text-center">New Transaction</h2>
-            
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="txn-type" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Transaction Type</label>
+                  <label
+                    htmlFor="txn-type"
+                    className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]"
+                  >
+                    Transaction Type
+                  </label>
                   <div className="relative">
                     <select
                       id="txn-type"
                       value={newTransaction.type}
                       aria-required={true}
-                      onChange={(e) => setNewTransaction({
-                        ...newTransaction,
-                        type: e.target.value as TransactionType
-                      })}
+                      onChange={(e) =>
+                        setNewTransaction({
+                          ...newTransaction,
+                          type: e.target.value as TransactionType,
+                        })
+                      }
                       className="w-full mg-input appearance-none bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(var(--mg-primary),0.3)] pr-10"
                     >
                       <option value="DEPOSIT">Deposit</option>
                       <option value="WITHDRAWAL">Withdrawal</option>
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                      <svg className="w-4 h-4 fill-current text-[rgba(var(--mg-primary),0.7)]" viewBox="0 0 20 20">
+                      <svg
+                        className="w-4 h-4 fill-current text-[rgba(var(--mg-primary),0.7)]"
+                        viewBox="0 0 20 20"
+                      >
                         <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
                       </svg>
                     </div>
@@ -96,32 +136,53 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
                 </div>
 
                 <div>
-                  <label htmlFor="txn-amount" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Amount (AUEC)</label>
+                  <label
+                    htmlFor="txn-amount"
+                    className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]"
+                  >
+                    Amount (AUEC)
+                  </label>
                   <input
                     type="number"
                     id="txn-amount"
                     value={newTransaction.amount}
                     aria-required={true}
-                    onChange={(e) => setNewTransaction({
-                      ...newTransaction,
-                      amount: e.target.value
-                    })}
+                    onChange={(e) =>
+                      setNewTransaction({
+                        ...newTransaction,
+                        amount: e.target.value,
+                      })
+                    }
                     className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(var(--mg-primary),0.3)]"
-                    min="0"
+                    min="1"
+                    step="1"
+                    aria-invalid={newTransaction.amount !== '' && !isAmountValid}
                     placeholder="Enter amount..."
                   />
+                  {newTransaction.amount !== '' && !isAmountValid && (
+                    <p className="mt-1 text-xs text-[rgba(var(--mg-error,220,53,69),0.9)]">
+                      Amount must be greater than 0.
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label htmlFor="txn-category" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Category</label>
+                  <label
+                    htmlFor="txn-category"
+                    className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]"
+                  >
+                    Category
+                  </label>
                   <div className="relative">
                     <select
                       id="txn-category"
                       value={newTransaction.category}
-                      onChange={(e) => setNewTransaction({
-                        ...newTransaction,
-                        category: e.target.value as TransactionCategory
-                      })}
+                      onChange={(e) =>
+                        setNewTransaction({
+                          ...newTransaction,
+                          category: e.target.value as TransactionCategory,
+                        })
+                      }
                       className="w-full mg-input appearance-none bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(var(--mg-primary),0.3)] pr-10"
                     >
                       {transactionCategories.map((category) => (
@@ -131,7 +192,10 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
                       ))}
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                      <svg className="w-4 h-4 fill-current text-[rgba(var(--mg-primary),0.7)]" viewBox="0 0 20 20">
+                      <svg
+                        className="w-4 h-4 fill-current text-[rgba(var(--mg-primary),0.7)]"
+                        viewBox="0 0 20 20"
+                      >
                         <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
                       </svg>
                     </div>
@@ -139,36 +203,50 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
                 </div>
 
                 <div>
-                  <label htmlFor="txn-description" className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]">Description</label>
+                  <label
+                    htmlFor="txn-description"
+                    className="block text-sm mb-2 text-[rgba(var(--mg-text),0.7)]"
+                  >
+                    Description
+                  </label>
                   <input
                     type="text"
                     id="txn-description"
                     value={newTransaction.description}
                     aria-required={true}
-                    onChange={(e) => setNewTransaction({
-                      ...newTransaction,
-                      description: e.target.value
-                    })}
+                    onChange={(e) =>
+                      setNewTransaction({
+                        ...newTransaction,
+                        description: e.target.value,
+                      })
+                    }
                     className="w-full mg-input bg-[rgba(var(--mg-panel-light),0.3)] border border-[rgba(var(--mg-primary),0.3)]"
                     placeholder="Enter transaction details..."
                   />
                 </div>
               </div>
 
+              {submitError && (
+                <p className="text-sm text-[rgba(var(--mg-error,220,53,69),0.9)]" role="alert">
+                  {submitError}
+                </p>
+              )}
+
               <div className="flex justify-end space-x-4">
                 <MobiGlasButton
                   type="button"
                   variant="secondary"
                   onClick={onClose}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </MobiGlasButton>
                 <MobiGlasButton
                   type="submit"
                   variant="primary"
-                  disabled={!newTransaction.amount || !newTransaction.description}
+                  disabled={isSubmitting || !isAmountValid || !newTransaction.description}
                 >
-                  Submit Transaction
+                  {isSubmitting ? 'Submitting...' : 'Submit Transaction'}
                 </MobiGlasButton>
               </div>
             </form>
@@ -177,4 +255,4 @@ export default function TransactionModal({ isOpen, onClose, onSubmit }: Transact
       )}
     </AnimatePresence>
   );
-} 
+}

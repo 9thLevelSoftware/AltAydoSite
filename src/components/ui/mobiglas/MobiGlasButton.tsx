@@ -49,21 +49,30 @@ export default function MobiGlasButton({
   title,
   ...motionProps
 }: MobiGlasButtonProps) {
+  const isDisabled = disabled || isLoading;
+
   const variantStyles = {
-    primary: 'mg-button border border-[rgba(var(--mg-primary),0.5)] text-[rgba(var(--mg-primary),1)] hover:bg-[rgba(var(--mg-primary),0.2)] hover:border-[rgba(var(--mg-primary),0.8)]',
-    secondary: 'mg-button border border-[rgba(var(--mg-secondary),0.5)] text-[rgba(var(--mg-secondary),1)] hover:bg-[rgba(var(--mg-secondary),0.2)] hover:border-[rgba(var(--mg-secondary),0.8)]',
-    accent: 'mg-button border border-[rgba(var(--mg-accent),0.5)] text-[rgba(var(--mg-accent),1)] hover:bg-[rgba(var(--mg-accent),0.2)] hover:border-[rgba(var(--mg-accent),0.8)]',
-    danger: 'mg-button border border-[rgba(var(--mg-danger),0.5)] text-[rgba(var(--mg-danger),1)] hover:bg-[rgba(var(--mg-danger),0.2)] hover:border-[rgba(var(--mg-danger),0.8)]',
-    success: 'mg-button border border-[rgba(var(--mg-success),0.5)] text-[rgba(var(--mg-success),1)] hover:bg-[rgba(var(--mg-success),0.2)] hover:border-[rgba(var(--mg-success),0.8)]',
-    ghost: 'bg-transparent border-none text-[rgba(var(--mg-text),0.8)] hover:text-[rgba(var(--mg-primary),1)] hover:bg-[rgba(var(--mg-primary),0.1)]',
-    outline: 'bg-transparent border border-[rgba(var(--mg-primary),0.3)] text-[rgba(var(--mg-primary),0.9)] hover:bg-[rgba(var(--mg-primary),0.1)] hover:border-[rgba(var(--mg-primary),0.6)]'
+    primary:
+      'mg-button border border-[rgba(var(--mg-primary),0.5)] text-[rgba(var(--mg-primary),1)] hover:bg-[rgba(var(--mg-primary),0.2)] hover:border-[rgba(var(--mg-primary),0.8)]',
+    secondary:
+      'mg-button border border-[rgba(var(--mg-secondary),0.5)] text-[rgba(var(--mg-secondary),1)] hover:bg-[rgba(var(--mg-secondary),0.2)] hover:border-[rgba(var(--mg-secondary),0.8)]',
+    accent:
+      'mg-button border border-[rgba(var(--mg-accent),0.5)] text-[rgba(var(--mg-accent),1)] hover:bg-[rgba(var(--mg-accent),0.2)] hover:border-[rgba(var(--mg-accent),0.8)]',
+    danger:
+      'mg-button border border-[rgba(var(--mg-danger),0.5)] text-[rgba(var(--mg-danger),1)] hover:bg-[rgba(var(--mg-danger),0.2)] hover:border-[rgba(var(--mg-danger),0.8)]',
+    success:
+      'mg-button border border-[rgba(var(--mg-success),0.5)] text-[rgba(var(--mg-success),1)] hover:bg-[rgba(var(--mg-success),0.2)] hover:border-[rgba(var(--mg-success),0.8)]',
+    ghost:
+      'bg-transparent border-none text-[rgba(var(--mg-text),0.8)] hover:text-[rgba(var(--mg-primary),1)] hover:bg-[rgba(var(--mg-primary),0.1)]',
+    outline:
+      'bg-transparent border border-[rgba(var(--mg-primary),0.3)] text-[rgba(var(--mg-primary),0.9)] hover:bg-[rgba(var(--mg-primary),0.1)] hover:border-[rgba(var(--mg-primary),0.6)]',
   };
 
   const sizeStyles = {
     sm: 'px-3 py-1.5 text-sm',
     md: 'px-4 py-2 text-base',
     lg: 'px-6 py-3 text-lg',
-    xl: 'px-8 py-4 text-xl'
+    xl: 'px-8 py-4 text-xl',
   };
 
   const baseClasses = `
@@ -79,18 +88,18 @@ export default function MobiGlasButton({
   `.trim();
 
   const buttonStyle = {
-    fontFamily: "'Quantify', sans-serif"
+    fontFamily: "'Quantify', sans-serif",
   };
 
   return (
     <motion.button
       type={type}
-      disabled={disabled || isLoading}
+      disabled={isDisabled}
       onClick={onClick}
       className={baseClasses}
       style={buttonStyle}
-      whileHover={{ scale: disabled ? 1 : 1.02 }}
-      whileTap={{ scale: disabled ? 1 : 0.98 }}
+      whileHover={{ scale: isDisabled ? 1 : 1.02 }}
+      whileTap={{ scale: isDisabled ? 1 : 0.98 }}
       id={id}
       name={name}
       form={form}
@@ -100,7 +109,7 @@ export default function MobiGlasButton({
       {...motionProps}
     >
       {/* Background effects */}
-      {withScanline && !disabled && (
+      {withScanline && !isDisabled && (
         <motion.div
           className="absolute inset-0 overflow-hidden pointer-events-none"
           initial={{ opacity: 0 }}
@@ -110,15 +119,16 @@ export default function MobiGlasButton({
           <motion.div
             className="absolute top-0 w-full h-0.5 opacity-60"
             style={{
-              background: 'linear-gradient(to right, transparent, rgba(var(--mg-primary), 0.8), transparent)'
+              background:
+                'linear-gradient(to right, transparent, rgba(var(--mg-primary), 0.8), transparent)',
             }}
             animate={{
-              top: ['0%', '100%', '0%']
+              top: ['0%', '100%', '0%'],
             }}
             transition={{
               duration: 1.5,
               repeat: Infinity,
-              ease: "linear"
+              ease: 'linear',
             }}
           />
         </motion.div>
@@ -140,15 +150,11 @@ export default function MobiGlasButton({
           <motion.div
             className="w-4 h-4 border-2 border-[rgba(var(--mg-primary),0.3)] border-t-[rgba(var(--mg-primary),1)] rounded-full"
             animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
           />
         ) : (
           <>
-            {leftIcon && (
-              <span className="flex-shrink-0">
-                {leftIcon}
-              </span>
-            )}
+            {leftIcon && <span className="flex-shrink-0">{leftIcon}</span>}
             <span>{children}</span>
             {rightIcon && (
               <motion.span

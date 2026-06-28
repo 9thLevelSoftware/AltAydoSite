@@ -19,12 +19,62 @@ import { logger } from '@/lib/logger';
 
 const MISSION_ADMIN_CLEARANCE_LEVEL = 4;
 
+// Fields a client is allowed to author on create/update. Status, attendance
+// (expected/confirmed participants) and Discord state are deliberately excluded:
+// they are system-derived and mutated only via their dedicated endpoints
+// (`/[id]/status`, `/[id]/attendance`, `/[id]/discord`).
+const MUTABLE_MISSION_FIELDS = [
+  'name',
+  'scheduledDateTime',
+  'duration',
+  'location',
+  'operationType',
+  'primaryActivity',
+  'secondaryActivity',
+  'tertiaryActivity',
+  'leaders',
+  'shipRequirements',
+  'personnelRequirements',
+  'ships',
+  'objectives',
+  'briefing',
+  'equipmentNotes',
+  'images',
+] as const;
+
+// Pick only whitelisted, supplied fields from a raw request body. A field that
+// is present but null (e.g. clearing secondaryActivity) is preserved; only
+// `undefined` keys are dropped so partial updates stay partial.
+function pickMutableMissionFields(data: any): any {
+  const result: Record<string, any> = {};
+  if (!data || typeof data !== 'object') return result;
+  for (const key of MUTABLE_MISSION_FIELDS) {
+    if (data[key] !== undefined) {
+      result[key] = data[key];
+    }
+  }
+  return result;
+}
+
+// Parse an integer query param with a NaN-safe fallback and inclusive clamping.
+function parseIntParam(value: string | null, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 // Auto-publish mission to Discord
-async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ success: boolean; discordEvent?: any; error?: string }> {
+async function autoPublishToDiscord(
+  mission: any,
+  baseUrl?: string
+): Promise<{ success: boolean; discordEvent?: any; error?: string }> {
   try {
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
-      logger.info('Discord not configured, skipping auto-publish', { route: '/api/planned-missions', missionId: mission.id });
+      logger.info('Discord not configured, skipping auto-publish', {
+        route: '/api/planned-missions',
+        missionId: mission.id,
+      });
       return { success: false, error: 'Discord not configured' };
     }
 
@@ -44,7 +94,7 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
       scheduledStartTime: mission.scheduledDateTime,
       scheduledEndTime: endTime,
       location: mission.location || 'Star Citizen',
-      image
+      image,
     });
 
     // Update mission with Discord event reference
@@ -53,14 +103,22 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
         eventId: discordEvent.id,
         guildId: discordEvent.guild_id,
         createdAt: new Date().toISOString(),
-        status: 'SCHEDULED'
-      }
+        status: 'SCHEDULED',
+      },
     });
 
-    logger.info('Auto-published mission to Discord', { route: '/api/planned-missions', missionId: mission.id, discordEventId: discordEvent.id });
+    logger.info('Auto-published mission to Discord', {
+      route: '/api/planned-missions',
+      missionId: mission.id,
+      discordEventId: discordEvent.id,
+    });
     return { success: true, discordEvent };
   } catch (error) {
-    logger.error('Failed to auto-publish to Discord', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions', missionId: mission.id });
+    logger.error(
+      'Failed to auto-publish to Discord',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions', missionId: mission.id }
+    );
     return { success: false, error: 'Failed to publish to Discord' };
   }
 }
@@ -86,7 +144,8 @@ const validateShipRequirements = (requirements: any[]) => {
     if (!requirement || typeof requirement !== 'object') return false;
     if (!SHIP_SIZES.includes(requirement.size)) return false;
     if (!SHIP_CATEGORIES.includes(requirement.category)) return false;
-    if (typeof requirement.count !== 'number' || requirement.count < 1 || requirement.count > 20) return false;
+    if (typeof requirement.count !== 'number' || requirement.count < 1 || requirement.count > 20)
+      return false;
   }
 
   return true;
@@ -98,7 +157,8 @@ const validatePersonnelRequirements = (requirements: any[]) => {
   for (const requirement of requirements) {
     if (!requirement || typeof requirement !== 'object') return false;
     if (!PERSONNEL_PROFESSIONS.includes(requirement.profession)) return false;
-    if (typeof requirement.count !== 'number' || requirement.count < 1 || requirement.count > 50) return false;
+    if (typeof requirement.count !== 'number' || requirement.count < 1 || requirement.count > 50)
+      return false;
   }
 
   return true;
@@ -178,9 +238,76 @@ const validatePlannedMissionData = (data: any) => {
   }
 
   // Validate status if provided
-  const validStatuses: PlannedMissionStatus[] = ['DRAFT', 'SCHEDULED', 'ACTIVE', 'DEBRIEFING', 'COMPLETED', 'CANCELLED'];
+  const validStatuses: PlannedMissionStatus[] = [
+    'DRAFT',
+    'SCHEDULED',
+    'ACTIVE',
+    'DEBRIEFING',
+    'COMPLETED',
+    'CANCELLED',
+  ];
   if (data.status && !validStatuses.includes(data.status)) {
     return { valid: false, error: 'Invalid status' };
+  }
+
+  return { valid: true };
+};
+
+// Partial-update validation: only validates fields that are actually supplied.
+// This avoids the full validator's all-or-nothing requirement (which both
+// rejected legitimate single-field edits and skipped validation unless a core
+// field was present). Status/attendance/Discord state are not validated here
+// because they are not mutable via this route.
+const validatePartialMissionUpdate = (data: any) => {
+  const validActivities: ActivityType[] = ACTIVITIES;
+  const validOperationTypes: OperationType[] = OPERATION_TYPES;
+
+  if (data.name !== undefined) {
+    if (typeof data.name !== 'string' || data.name.length < 3) {
+      return { valid: false, error: 'Name must be at least 3 characters' };
+    }
+  }
+
+  if (data.scheduledDateTime !== undefined) {
+    const scheduledDate = new Date(data.scheduledDateTime);
+    if (!data.scheduledDateTime || isNaN(scheduledDate.getTime())) {
+      return { valid: false, error: 'Invalid scheduled date/time format' };
+    }
+  }
+
+  if (data.operationType !== undefined && !validOperationTypes.includes(data.operationType)) {
+    return { valid: false, error: 'Invalid operation type' };
+  }
+
+  if (data.primaryActivity !== undefined && !validActivities.includes(data.primaryActivity)) {
+    return { valid: false, error: 'Invalid primary activity' };
+  }
+
+  // Activities may be cleared with null; only validate concrete values.
+  if (data.secondaryActivity != null && !validActivities.includes(data.secondaryActivity)) {
+    return { valid: false, error: 'Invalid secondary activity' };
+  }
+  if (data.tertiaryActivity != null && !validActivities.includes(data.tertiaryActivity)) {
+    return { valid: false, error: 'Invalid tertiary activity' };
+  }
+
+  if (data.leaders !== undefined && !validateLeaders(data.leaders)) {
+    return { valid: false, error: 'Invalid leaders data' };
+  }
+
+  if (data.ships !== undefined && !validateMissionShips(data.ships)) {
+    return { valid: false, error: 'Invalid ships data' };
+  }
+
+  if (data.shipRequirements !== undefined && !validateShipRequirements(data.shipRequirements)) {
+    return { valid: false, error: 'Invalid ship requirements data' };
+  }
+
+  if (
+    data.personnelRequirements !== undefined &&
+    !validatePersonnelRequirements(data.personnelRequirements)
+  ) {
+    return { valid: false, error: 'Invalid personnel requirements data' };
   }
 
   return { valid: true };
@@ -227,24 +354,37 @@ export async function GET(request: NextRequest) {
     // Check for upcoming only
     const upcoming = searchParams.get('upcoming');
     if (upcoming === 'true') {
-      const limit = parseInt(searchParams.get('limit') || '10', 10);
+      const limit = parseIntParam(searchParams.get('limit'), 10, 1, 100);
       const missions = await plannedMissionStorage.getUpcomingPlannedMissions(limit);
       const res = NextResponse.json({ items: missions, total: missions.length });
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
 
-    // Pagination params
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const pageSizeRaw = parseInt(searchParams.get('pageSize') || '25', 10);
-    const pageSize = Math.min(100, Math.max(1, pageSizeRaw));
+    // Pagination params (NaN-safe, clamped to sane bounds)
+    const page = parseIntParam(searchParams.get('page'), 1, 1, Number.MAX_SAFE_INTEGER);
+    const pageSize = parseIntParam(searchParams.get('pageSize'), 25, 1, 100);
 
-    logger.info('Fetching planned missions', { route: '/api/planned-missions', filters, page, pageSize });
+    logger.info('Fetching planned missions', {
+      route: '/api/planned-missions',
+      filters,
+      page,
+      pageSize,
+    });
 
     // DB-level pagination via skip/limit
-    const result = await plannedMissionStorage.getAllPlannedMissionsPaginated(page, pageSize, filters);
+    const result = await plannedMissionStorage.getAllPlannedMissionsPaginated(
+      page,
+      pageSize,
+      filters
+    );
 
-    logger.info('Returning planned missions', { route: '/api/planned-missions', count: result.missions.length, total: result.total, page });
+    logger.info('Returning planned missions', {
+      route: '/api/planned-missions',
+      count: result.missions.length,
+      total: result.total,
+      page,
+    });
 
     const res = NextResponse.json({
       items: result.missions,
@@ -255,13 +395,13 @@ export async function GET(request: NextRequest) {
     });
     res.headers.set('Cache-Control', 'no-store');
     return res;
-
   } catch (error) {
-    logger.error('Error fetching planned missions', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions' });
-    return NextResponse.json(
-      { error: 'Failed to fetch planned missions' },
-      { status: 500 }
+    logger.error(
+      'Error fetching planned missions',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions' }
     );
+    return NextResponse.json({ error: 'Failed to fetch planned missions' }, { status: 500 });
   }
 }
 
@@ -289,41 +429,44 @@ export async function POST(request: NextRequest) {
     // Validate data
     const validation = validatePlannedMissionData(missionData);
     if (!validation.valid) {
-      return NextResponse.json(
-        { error: validation.error },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const safeMissionData = { ...missionData };
-    delete safeMissionData.id;
-    delete safeMissionData._id;
-    delete safeMissionData.createdAt;
-    delete safeMissionData.updatedAt;
-    delete safeMissionData.createdBy;
+    // Whitelist the fields a client may author rather than spreading the whole
+    // body. This drops read-only metadata (id/_id/createdBy/createdAt/updatedAt)
+    // and, critically, any client-seeded Discord/attendance state.
+    const allowedData = pickMutableMissionFields(missionData);
 
-    // Set defaults
+    // Set defaults. System-derived state is forced server-side here:
+    // - status defaults to DRAFT (a SCHEDULED create still auto-publishes below)
+    // - expected/confirmed participants always start empty (attendance endpoint owns them)
+    // - discordEvent is never accepted from the client (set by autoPublishToDiscord)
     const missionToCreate = {
-      ...safeMissionData,
+      ...allowedData,
       createdBy: userId,
       status: missionData.status || 'DRAFT',
-      leaders: missionData.leaders || [],
-      shipRequirements: missionData.shipRequirements || [],
-      personnelRequirements: missionData.personnelRequirements || [],
-      ships: missionData.ships || [],
-      images: missionData.images || [],
-      objectives: missionData.objectives || '',
-      briefing: missionData.briefing || '',
-      expectedParticipants: missionData.expectedParticipants || [],
-      confirmedParticipants: missionData.confirmedParticipants || []
+      leaders: allowedData.leaders ?? [],
+      shipRequirements: allowedData.shipRequirements ?? [],
+      personnelRequirements: allowedData.personnelRequirements ?? [],
+      ships: allowedData.ships ?? [],
+      images: allowedData.images ?? [],
+      objectives: allowedData.objectives ?? '',
+      briefing: allowedData.briefing ?? '',
+      expectedParticipants: [],
+      confirmedParticipants: [],
     };
 
     try {
+      // Required create fields are guaranteed by validatePlannedMissionData above.
       const mission = await plannedMissionStorage.createPlannedMission(missionToCreate);
-      logger.info('Planned mission created successfully', { route: '/api/planned-missions', missionId: mission.id });
+      logger.info('Planned mission created successfully', {
+        route: '/api/planned-missions',
+        missionId: mission.id,
+      });
 
       // Auto-publish to Discord if status is SCHEDULED
-      let discordPublishResult: { success: boolean; discordEvent?: any; error?: string } | null = null;
+      let discordPublishResult: { success: boolean; discordEvent?: any; error?: string } | null =
+        null;
       if (mission.status === 'SCHEDULED' && !mission.discordEvent) {
         const baseUrl = request.headers.get('origin') || process.env.NEXTAUTH_URL || '';
         discordPublishResult = await autoPublishToDiscord(mission, baseUrl);
@@ -331,27 +474,32 @@ export async function POST(request: NextRequest) {
 
       // Re-fetch mission if Discord event was added
       const finalMission = discordPublishResult?.success
-        ? await plannedMissionStorage.getPlannedMissionById(mission.id) || mission
+        ? (await plannedMissionStorage.getPlannedMissionById(mission.id)) || mission
         : mission;
 
-      return NextResponse.json({
-        ...finalMission,
-        discordPublished: discordPublishResult?.success || false,
-        discordError: discordPublishResult?.error
-      }, { status: 201 });
-    } catch (storageError) {
-      logger.error('Error in planned mission storage layer', storageError instanceof Error ? storageError : new Error(String(storageError)), { route: '/api/planned-missions', operation: 'create' });
       return NextResponse.json(
-        { error: 'Failed to create planned mission' },
-        { status: 500 }
+        {
+          ...finalMission,
+          discordPublished: discordPublishResult?.success || false,
+          discordError: discordPublishResult?.error,
+        },
+        { status: 201 }
       );
+    } catch (storageError) {
+      logger.error(
+        'Error in planned mission storage layer',
+        storageError instanceof Error ? storageError : new Error(String(storageError)),
+        { route: '/api/planned-missions', operation: 'create' }
+      );
+      return NextResponse.json({ error: 'Failed to create planned mission' }, { status: 500 });
     }
   } catch (error) {
-    logger.error('Error creating planned mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions' });
-    return NextResponse.json(
-      { error: 'Failed to create planned mission' },
-      { status: 500 }
+    logger.error(
+      'Error creating planned mission',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions' }
     );
+    return NextResponse.json({ error: 'Failed to create planned mission' }, { status: 500 });
   }
 }
 
@@ -368,10 +516,7 @@ export async function PUT(request: NextRequest) {
     const missionData = await request.json();
 
     if (!missionData || !missionData.id) {
-      return NextResponse.json(
-        { error: 'Missing required field: id' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing required field: id' }, { status: 400 });
     }
 
     // Check if user can modify this mission
@@ -383,36 +528,24 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Get existing mission to check for status change
-    const existingMission = await plannedMissionStorage.getPlannedMissionById(missionData.id);
-
-    if (missionData.shipRequirements !== undefined && !validateShipRequirements(missionData.shipRequirements)) {
-      return NextResponse.json(
-        { error: 'Invalid ship requirements data' },
-        { status: 400 }
-      );
+    // Validate only the fields that were actually supplied.
+    const validation = validatePartialMissionUpdate(missionData);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    if (missionData.personnelRequirements !== undefined && !validatePersonnelRequirements(missionData.personnelRequirements)) {
-      return NextResponse.json(
-        { error: 'Invalid personnel requirements data' },
-        { status: 400 }
-      );
-    }
+    // Whitelist mutable fields. Status, attendance (expected/confirmed
+    // participants) and Discord state are intentionally excluded — those are
+    // changed only via the dedicated `/[id]/status`, `/[id]/attendance` and
+    // `/[id]/discord` endpoints, so any such values in this body are ignored.
+    const updateData = pickMutableMissionFields(missionData);
 
-    // Validate if updating core fields
-    if (missionData.name || missionData.scheduledDateTime || missionData.operationType || missionData.primaryActivity) {
-      const validation = validatePlannedMissionData(missionData);
-      if (!validation.valid) {
-        return NextResponse.json(
-          { error: validation.error },
-          { status: 400 }
-        );
-      }
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: 'No updatable fields provided' }, { status: 400 });
     }
 
     try {
-      const mission = await plannedMissionStorage.updatePlannedMission(missionData.id, missionData);
+      const mission = await plannedMissionStorage.updatePlannedMission(missionData.id, updateData);
 
       if (!mission) {
         return NextResponse.json(
@@ -421,41 +554,26 @@ export async function PUT(request: NextRequest) {
         );
       }
 
-      // Auto-publish to Discord if status changed to SCHEDULED and no Discord event yet
-      let discordPublishResult: { success: boolean; discordEvent?: any; error?: string } | null = null;
-      const statusChangedToScheduled = missionData.status === 'SCHEDULED' &&
-        existingMission?.status !== 'SCHEDULED' &&
-        !existingMission?.discordEvent;
-
-      if (statusChangedToScheduled) {
-        const baseUrl = request.headers.get('origin') || process.env.NEXTAUTH_URL || '';
-        discordPublishResult = await autoPublishToDiscord(mission, baseUrl);
-      }
-
-      // Re-fetch mission if Discord event was added
-      const finalMission = discordPublishResult?.success
-        ? await plannedMissionStorage.getPlannedMissionById(mission.id) || mission
-        : mission;
-
-      logger.info('Planned mission updated successfully', { route: '/api/planned-missions', missionId: mission.id });
-      return NextResponse.json({
-        ...finalMission,
-        discordPublished: discordPublishResult?.success || false,
-        discordError: discordPublishResult?.error
-      }, { status: 200 });
+      logger.info('Planned mission updated successfully', {
+        route: '/api/planned-missions',
+        missionId: mission.id,
+      });
+      return NextResponse.json(mission, { status: 200 });
     } catch (storageError) {
-      logger.error('Error in planned mission storage layer', storageError instanceof Error ? storageError : new Error(String(storageError)), { route: '/api/planned-missions', operation: 'update' });
-      return NextResponse.json(
-        { error: 'Failed to update planned mission' },
-        { status: 500 }
+      logger.error(
+        'Error in planned mission storage layer',
+        storageError instanceof Error ? storageError : new Error(String(storageError)),
+        { route: '/api/planned-missions', operation: 'update' }
       );
+      return NextResponse.json({ error: 'Failed to update planned mission' }, { status: 500 });
     }
   } catch (error) {
-    logger.error('Error updating planned mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions' });
-    return NextResponse.json(
-      { error: 'Failed to update planned mission' },
-      { status: 500 }
+    logger.error(
+      'Error updating planned mission',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions' }
     );
+    return NextResponse.json({ error: 'Failed to update planned mission' }, { status: 500 });
   }
 }
 
@@ -494,15 +612,18 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Planned mission not found' }, { status: 404 });
     }
 
-    logger.info('Planned mission deleted successfully', { route: '/api/planned-missions', missionId: id });
+    logger.info('Planned mission deleted successfully', {
+      route: '/api/planned-missions',
+      missionId: id,
+    });
 
     return NextResponse.json({ success: true });
-
   } catch (error) {
-    logger.error('Error deleting planned mission', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions' });
-    return NextResponse.json(
-      { error: 'Failed to delete planned mission' },
-      { status: 500 }
+    logger.error(
+      'Error deleting planned mission',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions' }
     );
+    return NextResponse.json({ error: 'Failed to delete planned mission' }, { status: 500 });
   }
 }

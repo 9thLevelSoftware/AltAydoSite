@@ -1,84 +1,113 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/auth';
 import * as resourceStorage from '@/lib/resource-storage';
 import * as userStorage from '@/lib/user-storage';
 import * as operationStorage from '@/lib/operation-storage';
 import { ResourceAllocation } from '@/types/Resource';
 import { z } from 'zod';
 import { requireAuth, requireLeadership } from '@/lib/auth-guards';
+import { ResourceAllocationConflictError } from '@/lib/resource-storage';
 import { logger } from '@/lib/logger';
 
-// Validation schema for resource allocation
-const allocationSchema = z.object({
-  resourceId: z.string(),
-  operationId: z.string(),
-  quantity: z.number().int().positive().optional(),
-  role: z.string().optional(),
-  notes: z.string().optional(),
-  startDateTime: z.string(),
-  endDateTime: z.string(),
-  allocatedById: z.string()
-});
+// allocatedById is intentionally NOT part of the schema -- it is set server-side
+// from the authenticated session, never trusted from the request body.
+const allocationSchema = z
+  .object({
+    resourceId: z.string(),
+    operationId: z.string(),
+    quantity: z.number().int().positive().optional(),
+    role: z.string().optional(),
+    notes: z.string().optional(),
+    startDateTime: z
+      .string()
+      .refine((v) => !isNaN(new Date(v).getTime()), 'startDateTime must be a valid date'),
+    endDateTime: z
+      .string()
+      .refine((v) => !isNaN(new Date(v).getTime()), 'endDateTime must be a valid date'),
+  })
+  .refine((data) => new Date(data.endDateTime).getTime() > new Date(data.startDateTime).getTime(), {
+    message: 'endDateTime must be after startDateTime',
+    path: ['endDateTime'],
+  });
 
 // GET /api/fleet-ops/resources/allocations - Get allocations by operation
 export async function GET(req: NextRequest) {
   try {
-    // Get the session to check if the user is authenticated
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
+    // Authenticate user
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+
+    // Leadership can view any allocations; others are scoped below.
+    const leadershipCheck = await requireLeadership();
+    const userHasLeadershipRole = !(leadershipCheck instanceof NextResponse);
+
     // Parse query parameters
     const searchParams = req.nextUrl.searchParams;
     const operationId = searchParams.get('operationId');
     const resourceId = searchParams.get('resourceId');
-    
+
     if (!operationId && !resourceId) {
       return NextResponse.json(
         { error: 'Either operationId or resourceId must be provided' },
         { status: 400 }
       );
     }
-    
+
     let allocations: ResourceAllocation[] = [];
-    
+
     if (operationId) {
+      // Only leadership or the operation's leader may view its allocations.
+      const operation = await operationStorage.getOperationById(operationId);
+      if (!operation) {
+        return NextResponse.json({ error: 'Operation not found' }, { status: 404 });
+      }
+      if (!userHasLeadershipRole && operation.leaderId !== auth.userId) {
+        return NextResponse.json({ error: 'Insufficient privileges' }, { status: 403 });
+      }
       // Get allocations by operation
       allocations = await resourceStorage.getAllocationsByOperation(operationId);
     } else if (resourceId) {
+      // Only leadership or the resource's owner may view its allocations.
+      const resource = await resourceStorage.getResourceById(resourceId);
+      if (!resource) {
+        return NextResponse.json({ error: 'Resource not found' }, { status: 404 });
+      }
+      if (!userHasLeadershipRole && resource.owner !== auth.userId) {
+        return NextResponse.json({ error: 'Insufficient privileges' }, { status: 403 });
+      }
       // Get allocations by resource
       allocations = await resourceStorage.getAllAllocationsByResource(resourceId);
     }
-    
+
     // Enhance allocations with additional information
-    const enhancedAllocations = await Promise.all(allocations.map(async (allocation) => {
-      // Get resource details
-      const resource = await resourceStorage.getResourceById(allocation.resourceId);
-      
-      // Get operation details
-      const operation = await operationStorage.getOperationById(allocation.operationId);
-      
-      // Get allocator details
-      const allocator = await userStorage.getUserById(allocation.allocatedById);
-      
-      return {
-        ...allocation,
-        resourceName: resource?.name || 'Unknown Resource',
-        resourceType: resource?.type || 'Unknown',
-        operationName: operation?.name || 'Unknown Operation',
-        allocatorName: allocator?.aydoHandle || 'Unknown'
-      };
-    }));
-    
+    const enhancedAllocations = await Promise.all(
+      allocations.map(async (allocation) => {
+        // Get resource details
+        const resource = await resourceStorage.getResourceById(allocation.resourceId);
+
+        // Get operation details
+        const operation = await operationStorage.getOperationById(allocation.operationId);
+
+        // Get allocator details
+        const allocator = await userStorage.getUserById(allocation.allocatedById);
+
+        return {
+          ...allocation,
+          resourceName: resource?.name || 'Unknown Resource',
+          resourceType: resource?.type || 'Unknown',
+          operationName: operation?.name || 'Unknown Operation',
+          allocatorName: allocator?.aydoHandle || 'Unknown',
+        };
+      })
+    );
+
     return NextResponse.json(enhancedAllocations);
   } catch (error) {
-    logger.error('Error getting resource allocations', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources/allocations' });
-    return NextResponse.json(
-      { error: 'Failed to get resource allocations' },
-      { status: 500 }
+    logger.error(
+      'Error getting resource allocations',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/fleet-ops/resources/allocations' }
     );
+    return NextResponse.json({ error: 'Failed to get resource allocations' }, { status: 500 });
   }
 }
 
@@ -119,7 +148,7 @@ export async function POST(req: NextRequest) {
       if (!userHasLeadershipRole && !isOperationLeader && !isResourceOwner) {
         return NextResponse.json({ error: 'Insufficient privileges' }, { status: 403 });
       }
-      
+
       // Check if the resource is available
       if (resource.status !== 'Available') {
         return NextResponse.json(
@@ -127,26 +156,34 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      
+
       // Allocate the resource
       const allocation = await resourceStorage.allocateResource({
         ...validatedData,
-        allocatedById: auth.userId // Override with actual user ID
+        allocatedById: auth.userId, // Override with actual user ID
       });
-      
+
       return NextResponse.json(allocation, { status: 201 });
     } catch (validationError: any) {
+      // A conflict (already reserved, overlapping window, or insufficient
+      // quantity) is a 409, not a validation 400.
+      if (validationError instanceof ResourceAllocationConflictError) {
+        return NextResponse.json({ error: validationError.message }, { status: 409 });
+      }
       return NextResponse.json(
-        { error: `Validation error: ${validationError.errors?.[0]?.message || validationError.message}` },
+        {
+          error: `Validation error: ${validationError.errors?.[0]?.message || validationError.message}`,
+        },
         { status: 400 }
       );
     }
   } catch (error) {
-    logger.error('Error allocating resource', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources/allocations' });
-    return NextResponse.json(
-      { error: 'Failed to allocate resource' },
-      { status: 500 }
+    logger.error(
+      'Error allocating resource',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/fleet-ops/resources/allocations' }
     );
+    return NextResponse.json({ error: 'Failed to allocate resource' }, { status: 500 });
   }
 }
 
@@ -190,16 +227,23 @@ export async function DELETE(req: NextRequest) {
     if (!userHasLeadershipRole && !isOperationLeader && !isResourceOwner) {
       return NextResponse.json({ error: 'Insufficient privileges' }, { status: 403 });
     }
-    
-    // Deallocate the resource
-    await resourceStorage.deallocateResource(resourceId, operationId);
-    
+
+    // Deallocate the resource. Returns false when no matching allocation existed.
+    const removed = await resourceStorage.deallocateResource(resourceId, operationId);
+    if (!removed) {
+      return NextResponse.json(
+        { error: 'No allocation found for the given resource and operation' },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json({ message: 'Resource deallocated successfully' });
   } catch (error) {
-    logger.error('Error deallocating resource', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/resources/allocations' });
-    return NextResponse.json(
-      { error: 'Failed to deallocate resource' },
-      { status: 500 }
+    logger.error(
+      'Error deallocating resource',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/fleet-ops/resources/allocations' }
     );
+    return NextResponse.json({ error: 'Failed to deallocate resource' }, { status: 500 });
   }
-} 
+}

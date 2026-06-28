@@ -1,20 +1,21 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { z } from 'zod';
 import { authOptions } from '@/app/api/auth/auth';
 import { getTransactions } from '@/lib/finance';
 import { connectToDatabase } from '@/lib/mongodb';
-import { Transaction, TransactionType, TransactionCategory } from '@/types/finance';
+import { Transaction } from '@/types/finance';
 import { apiRateLimiter } from '@/lib/rate-limiter';
 import { logger } from '@/lib/logger';
 
-// Validate transaction type
-const isValidTransactionType = (type: string): type is TransactionType => {
-  return ['DEPOSIT', 'WITHDRAWAL'].includes(type);
-};
+// Upper bound for a single transaction amount (aUEC are whole units).
+const MAX_TRANSACTION_AMOUNT = 1_000_000_000_000; // 1 trillion aUEC
 
-// Validate transaction category
-const isValidCategory = (category: string): category is TransactionCategory => {
-  return [
+// Validation schema for incoming transaction payloads.
+const transactionSchema = z.object({
+  type: z.enum(['DEPOSIT', 'WITHDRAWAL']),
+  amount: z.number().finite().positive().max(MAX_TRANSACTION_AMOUNT).int(),
+  category: z.enum([
     'SALARY',
     'MISSION_REWARD',
     'CARGO_SALE',
@@ -23,9 +24,10 @@ const isValidCategory = (category: string): category is TransactionCategory => {
     'SHIP_PURCHASE',
     'FUEL_EXPENSE',
     'MAINTENANCE',
-    'OTHER'
-  ].includes(category);
-};
+    'OTHER',
+  ]),
+  description: z.string().trim().min(1).max(500),
+});
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -33,7 +35,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const result = await getTransactions(session.user.email);
+  const clearance = session.user.clearanceLevel ?? 0;
+  const result = await getTransactions(session.user.email, clearance);
 
   if (result.error) {
     const status = result.error === 'Too many requests' ? 429 : 500;
@@ -52,11 +55,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user has required clearance (level 3 or higher)
-    const clearance = session.user.clearanceLevel;
+    // Check if user has required clearance (level 3 or higher).
+    // Default to 0 so an undefined clearance cannot bypass the check.
+    const clearance = session.user.clearanceLevel ?? 0;
     if (clearance < 3) {
       return NextResponse.json(
-        { error: 'Insufficient permissions. Only users with clearance level 3 or higher can submit transactions.' },
+        {
+          error:
+            'Insufficient permissions. Only users with clearance level 3 or higher can submit transactions.',
+        },
         { status: 403 }
       );
     }
@@ -64,48 +71,33 @@ export async function POST(request: Request) {
     // Apply rate limiting
     if (apiRateLimiter.isRateLimited(session.user.email)) {
       return NextResponse.json(
-        { 
+        {
           error: 'Too many requests',
           resetTime: apiRateLimiter.getResetTime(session.user.email),
-          remainingRequests: apiRateLimiter.getRemainingRequests(session.user.email)
-        }, 
+          remainingRequests: apiRateLimiter.getRemainingRequests(session.user.email),
+        },
         { status: 429 }
       );
     }
 
-    const { type, amount, category, description } = await request.json();
+    // Parse JSON body separately so malformed JSON returns 400, not 500.
+    let rawBody: unknown;
+    try {
+      rawBody = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
 
-    // Validate required fields
-    if (!type || !amount || !category || !description) {
+    // Validate and coerce the payload against the schema.
+    const parsed = transactionSchema.safeParse(rawBody);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Invalid transaction data', details: parsed.error.flatten() },
         { status: 400 }
       );
     }
 
-    // Validate transaction type
-    if (!isValidTransactionType(type)) {
-      return NextResponse.json(
-        { error: 'Invalid transaction type' },
-        { status: 400 }
-      );
-    }
-
-    // Validate category
-    if (!isValidCategory(category)) {
-      return NextResponse.json(
-        { error: 'Invalid category' },
-        { status: 400 }
-      );
-    }
-
-    // Validate amount
-    if (typeof amount !== 'number' || amount <= 0) {
-      return NextResponse.json(
-        { error: 'Amount must be a positive number' },
-        { status: 400 }
-      );
-    }
+    const { type, amount, category, description } = parsed.data;
 
     const { db } = await connectToDatabase();
 
@@ -115,7 +107,7 @@ export async function POST(request: Request) {
       category,
       description,
       submittedBy: session.user.aydoHandle || session.user.email || 'unknown',
-      submittedAt: new Date()
+      submittedAt: new Date(),
     };
 
     const result = await db.collection('transactions').insertOne(transaction);
@@ -126,13 +118,14 @@ export async function POST(request: Request) {
         ...transaction,
         id: result.insertedId.toString(),
       },
-      remainingRequests: apiRateLimiter.getRemainingRequests(session.user.email)
+      remainingRequests: apiRateLimiter.getRemainingRequests(session.user.email),
     });
   } catch (error) {
-    logger.error('Failed to create transaction', error instanceof Error ? error : new Error(String(error)), { route: '/api/finance/transactions' });
-    return NextResponse.json(
-      { error: 'Failed to create transaction' },
-      { status: 500 }
+    logger.error(
+      'Failed to create transaction',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/finance/transactions' }
     );
+    return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EscortRequestResponse, EscortRequestStatus } from '@/types/EscortRequest';
 
@@ -15,7 +15,7 @@ const EscortRequestTracker: React.FC<EscortRequestTrackerProps> = ({
   onRequestClick,
   showCreateButton = true,
   onCreateRequest,
-  onRequestsChange
+  onRequestsChange,
 }) => {
   const [requests, setRequests] = useState<EscortRequestResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,14 +23,20 @@ const EscortRequestTracker: React.FC<EscortRequestTrackerProps> = ({
   const [statusFilter, setStatusFilter] = useState<EscortRequestStatus | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
 
+  // Monotonically increasing request id so stale responses are ignored
+  const requestIdRef = useRef(0);
+
   // Fetch escort requests
   const fetchRequests = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.append('status', statusFilter);
       if (priorityFilter !== 'all') params.append('priority', priorityFilter);
       const response = await fetch(`/api/security/escort-requests?${params.toString()}`);
+      // Ignore responses superseded by a newer request
+      if (requestId !== requestIdRef.current) return;
       if (!response.ok) {
         console.error('Escort requests fetch failed', response.status);
         setError(`HTTP error ${response.status}`);
@@ -39,14 +45,20 @@ const EscortRequestTracker: React.FC<EscortRequestTrackerProps> = ({
         return;
       }
       const data = await response.json();
+      // Re-check after awaiting the JSON body in case a newer request landed
+      if (requestId !== requestIdRef.current) return;
       setRequests(data);
       onRequestsChange?.(data);
       setError(null);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Error fetching escort requests:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch escort requests');
     } finally {
-      setLoading(false);
+      // Only the latest request controls the loading state
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [statusFilter, priorityFilter, onRequestsChange]);
 
@@ -97,12 +109,15 @@ const EscortRequestTracker: React.FC<EscortRequestTrackerProps> = ({
   // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return 'Unknown';
+    }
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
     }).format(date);
   };
 
@@ -111,7 +126,7 @@ const EscortRequestTracker: React.FC<EscortRequestTrackerProps> = ({
       <div className="flex items-center justify-center p-8">
         <motion.div
           animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
           className="w-8 h-8 border-2 border-[rgba(255,100,100,0.3)] border-t-[rgba(255,100,100,0.8)] rounded-full"
         />
         <span className="ml-3 text-[rgba(var(--mg-text),0.7)]">Loading escort requests...</span>
@@ -204,18 +219,22 @@ const EscortRequestTracker: React.FC<EscortRequestTrackerProps> = ({
                     <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.9)]">
                       Request #{request.id.slice(-8).toUpperCase()}
                     </h3>
-                    <div className={`text-xs px-2 py-1 rounded border ${getStatusColor(request.status)}`}>
+                    <div
+                      className={`text-xs px-2 py-1 rounded border ${getStatusColor(request.status)}`}
+                    >
                       {request.status}
                     </div>
                     <div className={`text-xs font-semibold ${getPriorityColor(request.priority)}`}>
                       {request.priority}
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     <div>
                       <span className="text-[rgba(var(--mg-text),0.6)]">Requested by:</span>
-                      <span className="ml-2 text-[rgba(var(--mg-text),0.9)]">{request.requestedBy}</span>
+                      <span className="ml-2 text-[rgba(var(--mg-text),0.9)]">
+                        {request.requestedBy}
+                      </span>
                     </div>
                     <div>
                       <span className="text-[rgba(var(--mg-text),0.6)]">Route:</span>
@@ -225,33 +244,46 @@ const EscortRequestTracker: React.FC<EscortRequestTrackerProps> = ({
                     </div>
                     <div>
                       <span className="text-[rgba(var(--mg-text),0.6)]">Ships:</span>
-                      <span className="ml-2 text-[rgba(var(--mg-text),0.9)]">{request.shipsToEscort}</span>
+                      <span className="ml-2 text-[rgba(var(--mg-text),0.9)]">
+                        {request.shipsToEscort}
+                      </span>
                     </div>
                     <div>
                       <span className="text-[rgba(var(--mg-text),0.6)]">Created:</span>
-                      <span className="ml-2 text-[rgba(var(--mg-text),0.9)]">{formatDate(request.createdAt)}</span>
+                      <span className="ml-2 text-[rgba(var(--mg-text),0.9)]">
+                        {formatDate(request.createdAt)}
+                      </span>
                     </div>
                   </div>
 
                   {request.assignedSecurityOfficer && (
                     <div className="mt-2 text-sm">
                       <span className="text-[rgba(var(--mg-text),0.6)]">Assigned to:</span>
-                      <span className="ml-2 text-[rgba(255,100,100,0.8)]">{request.assignedSecurityOfficer}</span>
+                      <span className="ml-2 text-[rgba(255,100,100,0.8)]">
+                        {request.assignedSecurityOfficer}
+                      </span>
                     </div>
                   )}
                 </div>
 
                 <div className="text-right">
                   <div className="text-xs text-[rgba(var(--mg-text),0.5)]">
-                    {request.threatAssessment === 'done' ? '✓ Threat Assessment' : '○ Assessment Needed'}
+                    {request.threatAssessment === 'done'
+                      ? '✓ Threat Assessment'
+                      : '○ Assessment Needed'}
                   </div>
                   {request.threatLevel && (
-                    <div className={`text-xs mt-1 font-semibold ${
-                      request.threatLevel === 'Critical' ? 'text-red-400' :
-                      request.threatLevel === 'High' ? 'text-orange-400' :
-                      request.threatLevel === 'Medium' ? 'text-yellow-400' :
-                      'text-green-400'
-                    }`}>
+                    <div
+                      className={`text-xs mt-1 font-semibold ${
+                        request.threatLevel === 'Critical'
+                          ? 'text-red-400'
+                          : request.threatLevel === 'High'
+                            ? 'text-orange-400'
+                            : request.threatLevel === 'Medium'
+                              ? 'text-yellow-400'
+                              : 'text-green-400'
+                      }`}
+                    >
                       {request.threatLevel} Risk
                     </div>
                   )}

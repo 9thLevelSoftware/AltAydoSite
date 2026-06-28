@@ -98,8 +98,11 @@ export function extractImageUrl(view: ImageField, size: ImageSize = 'source'): s
 
   for (const key of imageUrlKeys[size]) {
     const url = view[key];
-    if (typeof url === 'string' && url.trim().length > 0) {
-      return url;
+    if (typeof url === 'string') {
+      const trimmed = url.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
     }
   }
 

@@ -4,6 +4,18 @@ import React, { useState } from 'react';
 import { Session } from 'next-auth';
 import { OperationResponse, OperationStatus } from '@/types/Operation';
 import { MobiGlasButton } from '@/components/ui/mobiglas';
+import { formatDate as formatDateSafe } from '@/lib/utils/formatDate';
+
+// Returns the link as a safe href only when it is a well-formed http(s) URL;
+// otherwise returns null so the caller renders it as plain text.
+const getSafeHttpUrl = (link: string): string | null => {
+  try {
+    const url = new URL(link);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+};
 
 interface OperationDetailViewProps {
   operation: OperationResponse;
@@ -13,73 +25,72 @@ interface OperationDetailViewProps {
   onDelete: (id: string) => void;
 }
 
-const OperationDetailView: React.FC<OperationDetailViewProps> = ({ 
-  operation, 
-  session, 
-  onBack, 
-  onEdit, 
-  onDelete 
+const OperationDetailView: React.FC<OperationDetailViewProps> = ({
+  operation,
+  session,
+  onBack,
+  onEdit,
+  onDelete,
 }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState<OperationStatus>(operation.status);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Check if user has leadership role
-  const isLeadership = session?.user?.role && ['Director', 'Manager', 'Board Member'].includes(session.user.role) || 
-                      (session?.user?.clearanceLevel && session.user.clearanceLevel >= 3);
-  
+  const isLeadership =
+    (session?.user?.role && ['Director', 'Manager', 'Board Member'].includes(session.user.role)) ||
+    (session?.user?.clearanceLevel && session.user.clearanceLevel >= 3);
+
   // Check if user is the operation leader
   const isLeader = operation.leaderId === session?.user?.id;
-  
+
   // Check if user can modify this operation
   const canModify = isLeadership || isLeader;
-  
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
+
+  // Format date for display (falls back to a label on invalid dates)
+  const formatDate = (dateString: string) =>
+    formatDateSafe(dateString, {
       month: 'long',
       day: 'numeric',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-    }).format(date);
-  };
-  
+    });
+
   // Handle status change
   const handleStatusChange = async () => {
     if (newStatus === operation.status) {
       setIsChangingStatus(false);
       return;
     }
-    
+
     try {
       setIsUpdatingStatus(true);
       setError(null);
-      
+
       const response = await fetch(`/api/fleet-ops/operations/${operation.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          status: newStatus
-        })
+          status: newStatus,
+        }),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to update status');
       }
-      
+
       // Update successful, refresh the operation data
       const updatedOperation = await response.json();
-      
+
       // Close the status change UI
       setIsChangingStatus(false);
-      
+
       // Go back to the list and refresh operations
       onBack();
     } catch (err: any) {
@@ -88,22 +99,22 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
       setIsUpdatingStatus(false);
     }
   };
-  
+
   // Handle delete operation
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
       setError(null);
-      
+
       const response = await fetch(`/api/fleet-ops/operations/${operation.id}`, {
         method: 'DELETE',
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to delete operation');
       }
-      
+
       // Delete successful, call onDelete to update UI
       onDelete(operation.id);
     } catch (err: any) {
@@ -111,7 +122,7 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
       setIsDeleting(false);
     }
   };
-  
+
   // Get status color
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -131,7 +142,7 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
         return 'bg-gray-600/20 text-gray-400';
     }
   };
-  
+
   return (
     <div>
       {/* Header with back button and actions */}
@@ -140,8 +151,19 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
           variant="secondary"
           onClick={onBack}
           leftIcon={
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
             </svg>
           }
         >
@@ -156,29 +178,26 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
             >
               Change Status
             </MobiGlasButton>
-            <MobiGlasButton
-              variant="primary"
-              onClick={onEdit}
-            >
+            <MobiGlasButton variant="primary" onClick={onEdit}>
               Edit Operation
             </MobiGlasButton>
           </div>
         )}
       </div>
-      
+
       {/* Error message */}
       {error && (
         <div className="mg-panel-error p-4 mb-6">
           <p className="mg-text-error">{error}</p>
         </div>
       )}
-      
+
       {/* Status change UI */}
       {isChangingStatus && (
         <div className="mg-panel p-4 mb-6">
           <h3 className="mg-subtitle mb-2">Change Operation Status</h3>
           <div className="flex flex-col md:flex-row gap-4">
-            <select 
+            <select
               className="mg-input"
               value={newStatus}
               onChange={(e) => setNewStatus(e.target.value as OperationStatus)}
@@ -210,7 +229,7 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
           </div>
         </div>
       )}
-      
+
       {/* Operation header */}
       <div className="mg-panel p-6 mb-6">
         <div className="flex justify-between items-start mb-4">
@@ -230,12 +249,12 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
             <div className="mg-text">{formatDate(operation.plannedDateTime)}</div>
           </div>
         </div>
-        
+
         <div className="mb-4">
           <h3 className="mg-subtitle mb-1">Description</h3>
           <p className="mg-text">{operation.description}</p>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h3 className="mg-subtitle mb-1">Location</h3>
@@ -247,15 +266,13 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
           </div>
         </div>
       </div>
-      
+
       {/* Objectives */}
       <div className="mg-panel p-6 mb-6">
         <h2 className="mg-subtitle text-xl mb-3">Objectives</h2>
-        <div className="mg-text whitespace-pre-wrap">
-          {operation.objectives}
-        </div>
+        <div className="mg-text whitespace-pre-wrap">{operation.objectives}</div>
       </div>
-      
+
       {/* Participants */}
       <div className="mg-panel p-6 mb-6">
         <h2 className="mg-subtitle text-xl mb-3">Participants ({operation.participants.length})</h2>
@@ -277,7 +294,9 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
                     <td>{participant.role}</td>
                     <td>
                       {participant.shipName ? (
-                        <span>{participant.shipManufacturer} {participant.shipName}</span>
+                        <span>
+                          {participant.shipManufacturer} {participant.shipName}
+                        </span>
                       ) : (
                         <span className="mg-text-secondary">Not assigned</span>
                       )}
@@ -292,58 +311,57 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
           <p className="mg-text-secondary">No participants assigned to this operation.</p>
         )}
       </div>
-      
+
       {/* Diagrams */}
       {operation.diagramLinks.length > 0 && (
         <div className="mg-panel p-6 mb-6">
           <h2 className="mg-subtitle text-xl mb-3">Operation Diagrams</h2>
           <ul className="list-disc pl-5">
-            {operation.diagramLinks.map((link, index) => (
-              <li key={index} className="mb-1">
-                <a 
-                  href={link} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="mg-link"
-                >
-                  {link}
-                </a>
-              </li>
-            ))}
+            {operation.diagramLinks.map((link, index) => {
+              const safeHref = getSafeHttpUrl(link);
+              return (
+                <li key={index} className="mb-1">
+                  {safeHref ? (
+                    <a
+                      href={safeHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mg-link"
+                    >
+                      {link}
+                    </a>
+                  ) : (
+                    <span className="mg-text-secondary break-all">{link}</span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
-      
+
       {/* Delete operation (only for leaders/admins) */}
       {canModify && (
         <div className="mg-panel p-6 border border-red-800/30 bg-red-900/10">
           <h2 className="mg-subtitle text-xl mb-3 text-red-400">Danger Zone</h2>
           <p className="mg-text-secondary mb-4">
-            Deleting an operation cannot be undone. All data associated with this operation will be permanently removed.
+            Deleting an operation cannot be undone. All data associated with this operation will be
+            permanently removed.
           </p>
           {isDeleting ? (
             <div>
               <p className="mg-text-error mb-2">Are you sure you want to delete this operation?</p>
               <div className="flex gap-2">
-                <MobiGlasButton
-                  variant="danger"
-                  onClick={handleDelete}
-                >
+                <MobiGlasButton variant="danger" onClick={handleDelete}>
                   Yes, Delete Operation
                 </MobiGlasButton>
-                <MobiGlasButton
-                  variant="secondary"
-                  onClick={() => setIsDeleting(false)}
-                >
+                <MobiGlasButton variant="secondary" onClick={() => setIsDeleting(false)}>
                   Cancel
                 </MobiGlasButton>
               </div>
             </div>
           ) : (
-            <MobiGlasButton
-              variant="danger"
-              onClick={() => setIsDeleting(true)}
-            >
+            <MobiGlasButton variant="danger" onClick={() => setIsDeleting(true)}>
               Delete Operation
             </MobiGlasButton>
           )}
@@ -353,4 +371,4 @@ const OperationDetailView: React.FC<OperationDetailViewProps> = ({
   );
 };
 
-export default OperationDetailView; 
+export default OperationDetailView;

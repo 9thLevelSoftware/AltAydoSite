@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useId, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import MobiGlasPanel from './MobiGlasPanel';
@@ -24,8 +24,10 @@ const variantBorderColors: Record<string, string> = {
 };
 
 const variantConfirmClasses: Record<string, string> = {
-  danger: '!bg-[rgba(var(--mg-danger),0.8)] !border-[rgba(var(--mg-danger),0.6)] !text-white hover:!bg-[rgba(var(--mg-danger),0.9)]',
-  warning: '!bg-[rgba(var(--mg-warning),0.8)] !border-[rgba(var(--mg-warning),0.6)] !text-black hover:!bg-[rgba(var(--mg-warning),0.9)]',
+  danger:
+    '!bg-[rgba(var(--mg-danger),0.8)] !border-[rgba(var(--mg-danger),0.6)] !text-white hover:!bg-[rgba(var(--mg-danger),0.9)]',
+  warning:
+    '!bg-[rgba(var(--mg-warning),0.8)] !border-[rgba(var(--mg-warning),0.6)] !text-black hover:!bg-[rgba(var(--mg-warning),0.9)]',
   default: '',
 };
 
@@ -40,6 +42,8 @@ export default function MobiGlasConfirmDialog({
   onCancel,
 }: MobiGlasConfirmDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const descId = useId();
   useFocusTrap(dialogRef, open, onCancel);
 
   return (
@@ -49,6 +53,8 @@ export default function MobiGlasConfirmDialog({
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={descId}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -70,6 +76,7 @@ export default function MobiGlasConfirmDialog({
             >
               {/* Title */}
               <h3
+                id={titleId}
                 className="text-lg font-quantify tracking-wider mb-3"
                 style={{ color: 'rgba(var(--mg-text), 1)' }}
               >
@@ -78,6 +85,7 @@ export default function MobiGlasConfirmDialog({
 
               {/* Message */}
               <p
+                id={descId}
                 className="text-sm leading-relaxed mb-6"
                 style={{ color: 'rgba(var(--mg-text), 0.7)' }}
               >
@@ -86,11 +94,7 @@ export default function MobiGlasConfirmDialog({
 
               {/* Actions */}
               <div className="flex justify-end gap-3">
-                <MobiGlasButton
-                  variant="outline"
-                  size="sm"
-                  onClick={onCancel}
-                >
+                <MobiGlasButton variant="outline" size="sm" onClick={onCancel}>
                   {cancelLabel}
                 </MobiGlasButton>
                 <MobiGlasButton

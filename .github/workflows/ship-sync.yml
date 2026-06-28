@@ -58,7 +58,12 @@ jobs:
             baseline_line="$(read_sync_status "${baseline_body}")"
             baseline_version="${baseline_line%% *}"
           else
-            echo "::warning::Could not read baseline ship sync status; assuming version 0."
+            baseline_exit=$?
+            rm -f "${baseline_body}"
+            echo "Could not read baseline ship sync status (curl exit ${baseline_exit})."
+            echo "Refusing to proceed: without a reliable baseline version the completion"
+            echo "check could falsely pass against a pre-existing sync status."
+            exit 1
           fi
           rm -f "${baseline_body}"
 

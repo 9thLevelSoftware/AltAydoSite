@@ -4,12 +4,17 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EscortRequestResponse, EscortRequestStatus, ThreatLevel } from '@/types/EscortRequest';
 
+const LEADERSHIP_ROLES = ['Director', 'Manager', 'Board Member'];
+
 interface EscortRequestDetailProps {
   request: EscortRequestResponse | null;
   isOpen: boolean;
   onClose: () => void;
   onUpdate?: (updatedRequest: EscortRequestResponse) => void;
   onDelete?: (requestId: string) => void;
+  currentUserId?: string;
+  currentUserRole?: string;
+  currentUserClearance?: number;
 }
 
 const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
@@ -17,7 +22,10 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
   isOpen,
   onClose,
   onUpdate,
-  onDelete
+  onDelete,
+  currentUserId,
+  currentUserRole,
+  currentUserClearance,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedRequest, setEditedRequest] = useState<EscortRequestResponse | null>(null);
@@ -32,6 +40,15 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
   }, [request]);
 
   if (!request || !isOpen) return null;
+
+  // Client-side gating only -- server remains the source of truth. Show
+  // Edit/Delete to the creator, the assigned security officer, or leadership.
+  const isLeadership =
+    (!!currentUserRole && LEADERSHIP_ROLES.includes(currentUserRole)) ||
+    (currentUserClearance ?? 0) >= 3;
+  const isCreator = !!currentUserId && request.requestedByUserId === currentUserId;
+  const isAssignedOfficer = !!currentUserId && request.securityOfficerUserId === currentUserId;
+  const canModify = isLeadership || isCreator || isAssignedOfficer;
 
   // Get status color for display
   const getStatusColor = (status: EscortRequestStatus) => {
@@ -76,6 +93,7 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
   // Format date for display
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Unknown';
     return new Intl.DateTimeFormat('en-US', {
       weekday: 'long',
       month: 'long',
@@ -84,7 +102,7 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
-      timeZoneName: 'short'
+      timeZoneName: 'short',
     }).format(date);
   };
 
@@ -96,16 +114,29 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
     setError(null);
 
     try {
+      // Send only the id, version, and the fields actually changed in this
+      // editor. The server whitelists by role and is the source of truth.
+      const payload: Record<string, unknown> = { id: request.id };
+      const version = (request as { __v?: number }).__v;
+      if (typeof version === 'number') payload.__v = version;
+
+      const editableFields: (keyof EscortRequestResponse)[] = ['status', 'priority'];
+      for (const field of editableFields) {
+        if (JSON.stringify(editedRequest[field]) !== JSON.stringify(request[field])) {
+          payload[field] = editedRequest[field];
+        }
+      }
+
       const response = await fetch('/api/security/escort-requests', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(editedRequest)
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
@@ -127,12 +158,15 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
     setError(null);
 
     try {
-      const response = await fetch(`/api/security/escort-requests?id=${request.id}`, {
-        method: 'DELETE'
-      });
+      const response = await fetch(
+        `/api/security/escort-requests?id=${encodeURIComponent(request.id)}`,
+        {
+          method: 'DELETE',
+        }
+      );
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
@@ -149,7 +183,7 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
 
   const handleInputChange = (field: keyof EscortRequestResponse, value: any) => {
     if (!editedRequest) return;
-    setEditedRequest(prev => prev ? { ...prev, [field]: value } : null);
+    setEditedRequest((prev) => (prev ? { ...prev, [field]: value } : null));
   };
 
   return (
@@ -166,7 +200,7 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            transition={{ type: "spring", damping: 25, stiffness: 500 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 500 }}
             className="bg-[rgba(var(--mg-panel-dark),0.95)] border border-[rgba(255,100,100,0.4)] rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
@@ -180,14 +214,27 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
                   onClick={onClose}
                   className="text-[rgba(var(--mg-text),0.6)] hover:text-[rgba(var(--mg-text),0.9)] transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
 
               <div className="flex items-center gap-4 mb-4">
-                <div className={`text-sm px-3 py-1 rounded border ${getStatusColor(request.status)}`}>
+                <div
+                  className={`text-sm px-3 py-1 rounded border ${getStatusColor(request.status)}`}
+                >
                   {isEditing ? (
                     <select
                       value={editedRequest?.status || request.status}
@@ -237,53 +284,76 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
               {/* Basic Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">Request Details</h3>
+                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">
+                    Request Details
+                  </h3>
                   <div className="space-y-3">
                     <div>
                       <span className="text-sm text-[rgba(var(--mg-text),0.6)]">Requested by:</span>
                       <div className="text-[rgba(var(--mg-text),0.9)]">{request.requestedBy}</div>
                     </div>
                     <div>
-                      <span className="text-sm text-[rgba(var(--mg-text),0.6)]">Ships to escort:</span>
+                      <span className="text-sm text-[rgba(var(--mg-text),0.6)]">
+                        Ships to escort:
+                      </span>
                       <div className="text-[rgba(var(--mg-text),0.9)]">{request.shipsToEscort}</div>
                     </div>
                     <div>
                       <span className="text-sm text-[rgba(var(--mg-text),0.6)]">Created:</span>
-                      <div className="text-[rgba(var(--mg-text),0.9)]">{formatDate(request.createdAt)}</div>
+                      <div className="text-[rgba(var(--mg-text),0.9)]">
+                        {formatDate(request.createdAt)}
+                      </div>
                     </div>
                     {request.preferredDateTime && (
                       <div>
-                        <span className="text-sm text-[rgba(var(--mg-text),0.6)]">Preferred time:</span>
-                        <div className="text-[rgba(var(--mg-text),0.9)]">{formatDate(request.preferredDateTime)}</div>
+                        <span className="text-sm text-[rgba(var(--mg-text),0.6)]">
+                          Preferred time:
+                        </span>
+                        <div className="text-[rgba(var(--mg-text),0.9)]">
+                          {formatDate(request.preferredDateTime)}
+                        </div>
                       </div>
                     )}
                     {request.estimatedDuration && (
                       <div>
                         <span className="text-sm text-[rgba(var(--mg-text),0.6)]">Duration:</span>
-                        <div className="text-[rgba(var(--mg-text),0.9)]">{request.estimatedDuration}</div>
+                        <div className="text-[rgba(var(--mg-text),0.9)]">
+                          {request.estimatedDuration}
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">Threat Assessment</h3>
+                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">
+                    Threat Assessment
+                  </h3>
                   <div className="space-y-3">
                     <div>
-                      <span className="text-sm text-[rgba(var(--mg-text),0.6)]">Assessment status:</span>
+                      <span className="text-sm text-[rgba(var(--mg-text),0.6)]">
+                        Assessment status:
+                      </span>
                       <div className="text-[rgba(var(--mg-text),0.9)]">
                         {request.threatAssessment === 'done' ? '✓ Completed' : '○ Needed'}
                       </div>
                     </div>
                     {request.threatLevel && (
                       <div>
-                        <span className="text-sm text-[rgba(var(--mg-text),0.6)]">Threat level:</span>
-                        <div className={`font-semibold ${
-                          request.threatLevel === 'Critical' ? 'text-red-400' :
-                          request.threatLevel === 'High' ? 'text-orange-400' :
-                          request.threatLevel === 'Medium' ? 'text-yellow-400' :
-                          'text-green-400'
-                        }`}>
+                        <span className="text-sm text-[rgba(var(--mg-text),0.6)]">
+                          Threat level:
+                        </span>
+                        <div
+                          className={`font-semibold ${
+                            request.threatLevel === 'Critical'
+                              ? 'text-red-400'
+                              : request.threatLevel === 'High'
+                                ? 'text-orange-400'
+                                : request.threatLevel === 'Medium'
+                                  ? 'text-yellow-400'
+                                  : 'text-green-400'
+                          }`}
+                        >
                           {request.threatLevel}
                         </div>
                       </div>
@@ -294,7 +364,9 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
 
               {/* Route Information */}
               <div>
-                <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">Route Information</h3>
+                <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">
+                  Route Information
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <span className="text-sm text-[rgba(var(--mg-text),0.6)]">Start location:</span>
@@ -306,8 +378,12 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
                   </div>
                   {request.secondaryLocations && (
                     <div className="md:col-span-2">
-                      <span className="text-sm text-[rgba(var(--mg-text),0.6)]">Secondary locations:</span>
-                      <div className="text-[rgba(var(--mg-text),0.9)]">{request.secondaryLocations}</div>
+                      <span className="text-sm text-[rgba(var(--mg-text),0.6)]">
+                        Secondary locations:
+                      </span>
+                      <div className="text-[rgba(var(--mg-text),0.9)]">
+                        {request.secondaryLocations}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -322,7 +398,9 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
               {/* Assets Requested */}
               {request.assetsRequested.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">Requested Assets</h3>
+                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">
+                    Requested Assets
+                  </h3>
                   <div className="flex flex-wrap gap-2">
                     {request.assetsRequested.map((asset, i) => (
                       <span
@@ -339,10 +417,14 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
               {/* Assignment Information */}
               {request.assignedSecurityOfficer && (
                 <div>
-                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">Assignment</h3>
+                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">
+                    Assignment
+                  </h3>
                   <div>
                     <span className="text-sm text-[rgba(var(--mg-text),0.6)]">Assigned to:</span>
-                    <div className="text-[rgba(255,100,100,0.8)] font-semibold">{request.assignedSecurityOfficer}</div>
+                    <div className="text-[rgba(255,100,100,0.8)] font-semibold">
+                      {request.assignedSecurityOfficer}
+                    </div>
                   </div>
                 </div>
               )}
@@ -350,7 +432,9 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
               {/* Additional Notes */}
               {request.additionalNotes && (
                 <div>
-                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">Additional Notes</h3>
+                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">
+                    Additional Notes
+                  </h3>
                   <div className="text-[rgba(var(--mg-text),0.9)] p-3 bg-[rgba(var(--mg-panel-light),0.2)] rounded border border-[rgba(255,100,100,0.2)]">
                     {request.additionalNotes}
                   </div>
@@ -360,7 +444,9 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
               {/* Completion Notes */}
               {request.completionNotes && (
                 <div>
-                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">Completion Notes</h3>
+                  <h3 className="text-lg font-quantify text-[rgba(255,100,100,0.8)] mb-3">
+                    Completion Notes
+                  </h3>
                   <div className="text-[rgba(var(--mg-text),0.9)] p-3 bg-[rgba(var(--mg-panel-light),0.2)] rounded border border-[rgba(255,100,100,0.2)]">
                     {request.completionNotes}
                   </div>
@@ -392,20 +478,22 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
                     </button>
                   </>
                 ) : (
-                  <>
-                    <button
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="px-4 py-2 text-sm bg-[rgba(var(--mg-error),0.2)] border border-[rgba(var(--mg-error),0.6)] text-[rgba(var(--mg-error),0.9)] rounded hover:bg-[rgba(var(--mg-error),0.3)] transition-colors"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="px-4 py-2 text-sm bg-[rgba(255,100,100,0.2)] border border-[rgba(255,100,100,0.6)] text-[rgba(255,100,100,0.9)] rounded hover:bg-[rgba(255,100,100,0.3)] transition-colors"
-                    >
-                      Edit
-                    </button>
-                  </>
+                  canModify && (
+                    <>
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="px-4 py-2 text-sm bg-[rgba(var(--mg-error),0.2)] border border-[rgba(var(--mg-error),0.6)] text-[rgba(var(--mg-error),0.9)] rounded hover:bg-[rgba(var(--mg-error),0.3)] transition-colors"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="px-4 py-2 text-sm bg-[rgba(255,100,100,0.2)] border border-[rgba(255,100,100,0.6)] text-[rgba(255,100,100,0.9)] rounded hover:bg-[rgba(255,100,100,0.3)] transition-colors"
+                      >
+                        Edit
+                      </button>
+                    </>
+                  )
                 )}
               </div>
             </div>
@@ -428,9 +516,12 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
                   className="bg-[rgba(var(--mg-panel-dark),0.95)] border border-[rgba(var(--mg-error),0.4)] rounded-lg p-6 max-w-md mx-4"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <h3 className="text-lg font-quantify text-[rgba(var(--mg-error),0.9)] mb-4">Confirm Deletion</h3>
+                  <h3 className="text-lg font-quantify text-[rgba(var(--mg-error),0.9)] mb-4">
+                    Confirm Deletion
+                  </h3>
                   <p className="text-[rgba(var(--mg-text),0.8)] mb-6">
-                    Are you sure you want to delete this escort request? This action cannot be undone.
+                    Are you sure you want to delete this escort request? This action cannot be
+                    undone.
                   </p>
                   <div className="flex gap-3 justify-end">
                     <button
@@ -457,4 +548,4 @@ const EscortRequestDetail: React.FC<EscortRequestDetailProps> = ({
   );
 };
 
-export default EscortRequestDetail; 
+export default EscortRequestDetail;

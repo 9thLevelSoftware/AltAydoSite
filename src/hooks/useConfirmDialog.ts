@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import MobiGlasConfirmDialog from '@/components/ui/mobiglas/MobiGlasConfirmDialog';
 
 export interface ConfirmOptions {
@@ -23,9 +23,19 @@ export function ConfirmDialogProvider({ children }: { children: React.ReactNode 
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
     return new Promise<boolean>((resolve) => {
+      // Unblock any prior awaiter so its promise never hangs (last-wins, single-dialog UX).
+      resolveRef.current?.(false);
       resolveRef.current = resolve;
       setDialogState({ ...options, open: true });
     });
+  }, []);
+
+  // Resolve any pending confirmation on unmount so awaiters don't hang forever.
+  useEffect(() => {
+    return () => {
+      resolveRef.current?.(false);
+      resolveRef.current = null;
+    };
   }, []);
 
   const handleConfirm = useCallback(() => {
@@ -63,7 +73,7 @@ export function useConfirmDialog() {
   if (!context) {
     throw new Error(
       'useConfirmDialog must be used within a ConfirmDialogProvider. ' +
-      'Ensure your component is wrapped in the Providers component from src/components/providers/index.tsx.'
+        'Ensure your component is wrapped in the Providers component from src/components/providers/index.tsx.'
     );
   }
 

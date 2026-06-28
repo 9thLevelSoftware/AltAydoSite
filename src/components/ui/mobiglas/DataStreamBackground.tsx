@@ -14,7 +14,7 @@ interface DataStreamBackgroundProps {
  */
 const DataStreamBackground: React.FC<DataStreamBackgroundProps> = ({
   opacity = 'low',
-  speed = 'medium'
+  speed = 'medium',
 }) => {
   const opacityMap = { low: 0.1, medium: 0.2, high: 0.3 };
   const speedMap = { slow: 8, medium: 5, fast: 3 };
@@ -26,7 +26,7 @@ const DataStreamBackground: React.FC<DataStreamBackgroundProps> = ({
   const streams = Array.from({ length: 5 }, (_, i) => ({
     id: i,
     left: `${15 + i * 20}%`,
-    delay: i * 0.4
+    delay: i * 0.4,
   }));
 
   return (
@@ -37,23 +37,23 @@ const DataStreamBackground: React.FC<DataStreamBackgroundProps> = ({
           className="absolute top-0 bottom-0 w-px"
           style={{
             left: stream.left,
-            background: `rgba(var(--mg-primary), ${opacityValue})`
+            background: `rgba(var(--mg-primary), ${opacityValue})`,
           }}
         >
           <motion.div
             className="w-2 h-2 rounded-full absolute left-1/2 -translate-x-1/2"
             style={{
               background: `rgba(var(--mg-primary), ${opacityValue * 3})`,
-              boxShadow: `0 0 8px rgba(var(--mg-primary), ${opacityValue * 2})`
+              boxShadow: `0 0 8px rgba(var(--mg-primary), ${opacityValue * 2})`,
             }}
             animate={{
-              y: ['-10%', '110%']
+              top: ['-10%', '110%'],
             }}
             transition={{
               duration,
               repeat: Infinity,
               delay: stream.delay,
-              ease: 'linear'
+              ease: 'linear',
             }}
           />
         </div>

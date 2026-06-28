@@ -1,18 +1,27 @@
 import { logger } from '@/lib/logger';
-import { DiscordScheduledEvent, DiscordEventStatus, DiscordEntityType, DiscordPrivacyLevel } from '@/types/DiscordEvent';
+import {
+  DiscordScheduledEvent,
+  DiscordEventStatus,
+  DiscordEntityType,
+  DiscordPrivacyLevel,
+} from '@/types/DiscordEvent';
 import { Client, GatewayIntentBits, Guild, GuildMember, Role } from 'discord.js';
 
 // Discord API configuration
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
 
 // Interface for creating Discord events
+//
+// For update operations (updateScheduledEvent) the optional fields follow this convention:
+//   - undefined  => leave the field unchanged
+//   - null / ''  => clear the field on Discord
 export interface CreateDiscordEventParams {
   name: string;
-  description?: string;
+  description?: string | null;
   scheduledStartTime: string; // ISO 8601 timestamp
-  scheduledEndTime?: string;  // ISO 8601 timestamp (optional)
-  location?: string;          // For external events
-  image?: string;             // Base64 encoded image data (optional)
+  scheduledEndTime?: string | null; // ISO 8601 timestamp (optional)
+  location?: string | null; // For external events
+  image?: string | null; // Base64 encoded image data (optional)
 }
 
 // Interface for Discord event RSVP user
@@ -54,7 +63,7 @@ export class DiscordService {
       `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events?with_recurrence=1`,
       {
         headers: {
-          'Authorization': `Bot ${this.botToken}`,
+          Authorization: `Bot ${this.botToken}`,
           'Content-Type': 'application/json',
         },
       }
@@ -66,9 +75,9 @@ export class DiscordService {
     }
 
     const events: DiscordScheduledEvent[] = await response.json();
-    return events.filter(event =>
-      event.status === DiscordEventStatus.SCHEDULED ||
-      event.status === DiscordEventStatus.ACTIVE
+    return events.filter(
+      (event) =>
+        event.status === DiscordEventStatus.SCHEDULED || event.status === DiscordEventStatus.ACTIVE
     );
   }
 
@@ -81,10 +90,10 @@ export class DiscordService {
     }
 
     const response = await fetch(
-      `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events/${eventId}`,
+      `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events/${encodeURIComponent(eventId)}`,
       {
         headers: {
-          'Authorization': `Bot ${this.botToken}`,
+          Authorization: `Bot ${this.botToken}`,
           'Content-Type': 'application/json',
         },
       }
@@ -114,32 +123,75 @@ export class DiscordService {
     }
 
     this.client = new Client({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers
-      ]
+      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
     });
 
-    return new Promise((resolve, reject) => {
+    // Configurable timeout so a hung login/connect doesn't block callers forever
+    const timeoutMs = parseInt(process.env.DISCORD_BOT_INIT_TIMEOUT_MS || '', 10) || 30000;
+
+    return new Promise<void>((resolve, reject) => {
+      let settled = false;
+      let timer: NodeJS.Timeout | null = null;
+
+      const finish = (err?: unknown) => {
+        if (settled) return;
+        settled = true;
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        if (err) {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        } else {
+          resolve();
+        }
+      };
+
+      timer = setTimeout(() => {
+        logger.error('Discord bot initialization timed out', undefined, {
+          module: 'discord',
+          timeoutMs,
+        });
+        // Tear down the half-initialized client so callers can fail fast and retry cleanly
+        const client = this.client;
+        this.client = null;
+        this.guild = null;
+        if (client) {
+          client.destroy().catch((destroyErr) => {
+            logger.error(
+              'Error destroying Discord client after init timeout',
+              destroyErr instanceof Error ? destroyErr : undefined,
+              { module: 'discord' }
+            );
+          });
+        }
+        finish(new Error(`Discord bot initialization timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
       this.client!.once('ready', async () => {
         logger.info('Discord bot logged in', { module: 'discord', botTag: this.client!.user?.tag });
 
         try {
           this.guild = await this.client!.guilds.fetch(this.guildId);
-          logger.info('Connected to Discord guild', { module: 'discord', guildName: this.guild.name });
-          resolve();
+          logger.info('Connected to Discord guild', {
+            module: 'discord',
+            guildName: this.guild.name,
+          });
+          finish();
         } catch (error) {
-          logger.error('Error fetching guild', error instanceof Error ? error : undefined, { module: 'discord' });
-          reject(error);
+          logger.error('Error fetching guild', error instanceof Error ? error : undefined, {
+            module: 'discord',
+          });
+          finish(error);
         }
       });
 
       this.client!.once('error', (error) => {
         logger.error('Discord client error', error, { module: 'discord' });
-        reject(error);
+        finish(error);
       });
 
-      this.client!.login(this.botToken).catch(reject);
+      this.client!.login(this.botToken).catch(finish);
     });
   }
 
@@ -173,23 +225,49 @@ export class DiscordService {
     }
 
     const members = await this.guild.members.fetch();
-    
+
     // Try to find by username, display name, or username#discriminator format
-    const member = members.find(m => 
-      m.user.username === discordName ||
-      m.displayName === discordName ||
-      `${m.user.username}#${m.user.discriminator}` === discordName ||
-      m.user.tag === discordName
+    const member = members.find(
+      (m) =>
+        m.user.username === discordName ||
+        m.displayName === discordName ||
+        `${m.user.username}#${m.user.discriminator}` === discordName ||
+        m.user.tag === discordName
     );
 
     return member || null;
   }
 
   /**
+   * Get member by Discord user ID (snowflake).
+   * Preferred over name lookups when the user's discordId is known.
+   */
+  async getMemberById(discordId: string): Promise<GuildMember | null> {
+    if (!this.guild) {
+      await this.initializeBot();
+    }
+
+    if (!this.guild) {
+      throw new Error('Guild not available');
+    }
+
+    try {
+      const member = await this.guild.members.fetch(discordId);
+      return member || null;
+    } catch (err: any) {
+      if (err?.code === 10007) {
+        // Unknown Member
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Get roles for a specific member
    */
   async getMemberRoles(member: GuildMember): Promise<Role[]> {
-    return Array.from(member.roles.cache.values()).filter(role => role.name !== '@everyone');
+    return Array.from(member.roles.cache.values()).filter((role) => role.name !== '@everyone');
   }
 
   /**
@@ -207,8 +285,8 @@ export class DiscordService {
       scheduled_start_time: params.scheduledStartTime,
       entity_type: DiscordEntityType.EXTERNAL, // External event (no voice channel)
       entity_metadata: {
-        location: params.location || 'Star Citizen'
-      }
+        location: params.location || 'Star Citizen',
+      },
     };
 
     // Add optional fields
@@ -231,17 +309,14 @@ export class DiscordService {
 
     logger.info('Creating Discord scheduled event', { module: 'discord', eventName: payload.name });
 
-    const response = await fetch(
-      `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bot ${this.botToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      }
-    );
+    const response = await fetch(`${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bot ${this.botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -261,33 +336,38 @@ export class DiscordService {
   /**
    * Update a scheduled event in Discord
    */
-  async updateScheduledEvent(eventId: string, params: Partial<CreateDiscordEventParams>): Promise<DiscordScheduledEvent> {
+  async updateScheduledEvent(
+    eventId: string,
+    params: Partial<CreateDiscordEventParams>
+  ): Promise<DiscordScheduledEvent> {
     if (!this.botToken || !this.guildId) {
       throw new Error('Discord configuration missing');
     }
 
+    // Field-clearing convention: undefined leaves a field unchanged, while null/''
+    // is forwarded to Discord to explicitly clear it.
     const payload: any = {};
 
     if (params.name) payload.name = params.name;
     if (params.description !== undefined) payload.description = params.description;
     if (params.scheduledStartTime) payload.scheduled_start_time = params.scheduledStartTime;
-    if (params.scheduledEndTime) payload.scheduled_end_time = params.scheduledEndTime;
-    if (params.location) {
+    if (params.scheduledEndTime !== undefined) payload.scheduled_end_time = params.scheduledEndTime;
+    if (params.location !== undefined) {
       payload.entity_metadata = { location: params.location };
     }
-    if (params.image) payload.image = params.image;
+    if (params.image !== undefined) payload.image = params.image;
 
     logger.info('Updating Discord scheduled event', { module: 'discord', eventId });
 
     const response = await fetch(
-      `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events/${eventId}`,
+      `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events/${encodeURIComponent(eventId)}`,
       {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bot ${this.botToken}`,
+          Authorization: `Bot ${this.botToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       }
     );
 
@@ -318,11 +398,11 @@ export class DiscordService {
     logger.info('Deleting Discord scheduled event', { module: 'discord', eventId });
 
     const response = await fetch(
-      `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events/${eventId}`,
+      `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events/${encodeURIComponent(eventId)}`,
       {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bot ${this.botToken}`,
+          Authorization: `Bot ${this.botToken}`,
           'Content-Type': 'application/json',
         },
       }
@@ -356,14 +436,14 @@ export class DiscordService {
 
     // Paginate through all users
     while (true) {
-      let url = `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events/${eventId}/users?limit=${limit}&with_member=true`;
+      let url = `${DISCORD_API_BASE}/guilds/${this.guildId}/scheduled-events/${encodeURIComponent(eventId)}/users?limit=${limit}&with_member=true`;
       if (after) {
         url += `&after=${after}`;
       }
 
       const response = await fetch(url, {
         headers: {
-          'Authorization': `Bot ${this.botToken}`,
+          Authorization: `Bot ${this.botToken}`,
           'Content-Type': 'application/json',
         },
       });
@@ -423,16 +503,22 @@ export class DiscordService {
     await this.guild.roles.fetch();
 
     // Try to find existing role
-    const existing = this.guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase());
+    const existing = this.guild.roles.cache.find(
+      (r) => r.name.toLowerCase() === roleName.toLowerCase()
+    );
     if (existing) return existing;
 
     // Create role if not exists
     logger.info('Creating Discord role', { module: 'discord', roleName });
     const created = await this.guild.roles.create({
       name: roleName,
-      reason: 'Auto-created for AydoDB synchronization'
+      reason: 'Auto-created for AydoDB synchronization',
     });
-    logger.info('Created Discord role', { module: 'discord', roleName: created.name, roleId: created.id });
+    logger.info('Created Discord role', {
+      module: 'discord',
+      roleName: created.name,
+      roleId: created.id,
+    });
     return created;
   }
 
@@ -440,7 +526,10 @@ export class DiscordService {
    * Assign a role to a guild member by Discord user ID.
    * Returns true if role was added, false if already present or member missing.
    */
-  async assignRoleToMember(discordUserId: string, role: Role): Promise<{added: boolean; reason: string;}> {
+  async assignRoleToMember(
+    discordUserId: string,
+    role: Role
+  ): Promise<{ added: boolean; reason: string }> {
     if (!this.guild) {
       await this.initializeBot();
     }
@@ -457,7 +546,8 @@ export class DiscordService {
       await member.roles.add(role, 'Synced to AydoDB role assignment');
       return { added: true, reason: 'added' };
     } catch (err: any) {
-      if (err?.code === 10007) { // Unknown Member
+      if (err?.code === 10007) {
+        // Unknown Member
         return { added: false, reason: 'member_not_found' };
       }
       throw err;

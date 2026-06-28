@@ -13,9 +13,24 @@ module.exports = {
     project: './tsconfig.json',
   },
   rules: {
-    // Downgrade pre-existing violations to warnings so the build passes.
-    // These are widespread across the legacy codebase and not introduced
-    // by the Dynamic Ship Database project.
+    // TECH-DEBT BASELINE (tracked): the rules below are intentionally
+    // downgraded from 'error' to 'warn' so the build passes against
+    // pre-existing violations that are widespread across the legacy
+    // codebase (not introduced by the Dynamic Ship Database project).
+    //
+    // This is a deliberate, tracked baseline -- NOT a permanent relaxation.
+    // The plan is to incrementally fix each rule's violations and then
+    // ratchet that rule back to 'error' one at a time. New/changed code
+    // should be written to satisfy these rules at 'error' level even while
+    // the global default remains 'warn'.
+    //
+    // Tracking: TODO(AYDO-LINT-BASELINE) -- file/link a tracking issue to
+    // ratchet each of the rules below back to 'error':
+    //   1. '@typescript-eslint/no-explicit-any'
+    //   2. '@typescript-eslint/no-unused-vars'
+    //   3. '@typescript-eslint/no-require-imports'
+    //   4. '@typescript-eslint/no-empty-object-type'
+    //   5. 'prefer-const'
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': 'warn',
     '@typescript-eslint/no-require-imports': 'warn',

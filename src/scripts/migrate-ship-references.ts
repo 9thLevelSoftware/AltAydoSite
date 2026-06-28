@@ -23,12 +23,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as userStorage from '../lib/user-storage';
 import { connectToDatabase } from '../lib/mongodb';
-import {
-  buildShipsIndex,
-  resolveShipName,
-  UUID_REGEX,
-  ShipsIndex,
-} from '../lib/ship-name-matcher';
+import { buildShipsIndex, resolveShipName, UUID_REGEX, ShipsIndex } from '../lib/ship-name-matcher';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,14 +32,14 @@ import {
 interface CollectionReport {
   total: number;
   updated: number;
-  skipped: number;   // already migrated or no ships
+  skipped: number; // already migrated or no ships
   failed: number;
 }
 
 interface MigrationMapping {
   collection: string;
   documentId: string;
-  fieldPath: string;     // e.g., "ships[0].name", "participants[2].shipName"
+  fieldPath: string; // e.g., "ships[0].name", "participants[2].shipName"
   originalName: string;
   resolvedName: string;
   fleetyardsId: string;
@@ -112,7 +107,6 @@ async function migrateUserShips(
           typeof shipAny.fleetyardsId === 'string' &&
           UUID_REGEX.test(shipAny.fleetyardsId)
         ) {
-          collectionReport.skipped++;
           return ship;
         }
 
@@ -166,8 +160,8 @@ async function migrateUserShips(
   report.collections.users = collectionReport;
   console.log(
     `MIGRATION: [users] Done -- ${collectionReport.total} total, ` +
-    `${collectionReport.updated} updated, ${collectionReport.skipped} skipped, ` +
-    `${collectionReport.failed} failed`
+      `${collectionReport.updated} updated, ${collectionReport.skipped} skipped, ` +
+      `${collectionReport.failed} failed`
   );
 }
 
@@ -216,7 +210,6 @@ async function migrateMissions(
           typeof participant.fleetyardsId === 'string' &&
           UUID_REGEX.test(participant.fleetyardsId as string)
         ) {
-          collectionReport.skipped++;
           return participant;
         }
 
@@ -226,7 +219,7 @@ async function migrateMissions(
         if (match) {
           report.mappings.push({
             collection: 'missions',
-            documentId: mission.id as string,
+            documentId: mission._id.toString(),
             fieldPath,
             originalName: shipName,
             resolvedName: match.matchedName,
@@ -238,7 +231,7 @@ async function migrateMissions(
         } else {
           report.unmatchedNames.push({
             collection: 'missions',
-            documentId: mission.id as string,
+            documentId: mission._id.toString(),
             fieldPath,
             name: shipName,
           });
@@ -249,13 +242,25 @@ async function migrateMissions(
       if (anyUpdated) {
         if (!dryRun) {
           try {
-            await db.collection('missions').updateOne(
-              { id: mission.id },
-              { $set: { participants: updatedParticipants } }
-            );
-            collectionReport.updated++;
+            // Filter on the fetched document's own _id for a reliable match.
+            // Mongo documents always carry an ObjectId _id, so this targets the
+            // exact record regardless of any legacy string `id` field.
+            const result = await db
+              .collection('missions')
+              .updateOne({ _id: mission._id }, { $set: { participants: updatedParticipants } });
+            if (result.matchedCount > 0) {
+              collectionReport.updated++;
+            } else {
+              console.warn(
+                `MIGRATION: [missions] No document matched _id ${mission._id.toString()} -- update not applied`
+              );
+              collectionReport.failed++;
+            }
           } catch (err) {
-            console.error(`MIGRATION: [missions] Failed to update mission ${mission.id}:`, err);
+            console.error(
+              `MIGRATION: [missions] Failed to update mission ${mission._id.toString()}:`,
+              err
+            );
             collectionReport.failed++;
           }
         } else {
@@ -273,8 +278,8 @@ async function migrateMissions(
   report.collections.missions = collectionReport;
   console.log(
     `MIGRATION: [missions] Done -- ${collectionReport.total} total, ` +
-    `${collectionReport.updated} updated, ${collectionReport.skipped} skipped, ` +
-    `${collectionReport.failed} failed`
+      `${collectionReport.updated} updated, ${collectionReport.skipped} skipped, ` +
+      `${collectionReport.failed} failed`
   );
 }
 
@@ -323,7 +328,6 @@ async function migratePlannedMissions(
           typeof ship.fleetyardsId === 'string' &&
           UUID_REGEX.test(ship.fleetyardsId as string)
         ) {
-          collectionReport.skipped++;
           return ship;
         }
 
@@ -333,7 +337,7 @@ async function migratePlannedMissions(
         if (match) {
           report.mappings.push({
             collection: 'planned-missions',
-            documentId: mission.id as string,
+            documentId: mission._id.toString(),
             fieldPath,
             originalName: shipName,
             resolvedName: match.matchedName,
@@ -345,7 +349,7 @@ async function migratePlannedMissions(
         } else {
           report.unmatchedNames.push({
             collection: 'planned-missions',
-            documentId: mission.id as string,
+            documentId: mission._id.toString(),
             fieldPath,
             name: shipName,
           });
@@ -356,13 +360,23 @@ async function migratePlannedMissions(
       if (anyUpdated) {
         if (!dryRun) {
           try {
-            await db.collection('planned-missions').updateOne(
-              { id: mission.id },
-              { $set: { ships: updatedShips } }
-            );
-            collectionReport.updated++;
+            // Filter on the fetched document's own _id for a reliable match.
+            const result = await db
+              .collection('planned-missions')
+              .updateOne({ _id: mission._id }, { $set: { ships: updatedShips } });
+            if (result.matchedCount > 0) {
+              collectionReport.updated++;
+            } else {
+              console.warn(
+                `MIGRATION: [planned-missions] No document matched _id ${mission._id.toString()} -- update not applied`
+              );
+              collectionReport.failed++;
+            }
           } catch (err) {
-            console.error(`MIGRATION: [planned-missions] Failed to update mission ${mission.id}:`, err);
+            console.error(
+              `MIGRATION: [planned-missions] Failed to update mission ${mission._id.toString()}:`,
+              err
+            );
             collectionReport.failed++;
           }
         } else {
@@ -380,8 +394,8 @@ async function migratePlannedMissions(
   report.collections.plannedMissions = collectionReport;
   console.log(
     `MIGRATION: [planned-missions] Done -- ${collectionReport.total} total, ` +
-    `${collectionReport.updated} updated, ${collectionReport.skipped} skipped, ` +
-    `${collectionReport.failed} failed`
+      `${collectionReport.updated} updated, ${collectionReport.skipped} skipped, ` +
+      `${collectionReport.failed} failed`
   );
 }
 
@@ -449,7 +463,6 @@ async function migrateOperations(
           typeof participant.fleetyardsId === 'string' &&
           UUID_REGEX.test(participant.fleetyardsId as string)
         ) {
-          collectionReport.skipped++;
           continue;
         }
 
@@ -502,8 +515,8 @@ async function migrateOperations(
   report.collections.operations = collectionReport;
   console.log(
     `MIGRATION: [operations] Done -- ${collectionReport.total} total, ` +
-    `${collectionReport.updated} updated, ${collectionReport.skipped} skipped, ` +
-    `${collectionReport.failed} failed`
+      `${collectionReport.updated} updated, ${collectionReport.skipped} skipped, ` +
+      `${collectionReport.failed} failed`
   );
 }
 
@@ -614,8 +627,8 @@ async function migrateResources(
   report.collections.resources = collectionReport;
   console.log(
     `MIGRATION: [resources] Done -- ${collectionReport.total} total, ` +
-    `${collectionReport.updated} updated, ${collectionReport.skipped} skipped, ` +
-    `${collectionReport.failed} failed`
+      `${collectionReport.updated} updated, ${collectionReport.skipped} skipped, ` +
+      `${collectionReport.failed} failed`
   );
 }
 
@@ -654,7 +667,7 @@ function printReport(report: MigrationReport): void {
       const padded = (label + ':').padEnd(18);
       console.log(
         `${padded} ${col.total} total, ${col.updated} updated, ` +
-        `${col.skipped} skipped, ${col.failed} failed`
+          `${col.skipped} skipped, ${col.failed} failed`
       );
     } else {
       const padded = (label + ':').padEnd(18);
@@ -672,21 +685,21 @@ function printReport(report: MigrationReport): void {
   for (const m of report.mappings) {
     console.log(
       `[${m.collection}] doc:${m.documentId} ${m.fieldPath}: ` +
-      `"${m.originalName}" -> "${m.resolvedName}" (${m.strategy})`
+        `"${m.originalName}" -> "${m.resolvedName}" (${m.strategy})`
     );
   }
 
   console.log(`\n--- Unmatched Names (${report.unmatchedNames.length} total) ---`);
   for (const u of report.unmatchedNames) {
     console.log(
-      `[${u.collection}] doc:${u.documentId} ${u.fieldPath}: ` +
-      `"${u.name}" -- NO MATCH FOUND`
+      `[${u.collection}] doc:${u.documentId} ${u.fieldPath}: ` + `"${u.name}" -- NO MATCH FOUND`
     );
   }
 
-  const result = report.unmatchedNames.length === 0
-    ? 'SUCCESS (0 unmatched)'
-    : `PARTIAL (${report.unmatchedNames.length} unmatched names)`;
+  const result =
+    report.unmatchedNames.length === 0
+      ? 'SUCCESS (0 unmatched)'
+      : `PARTIAL (${report.unmatchedNames.length} unmatched names)`;
 
   console.log(`\n${line}`);
   console.log(`RESULT: ${result}`);
@@ -745,7 +758,9 @@ export async function main(): Promise<void> {
 
   // Exit code: 0 if no unmatched, 1 if any unmatched
   if (report.unmatchedNames.length > 0) {
-    console.log(`\nMIGRATION: Exiting with code 1 (${report.unmatchedNames.length} unmatched names)`);
+    console.log(
+      `\nMIGRATION: Exiting with code 1 (${report.unmatchedNames.length} unmatched names)`
+    );
     process.exit(1);
   } else {
     console.log('\nMIGRATION: Exiting with code 0 (all names matched)');

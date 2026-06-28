@@ -16,15 +16,28 @@
  *
  * Examples: "just now", "5 minutes ago", "2 hours ago", "3 days ago"
  * Falls back to toLocaleDateString() for dates older than 30 days.
+ *
+ * Invalid timestamps render as "Unknown". Future dates within a small clock-skew
+ * tolerance render as "just now"; further-future dates fall back to an absolute date.
  */
 export function formatRelativeTime(date: Date | string): string {
   const now = new Date();
   const then = typeof date === 'string' ? new Date(date) : date;
   const diffMs = now.getTime() - then.getTime();
 
-  // Guard against future dates or invalid input
-  if (diffMs < 0 || isNaN(diffMs)) {
-    return 'just now';
+  // Guard against invalid input (unparseable string / Invalid Date)
+  if (isNaN(diffMs)) {
+    return 'Unknown';
+  }
+
+  // Guard against future dates: tolerate small clock skew (a few seconds),
+  // otherwise fall back to an absolute date rather than mislabeling as "just now".
+  if (diffMs < 0) {
+    const FUTURE_SKEW_TOLERANCE_MS = 5000;
+    if (-diffMs <= FUTURE_SKEW_TOLERANCE_MS) {
+      return 'just now';
+    }
+    return then.toLocaleDateString();
   }
 
   const diffSeconds = Math.floor(diffMs / 1000);

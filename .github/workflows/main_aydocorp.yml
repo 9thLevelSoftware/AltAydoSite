@@ -170,16 +170,55 @@ jobs:
           PY
           }
 
+          # Post-deploy data refresh is best-effort: the Azure deploy has already
+          # succeeded by this point, so failing here would not roll anything back.
+          # Instead of silently warning, we accumulate problems and surface them in
+          # the job summary so a partial/failed refresh is visible without marking a
+          # successful production deploy as failed.
+          refresh_issues=()
+          add_issue() {
+            refresh_issues+=("$1")
+            echo "::warning::$1"
+          }
+
+          write_summary() {
+            if [ -z "${GITHUB_STEP_SUMMARY:-}" ]; then
+              return 0
+            fi
+            {
+              echo "### Post-deploy data refresh"
+              echo ""
+              if [ "${#refresh_issues[@]}" -eq 0 ]; then
+                echo "All post-deploy refresh steps (ship sync + image warm-up) completed successfully."
+              else
+                echo "The production deploy succeeded, but the post-deploy data refresh may not have completed. This step is best-effort and does not affect the already-running app; the next scheduled ship sync will retry."
+                echo ""
+                echo "Issues:"
+                for issue in "${refresh_issues[@]}"; do
+                  echo "- ${issue}"
+                done
+              fi
+            } >> "${GITHUB_STEP_SUMMARY}"
+          }
+          trap write_summary EXIT
+
+          # Require a readable baseline before polling. If we cannot read the
+          # current sync version we must NOT assume 0, otherwise any stale published
+          # status (version > 0) from a previous run would falsely look like this
+          # deploy's sync completing. In that case we skip completion verification
+          # and report it clearly instead of producing a false positive.
           baseline_body="$(mktemp)"
           baseline_version="0"
+          baseline_ok="false"
           if curl --silent --show-error --fail \
             --output "${baseline_body}" \
             --header "Cache-Control: no-cache" \
             "${APP_URL}/api/ships/sync-status?baseline=$(date +%s%N)"; then
             baseline_line="$(read_sync_status "${baseline_body}")"
             baseline_version="${baseline_line%% *}"
+            baseline_ok="true"
           else
-            echo "::warning::Could not read baseline ship sync status; assuming version 0."
+            add_issue "Could not read baseline ship sync status; skipping sync completion verification to avoid a false positive."
           fi
           rm -f "${baseline_body}"
 
@@ -196,18 +235,18 @@ jobs:
             "${APP_URL}/api/cron/ship-sync?mode=async")"; then
             cat "${sync_body}"
             if [ "${sync_status}" -lt 200 ] || [ "${sync_status}" -ge 300 ]; then
-              echo "::warning::Ship sync returned HTTP ${sync_status}; deploy already completed."
+              add_issue "Ship sync returned HTTP ${sync_status}; deploy already completed."
             else
               sync_accepted="true"
             fi
           else
             sync_exit=$?
             cat "${sync_body}" || true
-            echo "::warning::Ship sync request failed with curl exit ${sync_exit}; deploy already completed."
+            add_issue "Ship sync request failed with curl exit ${sync_exit}; deploy already completed."
           fi
           rm -f "${sync_body}"
 
-          if [ "${sync_accepted}" = "true" ]; then
+          if [ "${sync_accepted}" = "true" ] && [ "${baseline_ok}" = "true" ]; then
             echo "Waiting for ship sync to publish a new status after version ${baseline_version}..."
             completed="false"
             for attempt in {1..30}; do
@@ -228,17 +267,17 @@ jobs:
                   if [ "${sync_version}" -gt "${baseline_version}" ]; then
                     rm -f "${poll_body}"
                     if [ "${ship_status}" = "failed" ]; then
-                      echo "::warning::Ship sync completed with failed status; deploy already completed."
+                      add_issue "Ship sync completed with failed status; deploy already completed."
                     fi
                     completed="true"
                     break
                   fi
                 else
-                  echo "::warning::Sync status poll returned HTTP ${poll_status}."
+                  echo "::warning::Sync status poll returned HTTP ${poll_status} (will retry)."
                 fi
               else
                 poll_exit=$?
-                echo "::warning::Sync status poll failed with curl exit ${poll_exit}."
+                echo "::warning::Sync status poll failed with curl exit ${poll_exit} (will retry)."
               fi
               rm -f "${poll_body}"
 
@@ -248,8 +287,10 @@ jobs:
             done
 
             if [ "${completed}" != "true" ]; then
-              echo "::warning::Ship sync did not publish a new status within polling window; deploy already completed."
+              add_issue "Ship sync did not publish a new status (> version ${baseline_version}) within the polling window; deploy already completed."
             fi
+          elif [ "${sync_accepted}" = "true" ]; then
+            add_issue "Ship sync was accepted but completion could not be verified because the baseline status was unreadable."
           fi
 
           echo "Warming mirrored ship images..."
@@ -262,11 +303,11 @@ jobs:
             "${APP_URL}/api/cron/warm-images")"; then
             cat "${warm_body}"
             if [ "${warm_status}" -lt 200 ] || [ "${warm_status}" -ge 300 ]; then
-              echo "::warning::Image warm-up returned HTTP ${warm_status}; deploy and ship sync already completed."
+              add_issue "Image warm-up returned HTTP ${warm_status}; deploy and ship sync already completed."
             fi
           else
             warm_exit=$?
             cat "${warm_body}" || true
-            echo "::warning::Image warm-up request failed with curl exit ${warm_exit}; deploy and ship sync already completed."
+            add_issue "Image warm-up request failed with curl exit ${warm_exit}; deploy and ship sync already completed."
           fi
           rm -f "${warm_body}"

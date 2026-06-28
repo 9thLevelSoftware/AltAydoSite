@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { notFound } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import UserProfilePanel from '../../components/UserProfilePanel';
 import Link from 'next/link';
@@ -23,28 +22,69 @@ interface ServerProfile {
   __v?: number;
 }
 
-export default function DebugUserProfilePage() {
-  // Block access in production
-  if (process.env.NODE_ENV === 'production') {
-    notFound();
-  }
+// localStorage keys whose values are non-sensitive (simple UI flags) and may be
+// displayed verbatim. Any other key has its value masked below.
+const SAFE_LOCALSTORAGE_KEYS = new Set(['hideFooter', 'loginAnimationShown']);
 
+/**
+ * Redacts the sensitive portion of a localStorage key. The profile cache key
+ * embeds the user's email (`user_profile_<version>_<email>`), so collapse it to
+ * a generic label.
+ */
+function redactStorageKey(key: string): string {
+  if (key.startsWith('user_profile_')) {
+    return 'user_profile_[redacted]';
+  }
+  return key;
+}
+
+/**
+ * Builds a sanitized, non-sensitive view of the server profile. Email, photo,
+ * raw id and ship payloads are redacted; only whitelisted fields are surfaced.
+ */
+function sanitizeServerProfile(p: ServerProfile) {
+  return {
+    aydoHandle: p.aydoHandle,
+    discordName: p.discordName ?? null,
+    rsiAccountName: p.rsiAccountName ?? null,
+    bio: p.bio ?? null,
+    payGrade: p.payGrade ?? null,
+    position: p.position ?? null,
+    division: p.division ?? null,
+    timezone: p.timezone ?? null,
+    preferredGameplayLoops: p.preferredGameplayLoops ?? [],
+    // Redacted / summarized fields -- never dump raw sensitive values.
+    email: '[redacted]',
+    photo: p.photo ? '[redacted]' : null,
+    id: '[redacted]',
+    ships: Array.isArray(p.ships) ? `[${p.ships.length} item(s)]` : '[redacted]',
+  };
+}
+
+export default function DebugUserProfilePage() {
+  // NOTE: Access control is enforced server-side in layout.tsx (feature flag +
+  // admin session gate). This component only renders for authorized users.
   const { data: session, status } = useSession();
   const [showDebugInfo, setShowDebugInfo] = useState(true);
-  const [storageItems, setStorageItems] = useState<{key: string, value: string}[]>([]);
+  const [storageItems, setStorageItems] = useState<{ key: string; value: string }[]>([]);
   const [serverProfile, setServerProfile] = useState<ServerProfile | null>(null);
   const [serverLoading, setServerLoading] = useState(true);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // Safely access localStorage on the client side
+  // Safely access localStorage on the client side. Values are sanitized at
+  // collection time so raw/sensitive contents are never held in React state or
+  // rendered: known-safe flags are shown verbatim, everything else is masked.
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const items = [];
+      const items: { key: string; value: string }[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key) {
-          const value = localStorage.getItem(key) || '';
-          items.push({ key, value });
+          const rawValue = localStorage.getItem(key) || '';
+          const value = SAFE_LOCALSTORAGE_KEYS.has(key)
+            ? rawValue
+            : `[masked -- ${rawValue.length} chars]`;
+          items.push({ key: redactStorageKey(key), value });
         }
       }
       setStorageItems(items);
@@ -86,7 +126,12 @@ export default function DebugUserProfilePage() {
         <div className="flex items-center justify-between">
           <div>
             Debug Mode | Session Status: <span className="text-cyan-400">{status}</span>
-            {session?.user?.email && <> | User: <span className="text-cyan-400">{session.user.email}</span></>}
+            {session?.user?.role && (
+              <>
+                {' '}
+                | Role: <span className="text-cyan-400">{session.user.role}</span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-4">
             <button
@@ -124,7 +169,7 @@ export default function DebugUserProfilePage() {
                 <p className="text-red-400">{serverError}</p>
               ) : serverProfile ? (
                 <pre className="whitespace-pre-wrap">
-                  {JSON.stringify(serverProfile, null, 2)}
+                  {JSON.stringify(sanitizeServerProfile(serverProfile), null, 2)}
                 </pre>
               ) : (
                 <p className="text-gray-400">No server profile data</p>
@@ -138,7 +183,9 @@ export default function DebugUserProfilePage() {
                 {storageItems.length > 0 ? (
                   storageItems.map(({ key, value }, index) => (
                     <div key={index} className="mb-2">
-                      <div><span className="text-cyan-400">{key}</span></div>
+                      <div>
+                        <span className="text-cyan-400">{key}</span>
+                      </div>
                       <div className="pl-4">{value}</div>
                     </div>
                   ))

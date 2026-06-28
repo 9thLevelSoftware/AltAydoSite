@@ -42,6 +42,10 @@ export type MissionBuilderAction =
   | { type: 'updateParticipant'; participant: MissionParticipantDraft }
   | { type: 'removeParticipant'; userId: string }
   | { type: 'setStatus'; status: SaveStatus }
+  | {
+      type: 'saveSucceeded';
+      payload?: Partial<Pick<MissionDraft, 'id' | 'createdAt' | 'updatedAt' | 'version'>>;
+    }
   | { type: 'setErrors'; errors?: FieldErrors };
 
 function reducer(state: MissionBuilderState, action: MissionBuilderAction): MissionBuilderState {
@@ -54,7 +58,11 @@ function reducer(state: MissionBuilderState, action: MissionBuilderAction): Miss
       return { ...initialState, mission: initialDraft() };
     }
     case 'setField': {
-      const mission = { ...state.mission, [action.field]: action.value, updatedAt: new Date().toISOString() } as MissionDraft;
+      const mission = {
+        ...state.mission,
+        [action.field]: action.value,
+        updatedAt: new Date().toISOString(),
+      } as MissionDraft;
       return { ...state, mission, dirty: true };
     }
     case 'addImage': {
@@ -69,13 +77,14 @@ function reducer(state: MissionBuilderState, action: MissionBuilderAction): Miss
       return { ...state, dirty: true, mission: { ...state.mission, images } };
     }
     case 'addParticipant': {
-      if (state.mission.participants.some((p) => p.userId === action.participant.userId)) return state;
+      if (state.mission.participants.some((p) => p.userId === action.participant.userId))
+        return state;
       const participants = [...state.mission.participants, action.participant];
       return { ...state, dirty: true, mission: { ...state.mission, participants } };
     }
     case 'updateParticipant': {
       const participants = state.mission.participants.map((p) =>
-        p.userId === action.participant.userId ? { ...p, ...action.participant } : p,
+        p.userId === action.participant.userId ? { ...p, ...action.participant } : p
       );
       return { ...state, dirty: true, mission: { ...state.mission, participants } };
     }
@@ -85,6 +94,12 @@ function reducer(state: MissionBuilderState, action: MissionBuilderAction): Miss
     }
     case 'setStatus': {
       return { ...state, status: action.status };
+    }
+    case 'saveSucceeded': {
+      // Atomically mark the draft as persisted: clear dirty/errors and merge any
+      // server-assigned metadata (id/createdAt/updatedAt/version) back into the draft.
+      const mission = action.payload ? { ...state.mission, ...action.payload } : state.mission;
+      return { ...state, mission, status: 'saved', dirty: false, errors: undefined };
     }
     case 'setErrors': {
       return { ...state, errors: action.errors };
@@ -97,8 +112,17 @@ function reducer(state: MissionBuilderState, action: MissionBuilderAction): Miss
 const StateCtx = createContext<MissionBuilderState | undefined>(undefined);
 const DispatchCtx = createContext<React.Dispatch<MissionBuilderAction> | undefined>(undefined);
 
-export function MissionBuilderProvider({ children, initial }: { children: React.ReactNode; initial?: MissionDraft }) {
-  const [state, dispatch] = useReducer(reducer, initial ? { ...initialState, mission: coerceToMissionDraft(initial) } : initialState);
+export function MissionBuilderProvider({
+  children,
+  initial,
+}: {
+  children: React.ReactNode;
+  initial?: MissionDraft;
+}) {
+  const [state, dispatch] = useReducer(
+    reducer,
+    initial ? { ...initialState, mission: coerceToMissionDraft(initial) } : initialState
+  );
 
   return (
     <StateCtx.Provider value={state}>
@@ -124,18 +148,36 @@ export function useMissionBuilder() {
   const state = useMissionBuilderState();
   const dispatch = useMissionBuilderDispatch();
 
-  const setField = useCallback(<K extends keyof MissionDraft>(field: K, value: MissionDraft[K]) => {
-    dispatch({ type: 'setField', field, value });
-  }, [dispatch]);
+  const setField = useCallback(
+    <K extends keyof MissionDraft>(field: K, value: MissionDraft[K]) => {
+      dispatch({ type: 'setField', field, value });
+    },
+    [dispatch]
+  );
 
   const addImage = useCallback((url: string) => dispatch({ type: 'addImage', url }), [dispatch]);
-  const removeImage = useCallback((url: string) => dispatch({ type: 'removeImage', url }), [dispatch]);
+  const removeImage = useCallback(
+    (url: string) => dispatch({ type: 'removeImage', url }),
+    [dispatch]
+  );
 
-  const addParticipant = useCallback((participant: MissionParticipantDraft) => dispatch({ type: 'addParticipant', participant }), [dispatch]);
-  const updateParticipant = useCallback((participant: MissionParticipantDraft) => dispatch({ type: 'updateParticipant', participant }), [dispatch]);
-  const removeParticipant = useCallback((userId: string) => dispatch({ type: 'removeParticipant', userId }), [dispatch]);
+  const addParticipant = useCallback(
+    (participant: MissionParticipantDraft) => dispatch({ type: 'addParticipant', participant }),
+    [dispatch]
+  );
+  const updateParticipant = useCallback(
+    (participant: MissionParticipantDraft) => dispatch({ type: 'updateParticipant', participant }),
+    [dispatch]
+  );
+  const removeParticipant = useCallback(
+    (userId: string) => dispatch({ type: 'removeParticipant', userId }),
+    [dispatch]
+  );
 
-  const loadFrom = useCallback((mission: MissionDraft) => dispatch({ type: 'setMission', payload: mission }), [dispatch]);
+  const loadFrom = useCallback(
+    (mission: MissionDraft) => dispatch({ type: 'setMission', payload: mission }),
+    [dispatch]
+  );
   const reset = useCallback(() => dispatch({ type: 'reset' }), [dispatch]);
 
   const validate = useCallback(() => {
@@ -148,7 +190,9 @@ export function useMissionBuilder() {
     return { valid: false, errors: result.errors } as const;
   }, [state.mission, dispatch]);
 
-  // Placeholder save that only validates and toggles status
+  // Persist the validated draft via the fleet-ops missions API. Existing drafts
+  // (those carrying an id) are updated with PUT; new drafts are created with POST.
+  // The server handles the hybrid Cosmos/local-JSON storage fallback.
   const save = useCallback(async () => {
     dispatch({ type: 'setStatus', status: 'saving' });
     const res = validate();
@@ -156,10 +200,42 @@ export function useMissionBuilder() {
       dispatch({ type: 'setStatus', status: 'error' });
       return { ok: false as const, errors: res.errors };
     }
-    // Intentionally do not perform network I/O here; this will be wired later
-    await new Promise((r) => setTimeout(r, 50));
-    dispatch({ type: 'setStatus', status: 'saved' });
-    return { ok: true as const, data: res.data };
+
+    try {
+      const method = res.data.id ? 'PUT' : 'POST';
+      const response = await fetch('/api/fleet-ops/missions', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(res.data),
+      });
+
+      if (!response.ok) {
+        let error = `Save failed (${response.status})`;
+        try {
+          const body = await response.json();
+          if (body?.error) error = body.error;
+        } catch {
+          // Non-JSON error body; keep the status-based message.
+        }
+        dispatch({ type: 'setStatus', status: 'error' });
+        return { ok: false as const, error };
+      }
+
+      const saved = (await response.json()) as Partial<MissionDraft>;
+
+      // Merge only server-assigned metadata that is actually present.
+      const meta: Partial<Pick<MissionDraft, 'id' | 'createdAt' | 'updatedAt' | 'version'>> = {};
+      if (saved.id) meta.id = saved.id;
+      if (saved.createdAt) meta.createdAt = saved.createdAt;
+      if (saved.updatedAt) meta.updatedAt = saved.updatedAt;
+      if (typeof saved.version === 'number') meta.version = saved.version;
+
+      dispatch({ type: 'saveSucceeded', payload: meta });
+      return { ok: true as const, data: saved };
+    } catch (e) {
+      dispatch({ type: 'setStatus', status: 'error' });
+      return { ok: false as const, error: e instanceof Error ? e.message : 'Save failed' };
+    }
   }, [validate, dispatch]);
 
   return {

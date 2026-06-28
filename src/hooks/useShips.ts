@@ -16,6 +16,11 @@ export interface ShipFilters {
   classification?: string;
   productionStatus?: string;
   search?: string;
+  /**
+   * When false, the hook skips fetching entirely (e.g. while a modal that
+   * owns this query is closed). Defaults to true.
+   */
+  enabled?: boolean;
 }
 
 /** Paginated result set matching the GET /api/ships response shape */
@@ -52,7 +57,15 @@ export function useShips(filters: ShipFilters): UseShipsReturn {
   // Ref to track the latest AbortController for cleanup
   const abortRef = useRef<AbortController | null>(null);
 
+  const enabled = filters.enabled ?? true;
+
   useEffect(() => {
+    // Skip fetching while disabled (e.g. the owning modal is closed)
+    if (!enabled) {
+      setIsLoading(false);
+      return;
+    }
+
     // Cancel any in-flight request
     if (abortRef.current) {
       abortRef.current.abort();
@@ -83,9 +96,7 @@ export function useShips(filters: ShipFilters): UseShipsReturn {
 
         if (!response.ok) {
           const body = await response.json().catch(() => null);
-          throw new Error(
-            body?.error || `Failed to fetch ships (${response.status})`
-          );
+          throw new Error(body?.error || `Failed to fetch ships (${response.status})`);
         }
 
         const result: ShipQueryResult = await response.json();
@@ -96,8 +107,10 @@ export function useShips(filters: ShipFilters): UseShipsReturn {
         if (err instanceof DOMException && err.name === 'AbortError') {
           return;
         }
-        const message =
-          err instanceof Error ? err.message : 'Failed to fetch ships';
+        const message = err instanceof Error ? err.message : 'Failed to fetch ships';
+        // Clear any previous results so a genuine failure can't display
+        // stale data that no longer matches the current filters.
+        setData(null);
         setError(message);
       } finally {
         // Only update loading if this controller is still current
@@ -120,6 +133,7 @@ export function useShips(filters: ShipFilters): UseShipsReturn {
     filters.classification,
     filters.productionStatus,
     filters.search,
+    enabled,
   ]);
 
   return { data, isLoading, error };

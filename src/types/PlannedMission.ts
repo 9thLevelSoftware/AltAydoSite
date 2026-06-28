@@ -4,54 +4,60 @@ import {
   ActivityType,
   MissionPersonnelRequirement,
   MissionShipRequirement,
-  OperationType
+  OperationType,
 } from './MissionPlanning';
 
 // Actual ship assignment (specific ship from compendium)
 export interface MissionShip {
-  shipName: string;           // Specific ship name (e.g., "Carrack", "Pisces C8X")
-  manufacturer: string;       // Ship manufacturer
-  size: string;               // Ship size category
-  role?: string[];            // Ship roles
-  fleetyardsId: string;       // FleetYards UUID
-  image?: string;             // Ship image URL (FleetYards CDN)
-  quantity: number;           // How many of this ship type
-  assignedTo?: string;        // Optional: User ID of who's bringing this ship
-  assignedToName?: string;    // Optional: Display name of assignee
-  notes?: string;             // Optional notes (e.g., "Lead ship", "Medical support")
+  shipName: string; // Specific ship name (e.g., "Carrack", "Pisces C8X")
+  manufacturer: string; // Ship manufacturer
+  size: string; // Ship size category
+  role?: string[]; // Ship roles
+  fleetyardsId: string; // FleetYards UUID
+  image?: string; // Ship image URL (FleetYards CDN)
+  quantity: number; // How many of this ship type
+  assignedTo?: string; // Optional: User ID of who's bringing this ship
+  assignedToName?: string; // Optional: Display name of assignee
+  notes?: string; // Optional notes (e.g., "Lead ship", "Medical support")
 }
 
 // Leader assignment for a mission
 export interface MissionLeader {
-  userId: string;             // User ID from the system
-  aydoHandle: string;         // Display name
-  role: string;               // Leadership role (e.g., "Mission Commander", "Ground Lead")
-  discordId?: string;         // Discord ID for mentions
+  userId: string; // User ID from the system
+  aydoHandle: string; // Display name
+  role: string; // Leadership role (e.g., "Mission Commander", "Ground Lead")
+  discordId?: string; // Discord ID for mentions
 }
 
 // Participant from Discord RSVP (expected to attend)
 export interface ExpectedParticipant {
-  discordId: string;          // Discord user ID
-  discordUsername: string;    // Discord username
+  discordId: string; // Discord user ID
+  discordUsername: string; // Discord username
   discordGlobalName?: string; // Discord display name
-  discordNickname?: string;   // Server nickname
-  discordAvatar?: string;     // Avatar URL
-  userId?: string;            // Linked AydoDB user ID (if matched)
-  aydoHandle?: string;        // Linked AydoDB handle (if matched)
-  rsvpAt?: string;            // When they RSVP'd (ISO date)
+  discordNickname?: string; // Server nickname
+  discordAvatar?: string; // Avatar URL
+  userId?: string; // Linked AydoDB user ID (if matched)
+  aydoHandle?: string; // Linked AydoDB handle (if matched)
+  rsvpAt?: string; // When they RSVP'd (ISO date)
 }
 
 // Confirmed participant (actually showed up)
 export interface ConfirmedParticipant {
-  odId: string;            // Discord or User ID
-  displayName: string;        // Display name used
-  discordId?: string;         // Discord ID if from Discord
-  userId?: string;            // AydoDB user ID if linked
-  aydoHandle?: string;        // AydoDB handle if linked
-  role?: string;              // Role they played in the mission
-  confirmedBy: string;        // User ID of leader who confirmed
-  confirmedAt: string;        // When they were confirmed (ISO date)
-  notes?: string;             // Optional notes
+  // NOTE: `odId` is the canonical participant identifier (a Discord ID or AydoDB
+  // user ID). The name is a historical typo of "id"/"discordId", but it is
+  // intentionally kept: this field is persisted on every confirmedParticipants
+  // entry in both Cosmos DB and the local JSON fallback. Renaming it would
+  // require migrating all stored documents plus a back-compat read alias, which
+  // is not worth the churn for a cosmetic fix. Treat `odId` as the participant key.
+  odId: string; // Discord or User ID (participant identifier)
+  displayName: string; // Display name used
+  discordId?: string; // Discord ID if from Discord
+  userId?: string; // AydoDB user ID if linked
+  aydoHandle?: string; // AydoDB handle if linked
+  role?: string; // Role they played in the mission
+  confirmedBy: string; // User ID of leader who confirmed
+  confirmedAt: string; // When they were confirmed (ISO date)
+  notes?: string; // Optional notes
 }
 
 // Reference image for mission briefing
@@ -65,9 +71,9 @@ export interface MissionImage {
 
 // Discord event reference
 export interface DiscordEventReference {
-  eventId: string;            // Discord event ID
-  guildId: string;            // Discord guild/server ID
-  createdAt: string;          // When the event was created
+  eventId: string; // Discord event ID
+  guildId: string; // Discord guild/server ID
+  createdAt: string; // When the event was created
   status: 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 }
 
@@ -77,9 +83,9 @@ export interface PlannedMission {
 
   // Basic Information
   name: string;
-  scheduledDateTime: string;  // ISO date string
-  duration?: number;          // Duration in minutes (optional)
-  location?: string;          // In-game location/system
+  scheduledDateTime: string; // ISO date string
+  duration?: number; // Duration in minutes (optional)
+  location?: string; // In-game location/system
 
   // Operation Details
   operationType: OperationType;
@@ -98,35 +104,35 @@ export interface PlannedMission {
   ships?: MissionShip[];
 
   // Mission Brief
-  objectives: string;         // Mission objectives
-  briefing: string;           // Full mission briefing/strategy
-  equipmentNotes?: string;    // Equipment recommendations (from template)
-  images: MissionImage[];     // Reference images/diagrams
+  objectives: string; // Mission objectives
+  briefing: string; // Full mission briefing/strategy
+  equipmentNotes?: string; // Equipment recommendations (from template)
+  images: MissionImage[]; // Reference images/diagrams
 
   // Discord Integration
   discordEvent?: DiscordEventReference;
 
   // Participants
-  expectedParticipants: ExpectedParticipant[];   // From Discord RSVPs
+  expectedParticipants: ExpectedParticipant[]; // From Discord RSVPs
   confirmedParticipants: ConfirmedParticipant[]; // Marked by leaders post-mission
 
   // Status
   status: PlannedMissionStatus;
 
   // Metadata
-  createdBy: string;          // User ID
-  createdAt: string;          // ISO date string
-  updatedAt: string;          // ISO date string
+  createdBy: string; // User ID
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
 }
 
 // Mission status lifecycle
 export type PlannedMissionStatus =
-  | 'DRAFT'           // Being created/edited
-  | 'SCHEDULED'       // Published to Discord, awaiting event
-  | 'ACTIVE'          // Mission in progress
-  | 'DEBRIEFING'      // Mission ended, marking attendance
-  | 'COMPLETED'       // Mission finished, attendance confirmed
-  | 'CANCELLED';      // Mission cancelled
+  | 'DRAFT' // Being created/edited
+  | 'SCHEDULED' // Published to Discord, awaiting event
+  | 'ACTIVE' // Mission in progress
+  | 'DEBRIEFING' // Mission ended, marking attendance
+  | 'COMPLETED' // Mission finished, attendance confirmed
+  | 'CANCELLED'; // Mission cancelled
 
 // Response interface with populated data
 export interface PlannedMissionResponse extends PlannedMission {
@@ -158,10 +164,10 @@ export const LEADERSHIP_ROLES = [
   'Medical Lead',
   'Mining Lead',
   'Salvage Lead',
-  'Transport Lead'
+  'Transport Lead',
 ] as const;
 
-export type LeadershipRole = typeof LEADERSHIP_ROLES[number];
+export type LeadershipRole = (typeof LEADERSHIP_ROLES)[number];
 
 // Helper to create empty mission with defaults
 export function createEmptyMission(): Partial<PlannedMission> {
@@ -179,6 +185,6 @@ export function createEmptyMission(): Partial<PlannedMission> {
     images: [],
     expectedParticipants: [],
     confirmedParticipants: [],
-    status: 'DRAFT'
+    status: 'DRAFT',
   };
 }

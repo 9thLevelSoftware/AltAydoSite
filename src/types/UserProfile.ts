@@ -1,4 +1,5 @@
 import { UserShip } from './user';
+import { TIMEZONE_OPTIONS } from '@/lib/timezone';
 
 export interface UserProfile {
   name: string;
@@ -25,42 +26,14 @@ export const subsidiaryOptions = [
   'Aydo Exploration',
 ];
 
-export const payGradeOptions = [
-  'Entry Level',
-  'Junior',
-  'Senior',
-  'Lead',
-  'Director',
-  'Executive',
-];
+export const payGradeOptions = ['Entry Level', 'Junior', 'Senior', 'Lead', 'Director', 'Executive'];
 
-export const timezoneOptions = [
-  'UTC-12:00',
-  'UTC-11:00',
-  'UTC-10:00',
-  'UTC-09:00',
-  'UTC-08:00',
-  'UTC-07:00',
-  'UTC-06:00',
-  'UTC-05:00',
-  'UTC-04:00',
-  'UTC-03:00',
-  'UTC-02:00',
-  'UTC-01:00',
-  'UTC+00:00',
-  'UTC+01:00',
-  'UTC+02:00',
-  'UTC+03:00',
-  'UTC+04:00',
-  'UTC+05:00',
-  'UTC+06:00',
-  'UTC+07:00',
-  'UTC+08:00',
-  'UTC+09:00',
-  'UTC+10:00',
-  'UTC+11:00',
-  'UTC+12:00',
-];
+// IANA timezone identifiers (compatible with the Intl `timeZone` option).
+// Derived from the canonical list in `@/lib/timezone` so the value set stays in
+// sync; friendly labels live on TIMEZONE_OPTIONS for components that need them.
+// Previously these were `UTC+HH:MM` offset strings, which are invalid as Intl
+// time zones and broke timezone-aware formatting (hooks-&-ty-18).
+export const timezoneOptions: string[] = TIMEZONE_OPTIONS.map((tz) => tz.value);
 
 export const gameplayLoopOptions = [
   'Mining',
@@ -74,4 +47,4 @@ export const gameplayLoopOptions = [
   'Transportation',
   'Escort',
   'Search & Rescue',
-]; 
+];

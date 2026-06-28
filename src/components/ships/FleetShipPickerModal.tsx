@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { useShips } from '@/hooks/useShips';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useBodyScrollLock } from '@/lib/utils/bodyScrollLock';
 import ShipFilterPanel from '@/components/ships/ShipFilterPanel';
 import ShipSearchBar from '@/components/ships/ShipSearchBar';
 import ShipCard from '@/components/ships/ShipCard';
@@ -125,6 +126,8 @@ export default function FleetShipPickerModal({
     classification: state.classification || undefined,
     productionStatus: state.productionStatus || undefined,
     search: state.search || undefined,
+    // Don't fetch ship pages while the modal is closed.
+    enabled: isOpen,
   });
 
   // Reset state when modal closes
@@ -134,15 +137,9 @@ export default function FleetShipPickerModal({
     }
   }, [isOpen]);
 
-  // Lock body scroll when modal is open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = '';
-      };
-    }
-  }, [isOpen]);
+  // Lock body scroll when modal is open (shared reference-counted lock so
+  // overlapping overlays don't unlock each other).
+  useBodyScrollLock(isOpen);
 
   // Stable callbacks
   const handleFilterChange = useCallback((key: string, value: string) => {
@@ -166,7 +163,7 @@ export default function FleetShipPickerModal({
       onSelect(ship);
       onClose();
     },
-    [onSelect, onClose],
+    [onSelect, onClose]
   );
 
   const handleBackdropClick = useCallback(
@@ -175,7 +172,7 @@ export default function FleetShipPickerModal({
         onClose();
       }
     },
-    [onClose],
+    [onClose]
   );
 
   // Derived values
@@ -255,11 +252,7 @@ export default function FleetShipPickerModal({
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {ships.map((ship) => (
-                    <ShipCard
-                      key={ship.fleetyardsId}
-                      ship={ship}
-                      onClick={handleShipClick}
-                    />
+                    <ShipCard key={ship.fleetyardsId} ship={ship} onClick={handleShipClick} />
                   ))}
                 </div>
               )}
@@ -299,6 +292,6 @@ export default function FleetShipPickerModal({
         </motion.div>
       )}
     </AnimatePresence>,
-    document.body,
+    document.body
   );
 }

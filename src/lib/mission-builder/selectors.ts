@@ -10,11 +10,10 @@ export function selectParticipantCount(state: MissionBuilderState) {
 }
 
 export function selectShipCount(state: MissionBuilderState) {
-  const ids = new Set<string>();
-  for (const p of state.mission.participants) {
-    if (p.shipId && !p.isGroundSupport) ids.add(p.shipId);
-  }
-  return ids.size;
+  // Count every participant that has a ship assigned and is not ground support.
+  // Each participant occupies one ship slot, so we intentionally do not
+  // deduplicate by shipId (two participants on the same model still count as two).
+  return state.mission.participants.filter((p) => p.shipId && !p.isGroundSupport).length;
 }
 
 export function selectGroundSupportCount(state: MissionBuilderState) {

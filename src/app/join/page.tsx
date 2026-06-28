@@ -8,14 +8,16 @@ import VisionSection from '@/components/join/VisionSection';
 import JoinCTA from '@/components/join/JoinCTA';
 
 export default function Join() {
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState<Date | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   useEffect(() => {
+    setTime(new Date());
+
     const timer = setInterval(() => {
       setTime(new Date());
     }, 1000);
-    
+
     return () => clearInterval(timer);
   }, []);
 
@@ -28,4 +30,4 @@ export default function Join() {
       <JoinCTA />
     </>
   );
-} 
+}

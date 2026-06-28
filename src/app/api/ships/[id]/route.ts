@@ -11,40 +11,30 @@ import { logger } from '@/lib/logger';
  *
  * No authentication required -- ship data is public reference data.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const normalizedId = id?.trim() ?? '';
 
-    if (!id || id.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'Ship ID or slug is required' },
-        { status: 400 }
-      );
+    if (normalizedId.length === 0) {
+      return NextResponse.json({ error: 'Ship ID or slug is required' }, { status: 400 });
     }
 
-    const ship = await shipStorage.getShipByIdOrSlug(id);
+    const ship = await shipStorage.getShipByIdOrSlug(normalizedId);
 
     if (!ship) {
-      return NextResponse.json(
-        { error: 'Ship not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Ship not found' }, { status: 404 });
     }
 
     const response = NextResponse.json(ship);
-    response.headers.set(
-      'Cache-Control',
-      'public, max-age=1800, stale-while-revalidate=86400'
-    );
+    response.headers.set('Cache-Control', 'public, max-age=1800, stale-while-revalidate=86400');
     return response;
   } catch (error) {
-    logger.error('Error fetching ship by ID/slug', error instanceof Error ? error : new Error(String(error)), { route: '/api/ships/[id]' });
-    return NextResponse.json(
-      { error: 'Failed to fetch ship' },
-      { status: 500 }
+    logger.error(
+      'Error fetching ship by ID/slug',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/ships/[id]' }
     );
+    return NextResponse.json({ error: 'Failed to fetch ship' }, { status: 500 });
   }
 }

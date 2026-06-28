@@ -13,7 +13,7 @@ const DEFAULT_PROFILE: Omit<UserProfile, 'handle' | 'email'> = {
   subsidiary: 'AydoCorp HQ',
   payGrade: 'Entry Level',
   position: '',
-  timezone: 'UTC+00:00',
+  timezone: 'UTC',
   preferredGameplayLoops: [],
   ships: [],
 };
@@ -38,7 +38,8 @@ function serverToClient(
     payGrade: (serverData.payGrade as string) || DEFAULT_PROFILE.payGrade,
     position: (serverData.position as string) || DEFAULT_PROFILE.position,
     timezone: (serverData.timezone as string) || DEFAULT_PROFILE.timezone,
-    preferredGameplayLoops: (serverData.preferredGameplayLoops as string[]) || DEFAULT_PROFILE.preferredGameplayLoops,
+    preferredGameplayLoops:
+      (serverData.preferredGameplayLoops as string[]) || DEFAULT_PROFILE.preferredGameplayLoops,
     ships: (serverData.ships as UserProfile['ships']) || DEFAULT_PROFILE.ships,
   };
 }
@@ -55,7 +56,8 @@ function clientToServer(updates: Partial<UserProfile>): Record<string, unknown> 
   if (updates.payGrade !== undefined) mapped.payGrade = updates.payGrade;
   if (updates.position !== undefined) mapped.position = updates.position;
   if (updates.timezone !== undefined) mapped.timezone = updates.timezone;
-  if (updates.preferredGameplayLoops !== undefined) mapped.preferredGameplayLoops = updates.preferredGameplayLoops;
+  if (updates.preferredGameplayLoops !== undefined)
+    mapped.preferredGameplayLoops = updates.preferredGameplayLoops;
   if (updates.ships !== undefined) mapped.ships = updates.ships;
 
   // name, handle, email are derived from session -- do not send to API
@@ -68,22 +70,34 @@ export function useUserProfile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const versionRef = useRef<number>(0);
-  const hasFetchedRef = useRef(false);
+  // Identity (email) of the profile currently loaded, so a direct account switch
+  // triggers a reload instead of retaining the previous user's profile (hooks-&-ty-11).
+  const fetchedForRef = useRef<string | null>(null);
+  // Serializes profile saves so versionRef advances deterministically and
+  // concurrent edits cannot overwrite newer ones (hooks-&-ty-13).
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const saveSeqRef = useRef(0);
 
   // Load profile: server-first with localStorage fallback
   useEffect(() => {
     if (!session?.user) {
       setProfile(null);
       setIsLoading(false);
-      hasFetchedRef.current = false;
+      fetchedForRef.current = null;
       return;
     }
 
-    // Prevent duplicate fetches for same session
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
-
     const email = session.user.email || '';
+
+    // Only (re)load when the signed-in identity changes. On a direct account
+    // switch the email differs, so reset state before loading the new profile
+    // instead of retaining the previous user's data (hooks-&-ty-11).
+    if (email === fetchedForRef.current) return;
+    fetchedForRef.current = email;
+    setProfile(null);
+    versionRef.current = 0;
+    setIsLoading(true);
+
     const profileKey = getProfileKey(email);
 
     async function loadProfile() {
@@ -102,7 +116,8 @@ export function useUserProfile() {
             try {
               const parsed = JSON.parse(savedLocal);
               if (
-                (!serverData.preferredGameplayLoops || serverData.preferredGameplayLoops.length === 0) &&
+                (!serverData.preferredGameplayLoops ||
+                  serverData.preferredGameplayLoops.length === 0) &&
                 parsed.preferredGameplayLoops &&
                 parsed.preferredGameplayLoops.length > 0
               ) {
@@ -163,61 +178,96 @@ export function useUserProfile() {
     }
 
     loadProfile();
-  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session?.user?.email]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update profile: optimistic local update + server save
+  // Update profile: optimistic local update + serialized server save
   const updateProfile = useCallback(
     (updates: Partial<UserProfile>) => {
       if (!profile) return;
 
-      // 1. Optimistic local state update
+      const profileKey = getProfileKey(profile.email);
+
+      // Capture prior state so a failed save can be rolled back (hooks-&-ty-12).
+      const previousProfile = profile;
+      const previousLocal = localStorage.getItem(profileKey);
+
+      const rollback = () => {
+        setProfile(previousProfile);
+        if (previousLocal !== null) {
+          localStorage.setItem(profileKey, previousLocal);
+        } else {
+          localStorage.removeItem(profileKey);
+        }
+      };
+
+      // 1. Optimistic local state update + write-through cache.
       const updatedProfile = { ...profile, ...updates };
       setProfile(updatedProfile);
-
-      // 2. Write-through to localStorage cache
-      const profileKey = getProfileKey(profile.email);
       localStorage.setItem(profileKey, JSON.stringify(updatedProfile));
 
-      // 3. Map to server fields and save via API
+      // 2. Map to server fields; skip the API call if nothing server-relevant changed.
       const serverUpdates = clientToServer(updates);
-
-      // Skip API call if no server-relevant fields changed
       if (Object.keys(serverUpdates).length === 0) return;
 
-      fetch('/api/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...serverUpdates, __v: versionRef.current }),
-      })
-        .then(async (res) => {
-          if (res.ok) {
-            const data = await res.json();
-            versionRef.current = data.__v ?? versionRef.current;
-          } else if (res.status === 409) {
-            // Conflict -- re-fetch from server
-            toast.info('Profile was modified elsewhere -- refreshed');
-            hasFetchedRef.current = false;
-            const refreshRes = await fetch('/api/profile');
-            if (refreshRes.ok) {
-              const serverData = await refreshRes.json();
-              versionRef.current = serverData.__v ?? 0;
-              const refreshedProfile = serverToClient(serverData, {
-                name: profile.handle,
-                email: profile.email,
-                image: profile.photo,
-              });
-              setProfile(refreshedProfile);
-              localStorage.setItem(profileKey, JSON.stringify(refreshedProfile));
+      // Identity used to reconcile the server-returned profile (name/handle/email
+      // are session-derived and never part of the API payload).
+      const identity = {
+        name: profile.handle,
+        email: profile.email,
+        image: profile.photo,
+      };
+
+      // 3. Serialize saves through a promise chain and tag each with a sequence
+      //    id so only the latest mutation reconciles client state. This keeps
+      //    versionRef advancing deterministically and prevents an earlier save's
+      //    response from overwriting a newer edit (hooks-&-ty-13).
+      const seq = ++saveSeqRef.current;
+      saveChainRef.current = saveChainRef.current
+        .catch(() => {}) // isolate prior failures so the chain keeps flowing
+        .then(async () => {
+          try {
+            const res = await fetch('/api/profile', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...serverUpdates, __v: versionRef.current }),
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              versionRef.current = data.__v ?? versionRef.current;
+              // Reconcile from the server's full profile rather than trusting the
+              // optimistic merge; only the most recent save applies its result.
+              if (seq === saveSeqRef.current) {
+                const serverProfile = serverToClient(data, identity);
+                setProfile(serverProfile);
+                localStorage.setItem(profileKey, JSON.stringify(serverProfile));
+              }
+            } else if (res.status === 409) {
+              // Conflict -- re-fetch authoritative server state.
+              toast.info('Profile was modified elsewhere -- refreshed');
+              const refreshRes = await fetch('/api/profile');
+              if (refreshRes.ok) {
+                const serverData = await refreshRes.json();
+                versionRef.current = serverData.__v ?? 0;
+                if (seq === saveSeqRef.current) {
+                  const refreshedProfile = serverToClient(serverData, identity);
+                  setProfile(refreshedProfile);
+                  localStorage.setItem(profileKey, JSON.stringify(refreshedProfile));
+                }
+              }
+            } else {
+              // Save failed -- roll back the optimistic update so localStorage
+              // is not left as the source of truth (hooks-&-ty-12).
+              toast.error('Failed to save profile');
+              if (seq === saveSeqRef.current) rollback();
             }
-          } else {
+          } catch {
             toast.error('Failed to save profile');
+            if (seq === saveSeqRef.current) rollback();
           }
-        })
-        .catch(() => {
-          toast.error('Failed to save profile');
         });
     },
-    [profile, toast],
+    [profile, toast]
   );
 
   return {

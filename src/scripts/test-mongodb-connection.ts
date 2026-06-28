@@ -16,7 +16,7 @@ function loadEnvFile() {
     const envFiles = [
       path.join(process.cwd(), '.env.local'),
       path.join(process.cwd(), 'env.local'),
-      path.join(process.cwd(), '.env')
+      path.join(process.cwd(), '.env'),
     ];
 
     let loaded = false;
@@ -25,7 +25,9 @@ function loadEnvFile() {
       if (fs.existsSync(envPath)) {
         console.log(`Loading variables from ${path.basename(envPath)}`);
         const envContent = fs.readFileSync(envPath, 'utf8');
-        const envVars = envContent.split('\n').filter(line => line.trim() && !line.startsWith('#'));
+        const envVars = envContent
+          .split('\n')
+          .filter((line) => line.trim() && !line.startsWith('#'));
 
         for (const envVar of envVars) {
           const [key, ...valueParts] = envVar.split('=');
@@ -44,7 +46,9 @@ function loadEnvFile() {
 
     // Check for both potential MongoDB connection variables
     console.log(`- MONGODB_URI: ${process.env.MONGODB_URI ? '✓ Set' : '✗ Not set'}`);
-    console.log(`- COSMOSDB_CONNECTION_STRING: ${process.env.COSMOSDB_CONNECTION_STRING ? '✓ Set' : '✗ Not set'}`);
+    console.log(
+      `- COSMOSDB_CONNECTION_STRING: ${process.env.COSMOSDB_CONNECTION_STRING ? '✓ Set' : '✗ Not set'}`
+    );
 
     return loaded;
   } catch (error) {
@@ -62,7 +66,9 @@ async function testMongoDBConnection() {
   console.log(`- COSMOS_ENDPOINT: ${process.env.COSMOS_ENDPOINT ? '✓ Set' : '✗ Not set'}`);
   console.log(`- COSMOS_KEY: ${process.env.COSMOS_KEY ? '✓ Set' : '✗ Not set'}`);
   console.log(`- COSMOS_DATABASE_ID: ${process.env.COSMOS_DATABASE_ID ? '✓ Set' : '✗ Not set'}`);
-  console.log(`- COSMOS_CONTAINER_ID: ${process.env.COSMOS_CONTAINER_ID ? `✓ Set (${process.env.COSMOS_CONTAINER_ID})` : '✗ Not set'}`);
+  console.log(
+    `- COSMOS_CONTAINER_ID: ${process.env.COSMOS_CONTAINER_ID ? `✓ Set (${process.env.COSMOS_CONTAINER_ID})` : '✗ Not set'}`
+  );
   console.log(`- MONGODB_URI: ${process.env.MONGODB_URI ? '✓ Set' : '✗ Not set'}`);
 
   if (process.env.MONGODB_URI) {
@@ -85,13 +91,18 @@ async function testMongoDBConnection() {
     console.log('✅ Successfully connected to MongoDB!');
 
     // Test getting all users
+    // SECURITY: Exclude sensitive fields so the test never serializes PII/credentials
     console.log('Fetching all users...');
-    const users = await db.collection('users').find({}, { projection: { _id: 0 } }).toArray();
+    const users = await db
+      .collection('users')
+      .find({}, { projection: { _id: 0, passwordHash: 0, password: 0, email: 0, discordId: 0 } })
+      .toArray();
     console.log(`Found ${users.length} users`);
 
     if (users.length > 0) {
-      console.log('Sample user data:');
-      console.log(JSON.stringify(users[0], null, 2));
+      // Print only the schema (field names), never the raw document values
+      console.log('Sample user schema (field names only):');
+      console.log(Object.keys(users[0]).sort().join(', '));
     }
 
     // Close the connection
@@ -106,4 +117,7 @@ async function testMongoDBConnection() {
 }
 
 // Run the test
-testMongoDBConnection().catch(console.error); 
+testMongoDBConnection().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

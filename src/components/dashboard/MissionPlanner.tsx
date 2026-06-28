@@ -23,7 +23,7 @@ import {
   PlannedMissionValidationErrors,
   PlannedMissionStatus,
   ConfirmedParticipant,
-  createEmptyMission
+  createEmptyMission,
 } from '@/types/PlannedMission';
 import {
   PlusIcon,
@@ -35,7 +35,7 @@ import {
   TrashIcon,
   EyeIcon,
   CheckIcon,
-  ClipboardIcon
+  ClipboardIcon,
 } from '@/components/ui/icons';
 
 // Status badge colors
@@ -45,7 +45,7 @@ const STATUS_COLORS: Record<PlannedMissionStatus, string> = {
   ACTIVE: 'bg-[rgba(var(--mg-success),0.2)] text-[rgba(var(--mg-success),1)]',
   DEBRIEFING: 'bg-[rgba(255,193,7),0.2] text-[rgba(255,193,7,1)]',
   COMPLETED: 'bg-[rgba(var(--mg-secondary),0.2)] text-[rgba(var(--mg-secondary),1)]',
-  CANCELLED: 'bg-[rgba(var(--mg-danger),0.2)] text-[rgba(var(--mg-danger),0.8)]'
+  CANCELLED: 'bg-[rgba(var(--mg-danger),0.2)] text-[rgba(var(--mg-danger),0.8)]',
 };
 
 type ViewMode = 'list' | 'create' | 'edit' | 'view' | 'debrief';
@@ -59,6 +59,12 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
+  // Keep a stable ref to toast so callbacks wrapped in useCallback/useEffect
+  // (e.g. fetchMissions) don't need it as a dependency. The toast context value
+  // is re-created on every provider render, so depending on it directly would
+  // re-trigger those effects whenever any toast is shown.
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const { confirm } = useConfirmDialog();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [missions, setMissions] = useState<PlannedMissionResponse[]>([]);
@@ -67,10 +73,19 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [errors, setErrors] = useState<PlannedMissionValidationErrors>({});
   const [statusFilter, setStatusFilter] = useState<PlannedMissionStatus | 'all'>('all');
-  const [rsvpData, setRsvpData] = useState<Record<string, { count: number; users: Array<{ username: string; globalName?: string; nickname?: string }> }>>({});
+  const [listError, setListError] = useState<string | null>(null);
+  const [rsvpData, setRsvpData] = useState<
+    Record<
+      string,
+      { count: number; users: Array<{ username: string; globalName?: string; nickname?: string }> }
+    >
+  >({});
 
   // Track if we've already processed URL params
   const missionIdParamProcessed = useRef(false);
+  // Track if we've already processed the initialMissionId prop (so refreshes
+  // don't keep forcing the user back into edit mode)
+  const initialMissionProcessed = useRef(false);
 
   // Debrief state
   const [debriefParticipants, setDebriefParticipants] = useState<Record<string, boolean>>({});
@@ -94,6 +109,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
 
       const res = await fetch(url);
       if (res.ok) {
+        setListError(null);
         const data = await res.json();
         setMissions(data.items || []);
 
@@ -102,9 +118,21 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
         for (const mission of published) {
           fetchRsvpData(mission.id);
         }
+      } else {
+        const data = await res.json().catch(() => null);
+        const message = data?.error || `Failed to load missions (${res.status}).`;
+        console.error('Error fetching missions:', message);
+        // Clear stale data so we don't show a list that no longer reflects the server
+        setMissions([]);
+        setListError(message);
+        toastRef.current.error(message);
       }
     } catch (error) {
       console.error('Error fetching missions:', error);
+      const message = 'Network error while loading missions. Please try again.';
+      setMissions([]);
+      setListError(message);
+      toastRef.current.error(message);
     } finally {
       setIsLoadingList(false);
     }
@@ -119,12 +147,12 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
         if (data.discordAvailable === false) {
           return;
         }
-        setRsvpData(prev => ({
+        setRsvpData((prev) => ({
           ...prev,
           [missionId]: {
             count: data.count || 0,
-            users: data.rsvps || []
-          }
+            users: data.rsvps || [],
+          },
         }));
       }
     } catch (error) {
@@ -139,9 +167,11 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
 
   // Handle initial mission ID
   useEffect(() => {
+    if (initialMissionProcessed.current) return;
     if (initialMissionId && missions.length > 0) {
-      const mission = missions.find(m => m.id === initialMissionId);
+      const mission = missions.find((m) => m.id === initialMissionId);
       if (mission) {
+        initialMissionProcessed.current = true;
         handleEdit(mission);
       }
     }
@@ -154,7 +184,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
     const missionId = searchParams.get('missionId');
     if (!missionId || missions.length === 0) return;
 
-    const mission = missions.find(m => m.id === missionId);
+    const mission = missions.find((m) => m.id === missionId);
     if (mission) {
       missionIdParamProcessed.current = true;
 
@@ -176,9 +206,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
 
   // Handle input change
   const handleInputChange = (field: keyof PlannedMission, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field as keyof PlannedMissionValidationErrors]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
   };
 
@@ -225,7 +255,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       const res = await fetch('/api/planned-missions', {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
 
       if (res.ok) {
@@ -236,7 +266,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
         if (selectedMission?.discordEvent && savedMission?.id) {
           try {
             const discordRes = await fetch(`/api/planned-missions/${savedMission.id}/discord`, {
-              method: 'PATCH'
+              method: 'PATCH',
             });
             if (!discordRes.ok) {
               const discordErrorBody = await discordRes.json().catch(() => null);
@@ -258,7 +288,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
         } else if (selectedMission?.discordEvent) {
           toast.success('Mission saved and Discord event updated.');
         } else {
-          toast.success(selectedMission ? 'Mission saved successfully.' : 'Mission created successfully.');
+          toast.success(
+            selectedMission ? 'Mission saved successfully.' : 'Mission created successfully.'
+          );
         }
       } else {
         const data = await res.json();
@@ -293,7 +325,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       images: mission.images,
       expectedParticipants: mission.expectedParticipants,
       confirmedParticipants: mission.confirmedParticipants,
-      status: mission.status
+      status: mission.status,
     });
     setViewMode('edit');
   };
@@ -314,21 +346,26 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       message: 'Are you sure you want to delete this mission? This action cannot be undone.',
       confirmLabel: 'Delete',
       cancelLabel: 'Cancel',
-      variant: 'danger'
+      variant: 'danger',
     });
     if (!confirmed) return;
 
     setIsLoading(true);
     try {
       const res = await fetch(`/api/planned-missions?id=${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
 
       if (res.ok) {
         await fetchMissions();
+        toast.success('Mission deleted.');
+      } else {
+        const data = await res.json().catch(() => null);
+        toast.error(`Failed to delete mission: ${data?.error || `request failed (${res.status})`}`);
       }
     } catch (error) {
       console.error('Error deleting mission:', error);
+      toast.error('Network error while deleting mission. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -341,13 +378,13 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
     setIsLoading(true);
     try {
       const res = await fetch(`/api/planned-missions/${selectedMission.id}/discord`, {
-        method: 'POST'
+        method: 'POST',
       });
 
       if (res.ok) {
         const data = await res.json();
         setSelectedMission(data.mission);
-        setFormData(prev => ({ ...prev, status: 'SCHEDULED' }));
+        setFormData((prev) => ({ ...prev, status: 'SCHEDULED' }));
         await fetchMissions();
         toast.success('Mission published to Discord successfully!');
       } else {
@@ -372,11 +409,11 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
     setSelectedMission(mission);
     // Pre-populate confirmed participants
     const confirmed: Record<string, boolean> = {};
-    mission.confirmedParticipants.forEach(p => {
+    mission.confirmedParticipants.forEach((p) => {
       confirmed[p.odId] = true;
     });
     // Also add expected participants as unchecked
-    mission.expectedParticipants.forEach(p => {
+    mission.expectedParticipants.forEach((p) => {
       if (!confirmed[p.discordId]) {
         confirmed[p.discordId] = false;
       }
@@ -387,9 +424,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
 
   // Toggle participant confirmation
   const toggleParticipantConfirm = (id: string) => {
-    setDebriefParticipants(prev => ({
+    setDebriefParticipants((prev) => ({
       ...prev,
-      [id]: !prev[id]
+      [id]: !prev[id],
     }));
   };
 
@@ -406,20 +443,23 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       Object.entries(debriefParticipants).forEach(([id, isConfirmed]) => {
         if (isConfirmed) {
           // Find in expected participants first
-          const expected = selectedMission.expectedParticipants.find(p => p.discordId === id);
+          const expected = selectedMission.expectedParticipants.find((p) => p.discordId === id);
           if (expected) {
             confirmed.push({
               odId: expected.discordId,
-              displayName: expected.discordNickname || expected.discordGlobalName || expected.discordUsername,
+              displayName:
+                expected.discordNickname || expected.discordGlobalName || expected.discordUsername,
               discordId: expected.discordId,
               userId: expected.userId,
               aydoHandle: expected.aydoHandle,
               confirmedBy: userId,
-              confirmedAt: now
+              confirmedAt: now,
             });
           } else {
             // Check if already in confirmed
-            const alreadyConfirmed = selectedMission.confirmedParticipants.find(p => p.odId === id);
+            const alreadyConfirmed = selectedMission.confirmedParticipants.find(
+              (p) => p.odId === id
+            );
             if (alreadyConfirmed) {
               confirmed.push(alreadyConfirmed);
             }
@@ -430,7 +470,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       const res = await fetch(`/api/planned-missions/${selectedMission.id}/attendance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirmedParticipants: confirmed })
+        body: JSON.stringify({ confirmedParticipants: confirmed }),
       });
 
       if (res.ok) {
@@ -458,7 +498,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       const res = await fetch(`/api/planned-missions/${selectedMission.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'COMPLETED' })
+        body: JSON.stringify({ status: 'COMPLETED' }),
       });
 
       if (res.ok) {
@@ -466,6 +506,11 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
         setViewMode('list');
         setSelectedMission(null);
         toast.success('Mission marked as completed!');
+      } else {
+        const data = await res.json().catch(() => null);
+        toast.error(
+          `Failed to complete mission: ${data?.error || `request failed (${res.status})`}`
+        );
       }
     } catch (error) {
       toast.error('Network error. Please try again.');
@@ -483,12 +528,14 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      timeZoneName: 'short'
+      timeZoneName: 'short',
     });
   };
 
   // Get countdown string for upcoming missions
-  const getCountdown = (dateString: string): { text: string; isUrgent: boolean; isPast: boolean } => {
+  const getCountdown = (
+    dateString: string
+  ): { text: string; isUrgent: boolean; isPast: boolean } => {
     const now = new Date();
     const target = new Date(dateString);
     const diffMs = target.getTime() - now.getTime();
@@ -513,7 +560,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
       return {
         text: `T-${diffHours}h ${remainingMins}m`,
         isUrgent: diffHours < 2,
-        isPast: false
+        isPast: false,
       };
     }
 
@@ -522,7 +569,7 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
     return {
       text: `T-${diffDays}d ${remainingHours}h`,
       isUrgent: false,
-      isPast: false
+      isPast: false,
     };
   };
 
@@ -531,9 +578,11 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
   };
 
-  const getTotalShipsRequired = (mission: PlannedMissionResponse) => getShipRequirementCount(mission);
+  const getTotalShipsRequired = (mission: PlannedMissionResponse) =>
+    getShipRequirementCount(mission);
 
-  const getTotalPersonnelRequired = (mission: PlannedMissionResponse) => getPersonnelRequirementCount(mission);
+  const getTotalPersonnelRequired = (mission: PlannedMissionResponse) =>
+    getPersonnelRequirementCount(mission);
 
   // Render list view
   const renderListView = () => (
@@ -544,7 +593,10 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
         rightContent={
           canCreateMission && (
             <MobiGlasButton
-              onClick={() => { resetForm(); setViewMode('create'); }}
+              onClick={() => {
+                resetForm();
+                setViewMode('create');
+              }}
               variant="primary"
               size="md"
               leftIcon={<PlusIcon />}
@@ -563,7 +615,12 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
             {/* Timezone indicator */}
             <div className="flex items-center gap-1 mt-1 text-xs text-[rgba(var(--mg-text),0.4)]">
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <span>Times shown in your local timezone: {getUserTimezone()}</span>
             </div>
@@ -571,27 +628,41 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
 
           {/* Status Filter */}
           <div className="flex flex-wrap gap-2">
-            {(['all', 'DRAFT', 'SCHEDULED', 'ACTIVE', 'DEBRIEFING', 'COMPLETED'] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                  statusFilter === status
-                    ? 'bg-[rgba(var(--mg-primary),0.3)] text-[rgba(var(--mg-primary),1)]'
-                    : 'bg-[rgba(var(--mg-panel-dark),0.3)] text-[rgba(var(--mg-text),0.6)] hover:bg-[rgba(var(--mg-primary),0.1)]'
-                }`}
-              >
-                {status === 'all' ? 'All' : status}
-              </button>
-            ))}
+            {(['all', 'DRAFT', 'SCHEDULED', 'ACTIVE', 'DEBRIEFING', 'COMPLETED'] as const).map(
+              (status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                    statusFilter === status
+                      ? 'bg-[rgba(var(--mg-primary),0.3)] text-[rgba(var(--mg-primary),1)]'
+                      : 'bg-[rgba(var(--mg-panel-dark),0.3)] text-[rgba(var(--mg-text),0.6)] hover:bg-[rgba(var(--mg-primary),0.1)]'
+                  }`}
+                >
+                  {status === 'all' ? 'All' : status}
+                </button>
+              )
+            )}
           </div>
         </div>
       </MobiGlasPanel>
 
+      {/* Load error banner */}
+      {listError && !isLoadingList && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-[rgba(var(--mg-danger),0.4)] bg-[rgba(var(--mg-danger),0.1)] px-4 py-3 text-sm text-[rgba(var(--mg-danger),0.9)]">
+          <span>{listError}</span>
+          <MobiGlasButton onClick={() => fetchMissions()} variant="secondary" size="sm">
+            Retry
+          </MobiGlasButton>
+        </div>
+      )}
+
       {/* Missions Grid */}
       {isLoadingList ? (
         <div className="text-center py-12">
-          <div className="animate-pulse text-[rgba(var(--mg-primary),0.6)]">Loading missions...</div>
+          <div className="animate-pulse text-[rgba(var(--mg-primary),0.6)]">
+            Loading missions...
+          </div>
         </div>
       ) : missions.length === 0 ? (
         <MobiGlasPanel>
@@ -599,7 +670,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
             <CalendarIcon />
             <p className="mt-4">No missions found.</p>
             {canCreateMission && (
-              <p className="mt-2">Click &quot;Plan New Mission&quot; to create your first mission.</p>
+              <p className="mt-2">
+                Click &quot;Plan New Mission&quot; to create your first mission.
+              </p>
             )}
           </div>
         </MobiGlasPanel>
@@ -617,7 +690,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                   <h3 className="text-lg font-medium text-[rgba(var(--mg-text),0.95)] truncate">
                     {mission.name}
                   </h3>
-                  <span className={`shrink-0 px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[mission.status]}`}>
+                  <span
+                    className={`shrink-0 px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[mission.status]}`}
+                  >
                     {mission.status}
                   </span>
                 </div>
@@ -628,26 +703,37 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                     <span className="text-xs">{formatDate(mission.scheduledDateTime)}</span>
                   </div>
                   {/* Countdown Display */}
-                  {mission.status === 'SCHEDULED' && (() => {
-                    const countdown = getCountdown(mission.scheduledDateTime);
-                    return (
-                      <div
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                          countdown.isPast
-                            ? 'bg-[rgba(var(--mg-success),0.2)] text-[rgba(var(--mg-success),1)]'
-                            : countdown.isUrgent
-                            ? 'bg-[rgba(var(--mg-danger),0.2)] text-[rgba(var(--mg-danger),1)] animate-pulse'
-                            : 'bg-[rgba(var(--mg-primary),0.15)] text-[rgba(var(--mg-primary),0.9)]'
-                        }`}
-                        title="Time until mission start"
-                      >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>{countdown.text}</span>
-                      </div>
-                    );
-                  })()}
+                  {mission.status === 'SCHEDULED' &&
+                    (() => {
+                      const countdown = getCountdown(mission.scheduledDateTime);
+                      return (
+                        <div
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                            countdown.isPast
+                              ? 'bg-[rgba(var(--mg-success),0.2)] text-[rgba(var(--mg-success),1)]'
+                              : countdown.isUrgent
+                                ? 'bg-[rgba(var(--mg-danger),0.2)] text-[rgba(var(--mg-danger),1)] animate-pulse'
+                                : 'bg-[rgba(var(--mg-primary),0.15)] text-[rgba(var(--mg-primary),0.9)]'
+                          }`}
+                          title="Time until mission start"
+                        >
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <span>{countdown.text}</span>
+                        </div>
+                      );
+                    })()}
                 </div>
 
                 <div className="flex items-center gap-4 text-xs text-[rgba(var(--mg-text),0.5)] mb-4">
@@ -666,7 +752,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                       {rsvpData[mission.id].users.length > 0 && (
                         <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50">
                           <div className="bg-[rgba(var(--mg-panel-dark),0.95)] border border-[rgba(var(--mg-primary),0.3)] rounded-lg p-3 shadow-lg min-w-[180px]">
-                            <div className="text-xs font-medium text-[rgba(var(--mg-primary),1)] mb-2">Interested:</div>
+                            <div className="text-xs font-medium text-[rgba(var(--mg-primary),1)] mb-2">
+                              Interested:
+                            </div>
                             <div className="space-y-1 max-h-[150px] overflow-y-auto">
                               {rsvpData[mission.id].users.map((user, idx) => (
                                 <div key={idx} className="text-xs text-[rgba(var(--mg-text),0.8)]">
@@ -694,7 +782,8 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                 </div>
 
                 {/* Participants Summary */}
-                {(mission.expectedParticipants.length > 0 || mission.confirmedParticipants.length > 0) && (
+                {(mission.expectedParticipants.length > 0 ||
+                  mission.confirmedParticipants.length > 0) && (
                   <div className="flex items-center gap-3 text-xs mb-4 p-2 rounded bg-[rgba(var(--mg-panel-dark),0.3)]">
                     {mission.expectedParticipants.length > 0 && (
                       <span className="text-[rgba(var(--mg-text),0.6)]">
@@ -727,31 +816,33 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                       <ClipboardIcon />
                     </button>
                   )}
-                  {(mission.createdBy === session?.user?.id || userClearance >= 4) && mission.status !== 'COMPLETED' && mission.status !== 'CANCELLED' && (
-                    <>
-                      {(mission.status === 'ACTIVE' || mission.status === 'DEBRIEFING') && (
+                  {(mission.createdBy === session?.user?.id || userClearance >= 4) &&
+                    mission.status !== 'COMPLETED' &&
+                    mission.status !== 'CANCELLED' && (
+                      <>
+                        {(mission.status === 'ACTIVE' || mission.status === 'DEBRIEFING') && (
+                          <button
+                            onClick={() => handleStartDebrief(mission)}
+                            className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(255,193,7,0.1)] text-[rgba(255,193,7,0.9)] hover:bg-[rgba(255,193,7,0.2)] transition-colors text-sm"
+                            title="Mark Attendance"
+                          >
+                            <ClipboardIcon />
+                          </button>
+                        )}
                         <button
-                          onClick={() => handleStartDebrief(mission)}
-                          className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(255,193,7,0.1)] text-[rgba(255,193,7,0.9)] hover:bg-[rgba(255,193,7,0.2)] transition-colors text-sm"
-                          title="Mark Attendance"
+                          onClick={() => handleEdit(mission)}
+                          className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(var(--mg-secondary),0.1)] text-[rgba(var(--mg-secondary),0.8)] hover:bg-[rgba(var(--mg-secondary),0.2)] transition-colors text-sm"
                         >
-                          <ClipboardIcon />
+                          <EditIcon />
                         </button>
-                      )}
-                      <button
-                        onClick={() => handleEdit(mission)}
-                        className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(var(--mg-secondary),0.1)] text-[rgba(var(--mg-secondary),0.8)] hover:bg-[rgba(var(--mg-secondary),0.2)] transition-colors text-sm"
-                      >
-                        <EditIcon />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(mission.id)}
-                        className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(var(--mg-danger),0.1)] text-[rgba(var(--mg-danger),0.8)] hover:bg-[rgba(var(--mg-danger),0.2)] transition-colors text-sm"
-                      >
-                        <TrashIcon />
-                      </button>
-                    </>
-                  )}
+                        <button
+                          onClick={() => handleDelete(mission.id)}
+                          className="flex items-center justify-center gap-1 py-2 px-3 rounded bg-[rgba(var(--mg-danger),0.1)] text-[rgba(var(--mg-danger),0.8)] hover:bg-[rgba(var(--mg-danger),0.2)] transition-colors text-sm"
+                        >
+                          <TrashIcon />
+                        </button>
+                      </>
+                    )}
                 </div>
               </div>
             </motion.div>
@@ -767,8 +858,10 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
 
     const shipRequirements = getMissionShipRequirements(selectedMission);
     const personnelRequirements = getMissionPersonnelRequirements(selectedMission);
-    const canModifySelectedMission = selectedMission.createdBy === session?.user?.id || userClearance >= 4;
-    const isReadOnlyStatus = selectedMission.status === 'COMPLETED' || selectedMission.status === 'CANCELLED';
+    const canModifySelectedMission =
+      selectedMission.createdBy === session?.user?.id || userClearance >= 4;
+    const isReadOnlyStatus =
+      selectedMission.status === 'COMPLETED' || selectedMission.status === 'CANCELLED';
 
     return (
       <div className="space-y-6">
@@ -777,7 +870,10 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
           title="Mission Details"
           rightContent={
             <MobiGlasButton
-              onClick={() => { setViewMode('list'); setSelectedMission(null); }}
+              onClick={() => {
+                setViewMode('list');
+                setSelectedMission(null);
+              }}
               variant="secondary"
               size="sm"
             >
@@ -789,19 +885,21 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
             <span className="px-2 py-1 rounded text-xs font-medium bg-[rgba(var(--mg-primary),0.2)] text-[rgba(var(--mg-primary),1)]">
               VIEWING
             </span>
-            <span className="text-[rgba(var(--mg-text),0.9)] font-medium text-lg">{selectedMission.name}</span>
+            <span className="text-[rgba(var(--mg-text),0.9)] font-medium text-lg">
+              {selectedMission.name}
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[selectedMission.status]}`}>
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[selectedMission.status]}`}
+            >
               {selectedMission.status}
             </span>
             <div className="text-[rgba(var(--mg-text),0.6)]">
               {formatDate(selectedMission.scheduledDateTime)}
             </div>
             {selectedMission.location && (
-              <div className="text-[rgba(var(--mg-text),0.6)]">
-                📍 {selectedMission.location}
-              </div>
+              <div className="text-[rgba(var(--mg-text),0.6)]">📍 {selectedMission.location}</div>
             )}
             {selectedMission.discordEvent && (
               <div className="flex items-center gap-1 text-[rgba(var(--mg-primary),0.8)]">
@@ -845,9 +943,14 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
               {selectedMission.leaders.length > 0 ? (
                 <div className="space-y-2">
                   {selectedMission.leaders.map((leader, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded bg-[rgba(var(--mg-panel-dark),0.3)]">
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-3 rounded bg-[rgba(var(--mg-panel-dark),0.3)]"
+                    >
                       <span className="text-[rgba(var(--mg-text),0.6)]">{leader.role}</span>
-                      <span className="text-[rgba(var(--mg-text),0.9)] font-medium">{leader.aydoHandle}</span>
+                      <span className="text-[rgba(var(--mg-text),0.9)] font-medium">
+                        {leader.aydoHandle}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -857,13 +960,16 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
             </MobiGlasPanel>
 
             {/* Participants */}
-            {(selectedMission.expectedParticipants.length > 0 || selectedMission.confirmedParticipants.length > 0) && (
+            {(selectedMission.expectedParticipants.length > 0 ||
+              selectedMission.confirmedParticipants.length > 0) && (
               <MobiGlasPanel title="Participants">
                 <div className="space-y-4">
                   {/* Expected Participants */}
                   {selectedMission.expectedParticipants.length > 0 && (
                     <div>
-                      <h4 className="mg-subtitle mb-2">EXPECTED ({selectedMission.expectedParticipants.length})</h4>
+                      <h4 className="mg-subtitle mb-2">
+                        EXPECTED ({selectedMission.expectedParticipants.length})
+                      </h4>
                       <div className="flex flex-wrap gap-2">
                         {selectedMission.expectedParticipants.map((p, i) => (
                           <div
@@ -946,7 +1052,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                   ))}
                 </div>
               ) : (
-                <div className="text-[rgba(var(--mg-text),0.5)]">No ship requirements assigned to this mission.</div>
+                <div className="text-[rgba(var(--mg-text),0.5)]">
+                  No ship requirements assigned to this mission.
+                </div>
               )}
             </MobiGlasPanel>
 
@@ -970,7 +1078,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                           <div className="text-sm font-medium text-[rgba(var(--mg-text),0.9)]">
                             {personnel.profession}
                           </div>
-                          <div className="text-xs text-[rgba(var(--mg-text),0.5)]">Personnel role</div>
+                          <div className="text-xs text-[rgba(var(--mg-text),0.5)]">
+                            Personnel role
+                          </div>
                         </div>
                         <div className="text-lg font-bold text-[rgba(var(--mg-secondary),1)]">
                           x{personnel.count}
@@ -980,7 +1090,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                   ))}
                 </div>
               ) : (
-                <div className="text-[rgba(var(--mg-text),0.5)]">No personnel requirements assigned to this mission.</div>
+                <div className="text-[rgba(var(--mg-text),0.5)]">
+                  No personnel requirements assigned to this mission.
+                </div>
               )}
             </MobiGlasPanel>
           </div>
@@ -998,16 +1110,18 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                 Copy to New Mission
               </MobiGlasButton>
             )}
-            {canModifySelectedMission && !isReadOnlyStatus && (selectedMission.status === 'ACTIVE' || selectedMission.status === 'DEBRIEFING') && (
-              <MobiGlasButton
-                onClick={() => handleStartDebrief(selectedMission)}
-                variant="secondary"
-                size="md"
-                leftIcon={<ClipboardIcon />}
-              >
-                Mark Attendance
-              </MobiGlasButton>
-            )}
+            {canModifySelectedMission &&
+              !isReadOnlyStatus &&
+              (selectedMission.status === 'ACTIVE' || selectedMission.status === 'DEBRIEFING') && (
+                <MobiGlasButton
+                  onClick={() => handleStartDebrief(selectedMission)}
+                  variant="secondary"
+                  size="md"
+                  leftIcon={<ClipboardIcon />}
+                >
+                  Mark Attendance
+                </MobiGlasButton>
+              )}
             {canModifySelectedMission && !isReadOnlyStatus && (
               <MobiGlasButton
                 onClick={() => handleEdit(selectedMission)}
@@ -1038,20 +1152,20 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
     if (!selectedMission) return null;
 
     const allParticipants = [
-      ...selectedMission.expectedParticipants.map(p => ({
+      ...selectedMission.expectedParticipants.map((p) => ({
         id: p.discordId,
         name: p.discordNickname || p.discordGlobalName || p.discordUsername,
         avatar: p.discordAvatar,
-        source: 'discord' as const
+        source: 'discord' as const,
       })),
       ...selectedMission.confirmedParticipants
-        .filter(p => !selectedMission.expectedParticipants.some(e => e.discordId === p.odId))
-        .map(p => ({
+        .filter((p) => !selectedMission.expectedParticipants.some((e) => e.discordId === p.odId))
+        .map((p) => ({
           id: p.odId,
           name: p.aydoHandle || p.displayName,
           avatar: undefined,
-          source: 'manual' as const
-        }))
+          source: 'manual' as const,
+        })),
     ];
 
     return (
@@ -1061,7 +1175,10 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
           title="Mark Attendance"
           rightContent={
             <MobiGlasButton
-              onClick={() => { setViewMode('list'); setSelectedMission(null); }}
+              onClick={() => {
+                setViewMode('list');
+                setSelectedMission(null);
+              }}
               variant="secondary"
               size="sm"
             >
@@ -1070,7 +1187,8 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
           }
         >
           <div className="text-[rgba(var(--mg-text),0.7)]">
-            <strong>{selectedMission.name}</strong> - {formatDate(selectedMission.scheduledDateTime)}
+            <strong>{selectedMission.name}</strong> -{' '}
+            {formatDate(selectedMission.scheduledDateTime)}
           </div>
           <div className="text-sm text-[rgba(var(--mg-text),0.5)] mt-2">
             Check the box next to participants who actually showed up for this mission.
@@ -1092,11 +1210,13 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                   onClick={() => toggleParticipantConfirm(participant.id)}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
-                    debriefParticipants[participant.id]
-                      ? 'bg-[rgba(var(--mg-success),0.8)] border-[rgba(var(--mg-success),1)]'
-                      : 'border-[rgba(var(--mg-text),0.3)]'
-                  }`}>
+                  <div
+                    className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
+                      debriefParticipants[participant.id]
+                        ? 'bg-[rgba(var(--mg-success),0.8)] border-[rgba(var(--mg-success),1)]'
+                        : 'border-[rgba(var(--mg-text),0.3)]'
+                    }`}
+                  >
                     {debriefParticipants[participant.id] && <CheckIcon />}
                   </div>
                   {participant.avatar && (
@@ -1108,12 +1228,8 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
                       className="rounded-full"
                     />
                   )}
-                  <span className="flex-1 text-[rgba(var(--mg-text),0.9)]">
-                    {participant.name}
-                  </span>
-                  {participant.source === 'discord' && (
-                    <DiscordIcon />
-                  )}
+                  <span className="flex-1 text-[rgba(var(--mg-text),0.9)]">{participant.name}</span>
+                  {participant.source === 'discord' && <DiscordIcon />}
                 </motion.div>
               ))}
             </div>
@@ -1128,10 +1244,9 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
             <div className="text-sm text-[rgba(var(--mg-text),0.6)]">
               <span className="text-[rgba(var(--mg-success),0.8)] font-medium">
                 {Object.values(debriefParticipants).filter(Boolean).length}
-              </span>
-              {' '}of{' '}
-              <span className="font-medium">{allParticipants.length}</span>
-              {' '}participants confirmed
+              </span>{' '}
+              of <span className="font-medium">{allParticipants.length}</span> participants
+              confirmed
             </div>
           </div>
         </MobiGlasPanel>
@@ -1210,8 +1325,15 @@ const MissionPlanner: React.FC<MissionPlannerProps> = ({ initialMissionId }) => 
             isEditing={viewMode === 'edit'}
             onInputChange={handleInputChange}
             onSave={handleSave}
-            onCancel={() => { setViewMode('list'); resetForm(); }}
-            onPublishToDiscord={viewMode === 'edit' && formData.status === 'DRAFT' ? handlePublishToDiscord : undefined}
+            onCancel={() => {
+              setViewMode('list');
+              resetForm();
+            }}
+            onPublishToDiscord={
+              viewMode === 'edit' && formData.status === 'DRAFT'
+                ? handlePublishToDiscord
+                : undefined
+            }
           />
         </motion.div>
       )}

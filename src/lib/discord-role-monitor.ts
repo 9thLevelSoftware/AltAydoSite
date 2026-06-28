@@ -1,6 +1,11 @@
 import { logger } from '@/lib/logger';
 import { getDiscordService } from './discord';
-import { ROLE_MAPPINGS, getDivisionFromPosition, getHighestClearanceLevel, POSITIONS_WITH_CLEARANCE } from './discord-role-mappings';
+import {
+  ROLE_MAPPINGS,
+  getDivisionFromPosition,
+  getHighestClearanceLevel,
+  POSITIONS_WITH_CLEARANCE,
+} from './discord-role-mappings';
 import * as userStorage from './user-storage';
 import { User } from '@/types/user';
 
@@ -20,6 +25,7 @@ export class DiscordRoleMonitor {
   private discordService = getDiscordService();
   private isRunning = false;
   private intervalId: NodeJS.Timeout | null = null;
+  private cycleInFlight = false;
 
   /**
    * Start the role monitoring service with 10-minute intervals
@@ -34,10 +40,32 @@ export class DiscordRoleMonitor {
     this.isRunning = true;
 
     // Run immediately, then every 10 minutes
-    this.checkAllUserRoles();
-    this.intervalId = setInterval(() => {
-      this.checkAllUserRoles();
-    }, 10 * 60 * 1000); // 10 minutes
+    this.checkAllUserRoles().catch((error) => {
+      logger.error(
+        'Discord role monitor startup run failed',
+        error instanceof Error ? error : undefined,
+        { module: 'discord-monitor' }
+      );
+    });
+    this.intervalId = setInterval(
+      () => {
+        // Skip this tick if a previous cycle is still running to avoid overlap
+        if (this.cycleInFlight) {
+          logger.info('Skipping Discord role check tick; previous cycle still in flight', {
+            module: 'discord-monitor',
+          });
+          return;
+        }
+        this.checkAllUserRoles().catch((error) => {
+          logger.error(
+            'Discord role monitor cycle failed',
+            error instanceof Error ? error : undefined,
+            { module: 'discord-monitor' }
+          );
+        });
+      },
+      10 * 60 * 1000
+    ); // 10 minutes
 
     logger.info('Discord role monitor started', { module: 'discord-monitor', intervalMinutes: 10 });
   }
@@ -45,7 +73,7 @@ export class DiscordRoleMonitor {
   /**
    * Stop the role monitoring service
    */
-  stop(): void {
+  async stop(): Promise<void> {
     if (!this.isRunning) {
       return;
     }
@@ -58,8 +86,16 @@ export class DiscordRoleMonitor {
       this.intervalId = null;
     }
 
-    // Cleanup Discord client
-    this.discordService.cleanup();
+    // Cleanup Discord client (await so destroy completes before we report stopped)
+    try {
+      await this.discordService.cleanup();
+    } catch (error) {
+      logger.error(
+        'Error cleaning up Discord client during stop',
+        error instanceof Error ? error : undefined,
+        { module: 'discord-monitor' }
+      );
+    }
     logger.info('Discord role monitor stopped', { module: 'discord-monitor' });
   }
 
@@ -67,12 +103,21 @@ export class DiscordRoleMonitor {
    * Check roles for all users with Discord names
    */
   async checkAllUserRoles(): Promise<UserRoleUpdate[]> {
+    // Prevent overlapping cycles (e.g. if a cycle runs longer than the interval)
+    if (this.cycleInFlight) {
+      logger.info('Discord role check cycle already in flight; skipping', {
+        module: 'discord-monitor',
+      });
+      return [];
+    }
+    this.cycleInFlight = true;
+
     logger.info('Starting Discord role check cycle', { module: 'discord-monitor' });
 
     try {
       // Get all users from database
       const allUsers = await userStorage.getAllUsers();
-      const usersWithDiscord = allUsers.filter(user => user.discordName);
+      const usersWithDiscord = allUsers.filter((user) => user.discordName || user.discordId);
 
       logger.info('Found users with Discord names', {
         module: 'discord-monitor',
@@ -93,24 +138,28 @@ export class DiscordRoleMonitor {
           const result = await this.checkUserRoles(user);
           results.push(result);
         } catch (error) {
-          logger.error('Error checking roles for user', error instanceof Error ? error : undefined, {
-            module: 'discord-monitor',
-            aydoHandle: user.aydoHandle,
-            discordName: user.discordName,
-          });
+          logger.error(
+            'Error checking roles for user',
+            error instanceof Error ? error : undefined,
+            {
+              module: 'discord-monitor',
+              aydoHandle: user.aydoHandle,
+              discordName: user.discordName,
+            }
+          );
           results.push({
             userId: user.id,
-            discordName: user.discordName!,
+            discordName: user.discordName || '',
             clearanceLevel: user.clearanceLevel || 1,
             rolesFound: [],
             updated: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           });
         }
       }
 
-      const updatedCount = results.filter(r => r.updated).length;
-      const errorCount = results.filter(r => r.error).length;
+      const updatedCount = results.filter((r) => r.updated).length;
+      const errorCount = results.filter((r) => r.error).length;
 
       logger.info('Role check cycle complete', {
         module: 'discord-monitor',
@@ -120,12 +169,13 @@ export class DiscordRoleMonitor {
       });
 
       return results;
-
     } catch (error) {
       logger.error('Error in checkAllUserRoles', error instanceof Error ? error : undefined, {
         module: 'discord-monitor',
       });
       return [];
+    } finally {
+      this.cycleInFlight = false;
     }
   }
 
@@ -139,19 +189,25 @@ export class DiscordRoleMonitor {
       discordName: user.discordName,
     });
 
-    if (!user.discordName) {
-      throw new Error('User has no Discord name');
+    if (!user.discordName && !user.discordId) {
+      throw new Error('User has no Discord identity (discordName or discordId)');
     }
 
-    // Get Discord member
-    const member = await this.discordService.getMemberByName(user.discordName);
+    // Get Discord member. Prefer a stable ID lookup; fall back to name matching.
+    let member = null;
+    if (user.discordId) {
+      member = await this.discordService.getMemberById(user.discordId);
+    }
+    if (!member && user.discordName) {
+      member = await this.discordService.getMemberByName(user.discordName);
+    }
     if (!member) {
-      throw new Error(`Discord member not found: ${user.discordName}`);
+      throw new Error(`Discord member not found: ${user.discordName || user.discordId}`);
     }
 
     // Get member's roles
     const memberRoles = await this.discordService.getMemberRoles(member);
-    const roleNames = memberRoles.map(role => role.name);
+    const roleNames = memberRoles.map((role) => role.name);
 
     logger.info('Found Discord roles for user', {
       module: 'discord-monitor',
@@ -170,13 +226,14 @@ export class DiscordRoleMonitor {
     if (needsUpdate) {
       // Update user in database
       const updateData: Partial<User> = {
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
 
       if (mappedData.division !== undefined) updateData.division = mappedData.division;
       if (mappedData.payGrade !== undefined) updateData.payGrade = mappedData.payGrade;
       if (mappedData.position !== undefined) updateData.position = mappedData.position;
-      if (mappedData.clearanceLevel !== undefined) updateData.clearanceLevel = mappedData.clearanceLevel;
+      if (mappedData.clearanceLevel !== undefined)
+        updateData.clearanceLevel = mappedData.clearanceLevel;
 
       const updatedUser = await userStorage.updateUser(user.id, updateData);
       updated = !!updatedUser;
@@ -205,13 +262,13 @@ export class DiscordRoleMonitor {
 
     return {
       userId: user.id,
-      discordName: user.discordName,
+      discordName: user.discordName || '',
       division: mappedData.division,
       payGrade: mappedData.payGrade,
       position: mappedData.position,
       clearanceLevel: mappedData.clearanceLevel || user.clearanceLevel || 1,
       rolesFound: roleNames,
-      updated
+      updated,
     };
   }
 
@@ -231,8 +288,8 @@ export class DiscordRoleMonitor {
 
     // Process each role
     for (const roleName of roleNames) {
-      const mapping = ROLE_MAPPINGS.find(m => m.discordRoleName === roleName);
-      
+      const mapping = ROLE_MAPPINGS.find((m) => m.discordRoleName === roleName);
+
       if (mapping) {
         if (mapping.division) {
           division = mapping.division;
@@ -272,24 +329,31 @@ export class DiscordRoleMonitor {
       division,
       payGrade,
       position,
-      clearanceLevel
+      clearanceLevel,
     };
   }
 
   /**
    * Check if user data needs updating
    */
-  private doesUserNeedUpdate(user: User, mappedData: {
-    division?: string;
-    payGrade?: string;
-    position?: string;
-    clearanceLevel?: number;
-  }): boolean {
+  private doesUserNeedUpdate(
+    user: User,
+    mappedData: {
+      division?: string;
+      payGrade?: string;
+      position?: string;
+      clearanceLevel?: number;
+    }
+  ): boolean {
     // Check if any of the mapped values differ from current user data
     if (mappedData.division !== undefined && user.division !== mappedData.division) return true;
     if (mappedData.payGrade !== undefined && user.payGrade !== mappedData.payGrade) return true;
     if (mappedData.position !== undefined && user.position !== mappedData.position) return true;
-    if (mappedData.clearanceLevel !== undefined && user.clearanceLevel !== mappedData.clearanceLevel) return true;
+    if (
+      mappedData.clearanceLevel !== undefined &&
+      user.clearanceLevel !== mappedData.clearanceLevel
+    )
+      return true;
 
     return false;
   }
@@ -300,7 +364,7 @@ export class DiscordRoleMonitor {
   getStatus(): { isRunning: boolean; nextCheck?: Date } {
     return {
       isRunning: this.isRunning,
-      nextCheck: this.intervalId ? new Date(Date.now() + 10 * 60 * 1000) : undefined
+      nextCheck: this.intervalId ? new Date(Date.now() + 10 * 60 * 1000) : undefined,
     };
   }
 }

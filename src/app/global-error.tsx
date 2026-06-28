@@ -9,6 +9,17 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  React.useEffect(() => {
+    // Log the error so it surfaces in the browser console and any attached
+    // monitoring. Avoid posting message/stack to an endpoint (may contain
+    // sensitive data); the digest is a safe, server-correlatable identifier.
+    console.error('[global-error-boundary]', {
+      route: typeof window !== 'undefined' ? window.location.pathname : undefined,
+      digest: error.digest,
+      message: error.message,
+    });
+  }, [error]);
+
   return (
     <html lang="en">
       <body className="font-quantify bg-black text-white min-h-screen antialiased overflow-x-hidden text-sm">
@@ -25,11 +36,7 @@ export default function GlobalError({
               <p className="text-sm opacity-80">
                 Recommended action: Perform complete system restart.
               </p>
-              {error.digest && (
-                <p className="text-xs opacity-60 mt-4">
-                  Error ID: {error.digest}
-                </p>
-              )}
+              {error.digest && <p className="text-xs opacity-60 mt-4">Error ID: {error.digest}</p>}
             </div>
             <button
               onClick={reset}

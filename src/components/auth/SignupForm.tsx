@@ -23,11 +23,13 @@ export default function SignupForm() {
     discordName: '',
     rsiAccountName: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [passwordMatch, setPasswordMatch] = useState<'matching' | 'not-matching' | 'incomplete' | null>(null);
+  const [passwordMatch, setPasswordMatch] = useState<
+    'matching' | 'not-matching' | 'incomplete' | null
+  >(null);
   const router = useRouter();
 
   // Check password match whenever password or confirmPassword changes
@@ -45,14 +47,19 @@ export default function SignupForm() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validate form fields
-    if (!formData.aydoHandle || !formData.email || !formData.password || !formData.confirmPassword) {
+    if (
+      !formData.aydoHandle ||
+      !formData.email ||
+      !formData.password ||
+      !formData.confirmPassword
+    ) {
       setError('Please fill in all required fields');
       return;
     }
@@ -74,12 +81,23 @@ export default function SignupForm() {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
+      // Only parse JSON when the server actually returned JSON; otherwise
+      // fall back to an empty object so we can derive a status-based message.
+      const isJson = response.headers.get('content-type')?.includes('application/json');
+      let data: { error?: string } = {};
+      if (isJson) {
+        try {
+          data = await response.json();
+        } catch {
+          // Malformed JSON body — keep the empty default.
+          data = {};
+        }
+      }
 
       if (!response.ok) {
         // Log the full response for debugging
         console.error('Signup error response:', data);
-        setError(data.error || 'Failed to create account');
+        setError(data.error || `Signup failed (HTTP ${response.status})`);
       } else {
         // Redirect to login page on success
         router.push('/login?signup=success');
@@ -105,14 +123,20 @@ export default function SignupForm() {
           <CornerAccents size="md" color="primary" opacity="medium" />
 
           <div className="text-center mb-6">
-            <h2 className="mg-title text-xl mb-1">AYDO<span className="mg-subtitle font-light">CORP</span></h2>
+            <h2 className="mg-title text-xl mb-1">
+              AYDO<span className="mg-subtitle font-light">CORP</span>
+            </h2>
             <div className="mg-subtitle text-xs tracking-wider">CREATE NEW ACCOUNT</div>
           </div>
 
           <form onSubmit={handleSubmit}>
             <MobiGlasFormError
               message={error}
-              details={error.includes('Failed to create user') ? 'Database connection issue. Please try again later or contact support.' : undefined}
+              details={
+                error.includes('Failed to create user')
+                  ? 'Database connection issue. Please try again later or contact support.'
+                  : undefined
+              }
               className="mb-4"
             />
 
@@ -186,7 +210,9 @@ export default function SignupForm() {
                   required
                   aria-required={true}
                   aria-invalid={passwordMatch === 'not-matching'}
-                  aria-describedby={passwordMatch === 'not-matching' ? 'signup-confirm-password-match' : undefined}
+                  aria-describedby={
+                    passwordMatch === 'not-matching' ? 'signup-confirm-password-match' : undefined
+                  }
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   className={`
@@ -194,18 +220,24 @@ export default function SignupForm() {
                     rounded-sm text-white
                     focus:outline-none focus:ring-2 focus:ring-[rgba(var(--mg-primary),0.5)]
                     transition-all mg-input text-base md:text-sm
-                    ${passwordMatch === 'matching'
-                      ? 'border border-[rgba(var(--mg-success),0.4)] focus:border-[rgba(var(--mg-success),0.7)]'
-                      : passwordMatch === 'not-matching'
-                        ? 'border border-[rgba(var(--mg-danger),0.4)] focus:border-[rgba(var(--mg-danger),0.7)]'
-                        : 'border border-[rgba(var(--mg-primary),0.3)] focus:border-[rgba(var(--mg-primary),0.5)]'
+                    ${
+                      passwordMatch === 'matching'
+                        ? 'border border-[rgba(var(--mg-success),0.4)] focus:border-[rgba(var(--mg-success),0.7)]'
+                        : passwordMatch === 'not-matching'
+                          ? 'border border-[rgba(var(--mg-danger),0.4)] focus:border-[rgba(var(--mg-danger),0.7)]'
+                          : 'border border-[rgba(var(--mg-primary),0.3)] focus:border-[rgba(var(--mg-primary),0.5)]'
                     }
                   `}
                   placeholder="ENTER PASSWORD AGAIN"
                   autoComplete="new-password"
                 />
                 {/* Corner accents matching MobiGlasInput */}
-                <CornerAccents size="xs" color="primary" opacity="low" className="pointer-events-none" />
+                <CornerAccents
+                  size="xs"
+                  color="primary"
+                  opacity="low"
+                  className="pointer-events-none"
+                />
 
                 {/* Status indicator for password matching */}
                 <AnimatePresence>
@@ -277,9 +309,11 @@ export default function SignupForm() {
                   <motion.div
                     id="signup-confirm-password-match"
                     className={`text-xs mt-1 font-quantify tracking-wider ${
-                      passwordMatch === 'matching' ? 'text-[rgba(var(--mg-success),0.8)]' :
-                      passwordMatch === 'not-matching' ? 'text-[rgba(var(--mg-danger),0.8)]' :
-                      'text-[rgba(var(--mg-warning),0.8)]'
+                      passwordMatch === 'matching'
+                        ? 'text-[rgba(var(--mg-success),0.8)]'
+                        : passwordMatch === 'not-matching'
+                          ? 'text-[rgba(var(--mg-danger),0.8)]'
+                          : 'text-[rgba(var(--mg-warning),0.8)]'
                     }`}
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -322,7 +356,15 @@ export default function SignupForm() {
           </form>
 
           <div className="mt-4 text-center text-[rgba(var(--mg-text),0.5)] text-xs">
-            <span>Already have an account? <Link href="/login" className="text-[rgba(var(--mg-primary),0.8)] hover:text-[rgba(var(--mg-primary),1)]">Login instead</Link></span>
+            <span>
+              Already have an account?{' '}
+              <Link
+                href="/login"
+                className="text-[rgba(var(--mg-primary),0.8)] hover:text-[rgba(var(--mg-primary),1)]"
+              >
+                Login instead
+              </Link>
+            </span>
           </div>
         </div>
 

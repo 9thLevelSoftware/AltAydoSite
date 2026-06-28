@@ -1,10 +1,17 @@
 import type {
   MissionPersonnelRequirement,
   MissionShipRequirement,
+  PersonnelProfession,
   ShipCategory,
   ShipSize,
 } from '@/types/MissionPlanning';
-import type { MissionImage, MissionLeader, MissionShip, PlannedMission } from '@/types/PlannedMission';
+import { PERSONNEL_PROFESSIONS } from '@/types/MissionPlanning';
+import type {
+  MissionImage,
+  MissionLeader,
+  MissionShip,
+  PlannedMission,
+} from '@/types/PlannedMission';
 
 interface RequirementSource {
   shipRequirements?: MissionShipRequirement[];
@@ -14,6 +21,11 @@ interface RequirementSource {
 
 const VALID_SHIP_SIZES: ShipSize[] = ['Small', 'Medium', 'Large', 'Capital'];
 const VALID_SHIP_CATEGORIES: ShipCategory[] = ['Fighter', 'Transport', 'Industrial', 'Medical'];
+const VALID_PERSONNEL_PROFESSIONS: PersonnelProfession[] = PERSONNEL_PROFESSIONS;
+
+function normalizeRequirementCount(count: unknown): number {
+  return Math.max(1, Math.floor(Number(count) || 1));
+}
 
 export function normalizeShipSize(size?: string): ShipSize {
   const normalized = (size || '').trim().toLowerCase();
@@ -30,7 +42,9 @@ export function inferShipCategory(ship: MissionShip): ShipCategory {
     ship.manufacturer,
     ...(Array.isArray(ship.role) ? ship.role : []),
     ship.notes || '',
-  ].join(' ').toLowerCase();
+  ]
+    .join(' ')
+    .toLowerCase();
 
   if (roleText.includes('medical') || roleText.includes('medivac') || roleText.includes('rescue')) {
     return 'Medical';
@@ -66,7 +80,9 @@ export function deriveShipRequirementsFromShips(ships?: MissionShip[]): MissionS
   if (!ships || ships.length === 0) return [];
 
   const grouped = new Map<string, MissionShipRequirement>();
-  const validShips = ships.filter((ship): ship is MissionShip => !!ship && typeof ship === 'object');
+  const validShips = ships.filter(
+    (ship): ship is MissionShip => !!ship && typeof ship === 'object'
+  );
 
   validShips.forEach((ship) => {
     const size = normalizeShipSize(ship.size);
@@ -97,16 +113,24 @@ export function getMissionShipRequirements(source: RequirementSource): MissionSh
   return deriveShipRequirementsFromShips(source.ships);
 }
 
-export function getMissionPersonnelRequirements(source: RequirementSource): MissionPersonnelRequirement[] {
+export function getMissionPersonnelRequirements(
+  source: RequirementSource
+): MissionPersonnelRequirement[] {
   return clonePersonnelRequirements(source.personnelRequirements || []);
 }
 
 export function getShipRequirementCount(source: RequirementSource): number {
-  return getMissionShipRequirements(source).reduce((total, requirement) => total + requirement.count, 0);
+  return getMissionShipRequirements(source).reduce(
+    (total, requirement) => total + requirement.count,
+    0
+  );
 }
 
 export function getPersonnelRequirementCount(source: RequirementSource): number {
-  return getMissionPersonnelRequirements(source).reduce((total, requirement) => total + requirement.count, 0);
+  return getMissionPersonnelRequirements(source).reduce(
+    (total, requirement) => total + requirement.count,
+    0
+  );
 }
 
 export function createMissionCopyDraft(source: PlannedMission): Partial<PlannedMission> {
@@ -134,18 +158,55 @@ export function createMissionCopyDraft(source: PlannedMission): Partial<PlannedM
 }
 
 function cloneShipRequirements(requirements: MissionShipRequirement[]): MissionShipRequirement[] {
-  return requirements.map((requirement) => ({
-    size: requirement.size,
-    category: requirement.category,
-    count: requirement.count,
-  }));
+  return (requirements || []).reduce<MissionShipRequirement[]>((sanitized, requirement) => {
+    if (!requirement || typeof requirement !== 'object') {
+      return sanitized;
+    }
+
+    if (!VALID_SHIP_SIZES.includes(requirement.size)) {
+      console.warn(
+        `[mission-requirements] Dropping ship requirement with invalid size: ${String(requirement.size)}`
+      );
+      return sanitized;
+    }
+
+    if (!VALID_SHIP_CATEGORIES.includes(requirement.category)) {
+      console.warn(
+        `[mission-requirements] Dropping ship requirement with invalid category: ${String(requirement.category)}`
+      );
+      return sanitized;
+    }
+
+    sanitized.push({
+      size: requirement.size,
+      category: requirement.category,
+      count: normalizeRequirementCount(requirement.count),
+    });
+    return sanitized;
+  }, []);
 }
 
-function clonePersonnelRequirements(requirements: MissionPersonnelRequirement[]): MissionPersonnelRequirement[] {
-  return requirements.map((requirement) => ({
-    profession: requirement.profession,
-    count: requirement.count,
-  }));
+function clonePersonnelRequirements(
+  requirements: MissionPersonnelRequirement[]
+): MissionPersonnelRequirement[] {
+  return (requirements || []).reduce<MissionPersonnelRequirement[]>((sanitized, requirement) => {
+    if (!requirement || typeof requirement !== 'object') {
+      return sanitized;
+    }
+
+    if (!VALID_PERSONNEL_PROFESSIONS.includes(requirement.profession)) {
+      console.warn(
+        `[mission-requirements] Dropping personnel requirement with invalid profession: ${String(requirement.profession)}`
+      );
+      return sanitized;
+    }
+
+    sanitized.push({
+      profession: requirement.profession,
+      count: normalizeRequirementCount(requirement.count),
+    });
+    return sanitized;
+  }, []);
 }
 
 function cloneLeaders(leaders?: MissionLeader[]): MissionLeader[] {

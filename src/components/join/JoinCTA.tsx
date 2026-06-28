@@ -1,10 +1,18 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
-import { MobiGlasPanel, MobiGlasButton, ScanlineEffect, StatusIndicator } from '@/components/ui/mobiglas';
+import {
+  MobiGlasPanel,
+  MobiGlasButton,
+  ScanlineEffect,
+  StatusIndicator,
+} from '@/components/ui/mobiglas';
 
 export default function JoinCTA() {
+  const router = useRouter();
+
   return (
     <section className="py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -42,8 +50,8 @@ export default function JoinCTA() {
                 <h2 className="mg-title text-3xl font-bold mb-2">READY TO BEGIN YOUR JOURNEY?</h2>
                 <motion.div
                   className="h-[1px] bg-gradient-to-r from-transparent via-[rgba(var(--mg-primary),0.8)] to-transparent mx-auto"
-                  initial={{ width: "0%" }}
-                  whileInView={{ width: "40%" }}
+                  initial={{ width: '0%' }}
+                  whileInView={{ width: '40%' }}
                   transition={{ duration: 1, delay: 0.3 }}
                   viewport={{ once: true }}
                 />
@@ -56,7 +64,8 @@ export default function JoinCTA() {
                 transition={{ duration: 0.5, delay: 0.3 }}
                 viewport={{ once: true }}
               >
-                Take the first step towards a rewarding career in interstellar logistics. Connect with our recruitment team today.
+                Take the first step towards a rewarding career in interstellar logistics. Connect
+                with our recruitment team today.
               </motion.p>
 
               <div className="flex flex-col sm:flex-row gap-6 justify-center mt-10">
@@ -70,6 +79,7 @@ export default function JoinCTA() {
                     variant="primary"
                     size="lg"
                     withScanline
+                    onClick={() => router.push('/join/recruitment-info')}
                     rightIcon={
                       <motion.svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -80,13 +90,16 @@ export default function JoinCTA() {
                         animate={{ x: [0, 3, 0] }}
                         transition={{ duration: 2, repeat: Infinity, repeatType: 'reverse' }}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M13 7l5 5m0 0l-5 5m5-5H6"
+                        />
                       </motion.svg>
                     }
                   >
-                    <a href="/join/recruitment-info" className="block w-full h-full">
-                      CONTACT RECRUITMENT
-                    </a>
+                    CONTACT RECRUITMENT
                   </MobiGlasButton>
                 </motion.div>
 
@@ -100,6 +113,7 @@ export default function JoinCTA() {
                     variant="secondary"
                     size="lg"
                     withScanline
+                    onClick={() => router.push('/about')}
                     rightIcon={
                       <motion.svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -108,21 +122,24 @@ export default function JoinCTA() {
                         viewBox="0 0 24 24"
                         stroke="currentColor"
                         animate={{
-                          rotate: [0, 10, 0, -10, 0]
+                          rotate: [0, 10, 0, -10, 0],
                         }}
                         transition={{
                           duration: 5,
                           repeat: Infinity,
-                          repeatType: 'loop'
+                          repeatType: 'loop',
                         }}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
                       </motion.svg>
                     }
                   >
-                    <a href="#" target="_blank" rel="noopener noreferrer" className="block w-full h-full">
-                      VIEW CORPORATE PROFILE
-                    </a>
+                    VIEW CORPORATE PROFILE
                   </MobiGlasButton>
                 </motion.div>
               </div>

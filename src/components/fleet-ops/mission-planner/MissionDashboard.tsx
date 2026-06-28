@@ -18,7 +18,7 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
   missions,
   loading,
   onMissionClick,
-  onCreateMission
+  onCreateMission,
 }) => {
   const [statusFilter, setStatusFilter] = useState<MissionStatus | 'all'>('all');
   const [typeFilter, setTypeFilter] = useState<MissionType | 'all'>('all');
@@ -27,15 +27,31 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
   // Ensure missions is always an array before filtering
   const missionArray = Array.isArray(missions) ? missions : [];
 
+  // Safely parse a scheduled date into a sortable timestamp. Invalid or missing
+  // dates are pushed to the end of the list regardless of sort order by using a
+  // sentinel value that always sorts last.
+  const getSortableTime = (value: string | null | undefined): number => {
+    const time = value ? new Date(value).getTime() : NaN;
+    if (Number.isNaN(time)) {
+      // Use finite sentinels (not ±Infinity) so two invalid dates compare as
+      // equal (0) instead of NaN, keeping the comparator total and stable.
+      // For ascending order the largest value sorts last; for descending the
+      // smallest sorts last. Valid epoch ms are far below MAX_SAFE_INTEGER.
+      return sortOrder === 'asc' ? Number.MAX_SAFE_INTEGER : Number.MIN_SAFE_INTEGER;
+    }
+    return time;
+  };
+
   // Filter and sort missions
   const filteredMissions = missionArray
-    .filter(mission =>
-      (statusFilter === 'all' || mission.status === statusFilter) &&
-      (typeFilter === 'all' || mission.type === typeFilter)
+    .filter(
+      (mission) =>
+        (statusFilter === 'all' || mission.status === statusFilter) &&
+        (typeFilter === 'all' || mission.type === typeFilter)
     )
     .sort((a, b) => {
-      const dateA = new Date(a.scheduledDateTime).getTime();
-      const dateB = new Date(b.scheduledDateTime).getTime();
+      const dateA = getSortableTime(a.scheduledDateTime);
+      const dateB = getSortableTime(b.scheduledDateTime);
 
       if (sortOrder === 'asc') {
         return dateA - dateB;
@@ -50,9 +66,9 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
     visible: {
       opacity: 1,
       transition: {
-        delayChildren: stagger(0.1)
-      }
-    }
+        delayChildren: stagger(0.1),
+      },
+    },
   };
 
   const itemVariants = {
@@ -60,8 +76,8 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.5 }
-    }
+      transition: { duration: 0.5 },
+    },
   };
 
   return (
@@ -125,10 +141,7 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
       </motion.div>
 
       {/* Mission List */}
-      <motion.div
-        variants={itemVariants}
-        className="relative"
-      >
+      <motion.div variants={itemVariants} className="relative">
         <div className="mg-panel bg-[rgba(var(--mg-panel-dark),0.5)] border border-[rgba(var(--mg-primary),0.15)] p-6 relative overflow-hidden">
           {/* Corner decorations */}
           <CornerAccents size="lg" color="primary" opacity="low" />
@@ -166,9 +179,7 @@ const MissionDashboard: React.FC<MissionDashboardProps> = ({
                 </svg>
               </div>
 
-              <p className="mg-text text-lg mb-2 font-quantify tracking-wider">
-                No Missions Found
-              </p>
+              <p className="mg-text text-lg mb-2 font-quantify tracking-wider">No Missions Found</p>
 
               <p className="mg-text-secondary text-sm opacity-70 max-w-md mb-6">
                 {statusFilter !== 'all' || typeFilter !== 'all'
