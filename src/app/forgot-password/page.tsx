@@ -36,15 +36,30 @@ export default function ForgotPasswordPage() {
         body: JSON.stringify({ email }),
       });
 
-      const data = await response.json();
+      // Guard against non-JSON or empty response bodies
+      const contentType = response.headers.get('content-type');
+      let data: { error?: string; message?: string } = {};
+      if (contentType?.includes('application/json')) {
+        try {
+          data = await response.json();
+        } catch {
+          // Empty or malformed JSON body — fall back to status-aware messaging below
+          data = {};
+        }
+      }
 
       if (!response.ok) {
-        setError(data.error || 'Failed to process your request. Please try again.');
+        setError(
+          data.error ||
+            `Failed to process your request (status ${response.status}). Please try again.`
+        );
         setIsLoading(false);
         return;
       }
 
-      setSuccess('If your email is registered, you will receive password reset instructions shortly.');
+      setSuccess(
+        'If your email is registered, you will receive password reset instructions shortly.'
+      );
       setEmail('');
       setIsLoading(false);
     } catch (error) {
@@ -55,8 +70,11 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-black bg-opacity-80 bg-cover bg-center bg-blend-overlay" style={{ backgroundImage: bgUrl('/spacebg.jpg') }}>
-      <motion.div 
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-4 bg-black bg-opacity-80 bg-cover bg-center bg-blend-overlay"
+      style={{ backgroundImage: bgUrl('/spacebg.jpg') }}
+    >
+      <motion.div
         className="w-full max-w-md"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -67,19 +85,32 @@ export default function ForgotPasswordPage() {
           <CornerAccents size="md" color="primary" opacity="medium" />
 
           <div className="text-center mb-6">
-            <h2 className="mg-title text-xl mb-1">AYDO<span className="mg-subtitle font-light">CORP</span></h2>
+            <h2 className="mg-title text-xl mb-1">
+              AYDO<span className="mg-subtitle font-light">CORP</span>
+            </h2>
             <div className="mg-subtitle text-xs tracking-wider">PASSWORD RECOVERY</div>
           </div>
 
           {error && (
-            <motion.div 
+            <motion.div
               className="mb-4 p-2 bg-[rgba(var(--mg-error),0.1)] border border-[rgba(var(--mg-error),0.3)] text-[rgba(var(--mg-error),0.8)] text-xs rounded-sm"
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
             >
               <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 mr-2"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1}
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 {error}
               </div>
@@ -87,14 +118,25 @@ export default function ForgotPasswordPage() {
           )}
 
           {success && (
-            <motion.div 
+            <motion.div
               className="mb-4 p-2 bg-[rgba(var(--mg-success),0.1)] border border-[rgba(var(--mg-success),0.3)] text-[rgba(var(--mg-success),0.8)] text-xs rounded-sm"
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
             >
               <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M5 13l4 4L19 7" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 mr-2"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1}
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
                 {success}
               </div>
@@ -103,7 +145,12 @@ export default function ForgotPasswordPage() {
 
           <form onSubmit={handleSubmit}>
             <div className="mg-input-group mb-6">
-              <label htmlFor="forgot-email" className="mg-subtitle text-xs mb-1 block tracking-wider">EMAIL ADDRESS</label>
+              <label
+                htmlFor="forgot-email"
+                className="mg-subtitle text-xs mb-1 block tracking-wider"
+              >
+                EMAIL ADDRESS
+              </label>
               <div className="relative">
                 <input
                   type="email"
@@ -118,7 +165,8 @@ export default function ForgotPasswordPage() {
                 <CornerAccents size="xs" color="primary" opacity="low" />
               </div>
               <p className="text-xs text-[rgba(var(--mg-text),0.6)] mt-2">
-                Enter the email address associated with your account, and we&apos;ll send you instructions to reset your password.
+                Enter the email address associated with your account, and we&apos;ll send you
+                instructions to reset your password.
               </p>
             </div>
 
@@ -137,7 +185,10 @@ export default function ForgotPasswordPage() {
           {/* Back to login link */}
           <div className="mt-6 text-center text-xs text-[rgba(var(--mg-text),0.6)]">
             <span>Remember your password? </span>
-            <Link href="/login" className="text-[rgba(var(--mg-primary),0.8)] hover:text-[rgba(var(--mg-primary),1)] hover:underline">
+            <Link
+              href="/login"
+              className="text-[rgba(var(--mg-primary),0.8)] hover:text-[rgba(var(--mg-primary),1)] hover:underline"
+            >
               Back to login
             </Link>
           </div>
@@ -145,4 +196,4 @@ export default function ForgotPasswordPage() {
       </motion.div>
     </div>
   );
-} 
+}

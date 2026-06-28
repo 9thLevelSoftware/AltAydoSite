@@ -18,24 +18,29 @@ interface ShipSearchBarProps {
  */
 export default function ShipSearchBar({ value, onChange }: ShipSearchBarProps) {
   const [localValue, setLocalValue] = useState(value);
-  const isExternalUpdate = useRef(false);
+  // Tracks the last value that is already in sync with the parent (either
+  // pushed up via onChange or received down via the value prop). Comparing
+  // against this by value — rather than relying on a one-shot boolean flag —
+  // avoids dropping a subsequent edit when an external sync is a no-op.
+  const lastSyncedValue = useRef(value);
 
   // Sync localValue when the external value prop changes
   // (e.g., parent clears all filters)
   useEffect(() => {
-    isExternalUpdate.current = true;
+    lastSyncedValue.current = value;
     setLocalValue(value);
   }, [value]);
 
   // Debounce: fire onChange 300ms after localValue stops changing
   useEffect(() => {
-    // Skip debounce when value was set from external prop sync
-    if (isExternalUpdate.current) {
-      isExternalUpdate.current = false;
+    // Skip when localValue already matches what the parent has, so external
+    // prop syncs (and explicit clears) don't trigger a redundant onChange.
+    if (localValue === lastSyncedValue.current) {
       return;
     }
 
     const timer = setTimeout(() => {
+      lastSyncedValue.current = localValue;
       onChange(localValue);
     }, 300);
 
@@ -43,6 +48,7 @@ export default function ShipSearchBar({ value, onChange }: ShipSearchBarProps) {
   }, [localValue, onChange]);
 
   const handleClear = () => {
+    lastSyncedValue.current = '';
     setLocalValue('');
     // Immediately notify parent on explicit clear action
     onChange('');
@@ -51,11 +57,11 @@ export default function ShipSearchBar({ value, onChange }: ShipSearchBarProps) {
   return (
     <div className="relative">
       {/* Search icon */}
-      <MagnifyingGlassIcon
-        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[rgba(var(--mg-text),0.4)] pointer-events-none"
-      />
+      <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[rgba(var(--mg-text),0.4)] pointer-events-none" />
 
-      <label htmlFor="ship-search" className="sr-only">Search ships by name</label>
+      <label htmlFor="ship-search" className="sr-only">
+        Search ships by name
+      </label>
       <input
         type="text"
         id="ship-search"

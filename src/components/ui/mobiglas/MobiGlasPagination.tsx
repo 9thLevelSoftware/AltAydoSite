@@ -94,11 +94,17 @@ export function MobiGlasPagination({
   pageSize,
   className = '',
 }: MobiGlasPaginationProps) {
-  const showItemRange = totalItems !== undefined && pageSize !== undefined;
-  const start = showItemRange && totalItems! > 0 ? (currentPage - 1) * pageSize! + 1 : 0;
-  const end = showItemRange ? Math.min(currentPage * pageSize!, totalItems!) : 0;
+  // Normalize/clamp inputs so out-of-range or fractional values can't break
+  // the range math, page labels, or nav button state.
+  const safeTotalPages = Math.max(1, Math.floor(totalPages) || 1);
+  const safePage = Math.min(Math.max(1, Math.floor(currentPage) || 1), safeTotalPages);
 
-  const pageNumbers = getPageNumbers(currentPage, totalPages);
+  const showItemRange = totalItems !== undefined && pageSize !== undefined;
+  const start =
+    showItemRange && totalItems! > 0 ? Math.min((safePage - 1) * pageSize! + 1, totalItems!) : 0;
+  const end = showItemRange ? Math.min(safePage * pageSize!, totalItems!) : 0;
+
+  const pageNumbers = getPageNumbers(safePage, safeTotalPages);
 
   return (
     <nav
@@ -111,17 +117,17 @@ export function MobiGlasPagination({
           ? `Showing ${start}-${end} of ${totalItems} items`
           : showItemRange
             ? 'No items found'
-            : `Page ${currentPage} of ${totalPages}`}
+            : `Page ${safePage} of ${safeTotalPages}`}
       </div>
 
       {/* Page buttons (hidden when only 1 page) */}
-      {totalPages > 1 && (
+      {safeTotalPages > 1 && (
         <div className="flex items-center gap-1">
           {/* Previous */}
           <button
             type="button"
-            disabled={currentPage === 1}
-            onClick={() => onPageChange(currentPage - 1)}
+            disabled={safePage === 1}
+            onClick={() => onPageChange(safePage - 1)}
             className={navButtonBase}
             aria-label="Previous page"
           >
@@ -143,9 +149,9 @@ export function MobiGlasPagination({
                 type="button"
                 onClick={() => onPageChange(p)}
                 className={`${pageButtonBase} ${
-                  p === currentPage ? pageButtonActive : pageButtonGhost
+                  p === safePage ? pageButtonActive : pageButtonGhost
                 }`}
-                aria-current={p === currentPage ? 'page' : undefined}
+                aria-current={p === safePage ? 'page' : undefined}
                 aria-label={`Page ${p}`}
               >
                 {p}
@@ -156,8 +162,8 @@ export function MobiGlasPagination({
           {/* Next */}
           <button
             type="button"
-            disabled={currentPage === totalPages}
-            onClick={() => onPageChange(currentPage + 1)}
+            disabled={safePage === safeTotalPages}
+            onClick={() => onPageChange(safePage + 1)}
             className={navButtonBase}
             aria-label="Next page"
           >

@@ -13,7 +13,7 @@ export default async function MissionPlannerPage() {
 
   // Redirect to login if not authenticated
   if (!session) {
-    redirect('/auth/login?callbackUrl=/dashboard/mission-planner');
+    redirect('/login?callbackUrl=/dashboard/mission-planner');
   }
 
   return (

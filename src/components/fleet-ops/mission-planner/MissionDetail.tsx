@@ -1,12 +1,53 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, stagger } from 'motion/react';
 import { MissionResponse } from '@/types/Mission';
 import Image from 'next/image';
 import { useShipBatch } from '@/hooks/useShipBatch';
 import MissionParticipantShip from '@/components/ships/MissionParticipantShip';
 import { CornerAccents } from '@/components/ui/mobiglas';
+import { formatDate as formatDateSafe } from '@/lib/utils/formatDate';
+
+// Mission images are externally supplied URLs that may point at hosts not
+// configured in next.config.js. Rendering them through the optimizer would
+// throw, so we render `unoptimized` and fall back to a placeholder on error.
+const MissionImage: React.FC<{ src: string; index: number }> = ({ src, index }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError) {
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-[rgba(var(--mg-panel-dark),0.5)] text-[rgba(var(--mg-primary),0.6)]">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6 mb-1"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+          />
+        </svg>
+        <span className="text-[10px] tracking-wider">IMAGE UNAVAILABLE</span>
+      </div>
+    );
+  }
+
+  return (
+    <Image
+      src={src}
+      alt={`Mission image ${index + 1}`}
+      fill
+      unoptimized
+      className="object-cover"
+      onError={() => setHasError(true)}
+    />
+  );
+};
 
 interface MissionDetailProps {
   mission: MissionResponse;
@@ -15,25 +56,20 @@ interface MissionDetailProps {
   onDelete: () => void;
 }
 
-const MissionDetail: React.FC<MissionDetailProps> = ({
-  mission,
-  onBack,
-  onEdit,
-  onDelete
-}) => {
+const MissionDetail: React.FC<MissionDetailProps> = ({ mission, onBack, onEdit, onDelete }) => {
   // Batch-resolve participant ships from FleetYards API
   const participantShipIds = useMemo(
-    () => mission.participants
-      .map((p) => p.fleetyardsId)
-      .filter((id): id is string => !!id && id.length > 0),
+    () =>
+      mission.participants
+        .map((p) => p.fleetyardsId)
+        .filter((id): id is string => !!id && id.length > 0),
     [mission.participants]
   );
   const { ships: resolvedShips } = useShipBatch(participantShipIds);
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
+  // Format date (falls back to a label on invalid dates)
+  const formatDate = (dateString: string) =>
+    formatDateSafe(dateString, {
       weekday: 'long',
       month: 'long',
       day: 'numeric',
@@ -41,9 +77,8 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
-      timeZoneName: 'short'
-    }).format(date);
-  };
+      timeZoneName: 'short',
+    });
 
   // Animation variants
   const containerVariants = {
@@ -51,9 +86,9 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
     visible: {
       opacity: 1,
       transition: {
-        delayChildren: stagger(0.1)
-      }
-    }
+        delayChildren: stagger(0.1),
+      },
+    },
   };
 
   const itemVariants = {
@@ -61,8 +96,8 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.4 }
-    }
+      transition: { duration: 0.4 },
+    },
   };
 
   // Mission status styling - uses MobiGlas palette variables
@@ -95,36 +130,53 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
       {/* Header with back button */}
       <motion.div variants={itemVariants} className="flex items-center gap-4">
         <motion.button
-          whileHover={{ scale: 1.05, boxShadow: "0 0 10px rgba(var(--mg-primary), 0.5)" }}
+          whileHover={{ scale: 1.05, boxShadow: '0 0 10px rgba(var(--mg-primary), 0.5)' }}
           whileTap={{ scale: 0.95 }}
           onClick={onBack}
           className="holo-element bg-[rgba(var(--mg-panel-dark),0.7)] border border-[rgba(var(--mg-primary),0.3)] p-2 rounded-sm relative overflow-hidden group"
         >
           {/* Holographic scan effect */}
           <div className="holo-scan absolute inset-0 opacity-50 pointer-events-none" />
-          
+
           {/* Corner decorations */}
           <CornerAccents size="xs" color="primary" opacity="medium" />
-          
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5 relative z-10"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            />
           </svg>
-          
+
           {/* Hover effects */}
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[rgba(var(--mg-primary),0.1)] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </motion.button>
-        
-        <motion.h1 
+
+        <motion.h1
           className="mg-title text-3xl font-quantify tracking-wider flex-grow"
-          animate={{ textShadow: ['0 0 5px rgba(var(--mg-primary), 0.2)', '0 0 10px rgba(var(--mg-primary), 0.4)', '0 0 5px rgba(var(--mg-primary), 0.2)'] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          animate={{
+            textShadow: [
+              '0 0 5px rgba(var(--mg-primary), 0.2)',
+              '0 0 10px rgba(var(--mg-primary), 0.4)',
+              '0 0 5px rgba(var(--mg-primary), 0.2)',
+            ],
+          }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
         >
           MISSION DETAILS
         </motion.h1>
-        
+
         <div className="flex space-x-3">
           <motion.button
-            whileHover={{ scale: 1.05, boxShadow: "0 0 15px rgba(var(--mg-primary), 0.5)" }}
+            whileHover={{ scale: 1.05, boxShadow: '0 0 15px rgba(var(--mg-primary), 0.5)' }}
             whileTap={{ scale: 0.95 }}
             onClick={onEdit}
             className="holo-element bg-[rgba(var(--mg-panel-dark),0.7)] border border-[rgba(var(--mg-primary),0.3)] py-2 px-4 text-sm font-quantify tracking-wider relative overflow-hidden group"
@@ -132,33 +184,55 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
             {/* Background effects */}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[rgba(var(--mg-primary),0.1)] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="holo-scan absolute inset-0 opacity-30 pointer-events-none" />
-            
+
             {/* Corner decorations */}
             <CornerAccents size="sm" color="primary" opacity="medium" />
 
             <span className="relative z-10 inline-flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 mr-2"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
               </svg>
               EDIT
             </span>
           </motion.button>
-          
+
           <motion.button
-            whileHover={{ scale: 1.05, boxShadow: "0 0 15px rgba(var(--mg-danger), 0.5)" }}
+            whileHover={{ scale: 1.05, boxShadow: '0 0 15px rgba(var(--mg-danger), 0.5)' }}
             whileTap={{ scale: 0.95 }}
             onClick={onDelete}
             className="holo-element bg-[rgba(var(--mg-panel-dark),0.7)] border border-[rgba(var(--mg-danger),0.3)] py-2 px-4 text-sm font-quantify tracking-wider text-[rgba(var(--mg-danger),0.9)] relative overflow-hidden group"
           >
             {/* Background effects */}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[rgba(var(--mg-danger),0.1)] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            
+
             {/* Corner decorations */}
             <CornerAccents size="sm" color="danger" opacity="medium" />
-            
+
             <span className="relative z-10 inline-flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 mr-2"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
               </svg>
               DELETE
             </span>
@@ -167,25 +241,25 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
       </motion.div>
 
       {/* Mission Overview Panel */}
-      <motion.div 
+      <motion.div
         variants={itemVariants}
         className="mg-panel bg-[rgba(var(--mg-panel-dark),0.4)] border border-[rgba(var(--mg-primary),0.15)] rounded-sm p-6 relative overflow-hidden"
       >
         {/* Corner decorations */}
         <CornerAccents size="lg" color="primary" opacity="low" />
-        
+
         {/* Scanning line effect */}
         <motion.div
           initial={{ y: '-100%' }}
           animate={{ y: '100%' }}
-          transition={{ 
-            repeat: Infinity, 
+          transition={{
+            repeat: Infinity,
             duration: 2,
-            ease: "linear"
+            ease: 'linear',
           }}
           className="absolute inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[rgba(var(--mg-primary),0.8)] to-transparent pointer-events-none"
         />
-        
+
         {/* Hexagon background pattern */}
         <div className="hexagon-bg absolute inset-0 opacity-10 pointer-events-none"></div>
 
@@ -196,20 +270,28 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
           {/* Left column - Mission info */}
           <div className="flex-1">
             <div className="flex justify-between items-start mb-4">
-              <motion.h2 
+              <motion.h2
                 className="mg-title text-2xl"
-                animate={{ textShadow: ['0 0 5px rgba(var(--mg-primary), 0.2)', '0 0 10px rgba(var(--mg-primary), 0.4)', '0 0 5px rgba(var(--mg-primary), 0.2)'] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                animate={{
+                  textShadow: [
+                    '0 0 5px rgba(var(--mg-primary), 0.2)',
+                    '0 0 10px rgba(var(--mg-primary), 0.4)',
+                    '0 0 5px rgba(var(--mg-primary), 0.2)',
+                  ],
+                }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
               >
                 {mission.name}
               </motion.h2>
-              <span className={`text-sm px-3 py-1.5 rounded-sm border ${getStatusColor(mission.status)}`}>
+              <span
+                className={`text-sm px-3 py-1.5 rounded-sm border ${getStatusColor(mission.status)}`}
+              >
                 {mission.status}
               </span>
             </div>
-            
+
             <div className="space-y-4">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
@@ -217,18 +299,20 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
                 <h3 className="text-sm text-[rgba(var(--mg-primary),0.7)] mb-1">Mission Type</h3>
                 <p className="mg-text">{mission.type}</p>
               </motion.div>
-              
-              <motion.div 
+
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
               >
-                <h3 className="text-sm text-[rgba(var(--mg-primary),0.7)] mb-1">Scheduled Date & Time</h3>
+                <h3 className="text-sm text-[rgba(var(--mg-primary),0.7)] mb-1">
+                  Scheduled Date & Time
+                </h3>
                 <p className="mg-text">{formatDate(mission.scheduledDateTime)}</p>
               </motion.div>
-              
+
               {mission.location && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
@@ -237,47 +321,46 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
                   <p className="mg-text">{mission.location}</p>
                 </motion.div>
               )}
-              
-              <motion.div 
+
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
               >
                 <h3 className="text-sm text-[rgba(var(--mg-primary),0.7)] mb-1">Mission Details</h3>
                 <div className="holo-element bg-[rgba(var(--mg-panel-dark),0.3)] p-3 border border-[rgba(var(--mg-primary),0.1)] rounded-sm relative overflow-hidden">
-                  <p className="mg-text whitespace-pre-wrap relative z-10">{mission.details || 'No details provided.'}</p>
+                  <p className="mg-text whitespace-pre-wrap relative z-10">
+                    {mission.details || 'No details provided.'}
+                  </p>
                   <div className="holo-scan absolute inset-0 opacity-30 pointer-events-none" />
                 </div>
               </motion.div>
-              
+
               {mission.images && mission.images.length > 0 && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.6 }}
                 >
-                  <h3 className="text-sm text-[rgba(var(--mg-primary),0.7)] mb-2">Mission Images</h3>
+                  <h3 className="text-sm text-[rgba(var(--mg-primary),0.7)] mb-2">
+                    Mission Images
+                  </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     {mission.images.map((imageUrl, index) => (
-                      <motion.div 
-                        key={index} 
+                      <motion.div
+                        key={index}
                         className="aspect-video relative group overflow-hidden border border-[rgba(var(--mg-primary),0.2)] rounded-sm"
-                        whileHover={{ 
-                          scale: 1.05, 
-                          boxShadow: "0 0 15px rgba(var(--mg-primary), 0.3)", 
-                          borderColor: "rgba(var(--mg-primary), 0.5)" 
+                        whileHover={{
+                          scale: 1.05,
+                          boxShadow: '0 0 15px rgba(var(--mg-primary), 0.3)',
+                          borderColor: 'rgba(var(--mg-primary), 0.5)',
                         }}
                       >
-                        <Image
-                          src={imageUrl}
-                          alt={`Mission image ${index + 1}`}
-                          fill
-                          className="object-cover"
-                        />
+                        <MissionImage src={imageUrl} index={index} />
                         <div className="absolute inset-0 bg-gradient-to-t from-[rgba(0,0,0,0.7)] to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end">
                           <span className="p-2 text-xs text-white">Image {index + 1}</span>
                         </div>
-                        
+
                         {/* Scanning line effect on hover */}
                         <motion.div
                           className="absolute inset-0 opacity-0 group-hover:opacity-1 pointer-events-none"
@@ -290,8 +373,8 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
                             animate={{ top: '100%' }}
                             transition={{
                               duration: 1.2,
-                              ease: "linear",
-                              repeat: Infinity
+                              ease: 'linear',
+                              repeat: Infinity,
                             }}
                           />
                         </motion.div>
@@ -302,19 +385,21 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
               )}
             </div>
           </div>
-          
+
           {/* Right column - Participants */}
-          <motion.div 
+          <motion.div
             className="w-full md:w-96"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.7, duration: 0.5 }}
           >
             <h3 className="text-sm text-[rgba(var(--mg-primary),0.7)] mb-3">Mission Roster</h3>
-            
+
             {mission.participants.length === 0 ? (
               <div className="holo-element bg-[rgba(var(--mg-panel-dark),0.3)] p-3 border border-[rgba(var(--mg-primary),0.1)] rounded-sm text-center py-6 relative overflow-hidden">
-                <p className="mg-text-secondary text-sm relative z-10">No personnel assigned to this mission</p>
+                <p className="mg-text-secondary text-sm relative z-10">
+                  No personnel assigned to this mission
+                </p>
                 <div className="holo-scan absolute inset-0 opacity-30 pointer-events-none" />
               </div>
             ) : (
@@ -325,11 +410,11 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
                     className="holo-element bg-[rgba(var(--mg-panel-dark),0.3)] p-3 border border-[rgba(var(--mg-primary),0.1)] rounded-sm relative group overflow-hidden"
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7 + (index * 0.1) }}
+                    transition={{ delay: 0.7 + index * 0.1 }}
                     whileHover={{
                       y: -2,
-                      boxShadow: "0 0 10px rgba(var(--mg-primary), 0.2)",
-                      borderColor: "rgba(var(--mg-primary), 0.3)"
+                      boxShadow: '0 0 10px rgba(var(--mg-primary), 0.2)',
+                      borderColor: 'rgba(var(--mg-primary), 0.3)',
                     }}
                   >
                     {/* Hover effect */}
@@ -343,7 +428,11 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
 
                     <MissionParticipantShip
                       participant={participant}
-                      resolved={participant.fleetyardsId ? resolvedShips.get(participant.fleetyardsId) : undefined}
+                      resolved={
+                        participant.fleetyardsId
+                          ? resolvedShips.get(participant.fleetyardsId)
+                          : undefined
+                      }
                     />
                   </motion.div>
                 ))}
@@ -356,4 +445,4 @@ const MissionDetail: React.FC<MissionDetailProps> = ({
   );
 };
 
-export default MissionDetail; 
+export default MissionDetail;

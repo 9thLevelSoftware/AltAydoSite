@@ -15,24 +15,24 @@ const DashboardPanelLayout: React.FC<DashboardPanelLayoutProps> = ({ children })
       opacity: 1,
       transition: {
         delayChildren: stagger(0.1, { startDelay: 0.1 }),
-        duration: 0.5
-      }
-    }
+        duration: 0.5,
+      },
+    },
   };
-  
+
   // Child animation
   const childVariants = {
     hidden: { opacity: 0, y: 20 },
-    visible: { 
-      opacity: 1, 
+    visible: {
+      opacity: 1,
       y: 0,
-      transition: { duration: 0.5 }
-    }
+      transition: { duration: 0.5 },
+    },
   };
-  
+
   // Convert children to array
   const childrenArray = React.Children.toArray(children);
-  
+
   return (
     <motion.div
       className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6"
@@ -41,9 +41,9 @@ const DashboardPanelLayout: React.FC<DashboardPanelLayoutProps> = ({ children })
       animate="visible"
     >
       {childrenArray.map((child, index) => (
-        <motion.div 
-          key={index} 
-          variants={childVariants} 
+        <motion.div
+          key={React.isValidElement(child) && child.key != null ? child.key : index}
+          variants={childVariants}
           className="h-full"
         >
           {child}
@@ -53,4 +53,4 @@ const DashboardPanelLayout: React.FC<DashboardPanelLayoutProps> = ({ children })
   );
 };
 
-export default DashboardPanelLayout; 
+export default DashboardPanelLayout;

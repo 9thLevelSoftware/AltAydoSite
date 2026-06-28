@@ -52,17 +52,17 @@ export function useShipDetail(shipId: string | null): UseShipDetailReturn {
     async function fetchShip() {
       setIsLoading(true);
       setError(null);
+      // Blank the view while loading a new ship so stale data is never shown
+      setShip(null);
 
       try {
-        const response = await fetch(`/api/ships/${shipId}`, {
+        const response = await fetch(`/api/ships/${encodeURIComponent(shipId!)}`, {
           signal: controller.signal,
         });
 
         if (!response.ok) {
           const body = await response.json().catch(() => null);
-          throw new Error(
-            body?.error || `Failed to fetch ship (${response.status})`
-          );
+          throw new Error(body?.error || `Failed to fetch ship (${response.status})`);
         }
 
         const result: ShipDocument = await response.json();
@@ -72,9 +72,10 @@ export function useShipDetail(shipId: string | null): UseShipDetailReturn {
         if (err instanceof DOMException && err.name === 'AbortError') {
           return;
         }
-        const message =
-          err instanceof Error ? err.message : 'Failed to fetch ship';
+        const message = err instanceof Error ? err.message : 'Failed to fetch ship';
         setError(message);
+        // Clear stale ship so a failed fetch never displays the previous ship
+        setShip(null);
       } finally {
         if (!controller.signal.aborted) {
           setIsLoading(false);

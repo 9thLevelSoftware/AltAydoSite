@@ -10,13 +10,13 @@ export { default as DataStreamBackground } from './DataStreamBackground';
 export { default as HolographicBorder } from './HolographicBorder';
 
 // Type exports for TypeScript users
-export type { default as MobiGlasContainerProps } from './MobiGlasContainer';
-export type { default as MobiGlasPanelProps } from './MobiGlasPanel';
-export type { default as MobiGlasButtonProps } from './MobiGlasButton';
-export type { MobiGlasInputProps } from './MobiGlasInput';
-export type { default as CornerAccentsProps } from './CornerAccents';
-export type { default as ScanlineEffectProps } from './ScanlineEffect';
-export type { default as StatusIndicatorProps } from './StatusIndicator';
+export type { MobiGlasContainerProps } from './MobiGlasContainer';
+export type { MobiGlasPanelProps } from './MobiGlasPanel';
+export type { MobiGlasButtonProps } from './MobiGlasButton';
+export type { MobiGlasInputProps, MobiGlasTextAreaProps } from './MobiGlasInput';
+export type { CornerAccentsProps } from './CornerAccents';
+export type { ScanlineEffectProps } from './ScanlineEffect';
+export type { StatusIndicatorProps } from './StatusIndicator';
 
 // Pagination
 export { MobiGlasPagination } from './MobiGlasPagination';
@@ -28,5 +28,7 @@ export type { MobiGlasFormErrorProps } from './MobiGlasFormError';
 
 // Toast and Dialog components
 export { default as MobiGlasToast } from './MobiGlasToast';
+export type { MobiGlasToastProps } from './MobiGlasToast';
 export { MobiGlasToastProvider } from './MobiGlasToastProvider';
 export { default as MobiGlasConfirmDialog } from './MobiGlasConfirmDialog';
+export type { MobiGlasConfirmDialogProps } from './MobiGlasConfirmDialog';

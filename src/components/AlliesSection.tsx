@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { motion } from 'motion/react';
 import Image from 'next/image';
@@ -5,7 +7,7 @@ import { cdn } from '@/lib/cdn';
 
 const AlliesSection = () => {
   return (
-    <motion.div 
+    <motion.div
       className="mg-container p-0.5 my-6"
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
@@ -15,14 +17,17 @@ const AlliesSection = () => {
       <div className="p-4 bg-[rgba(var(--mg-background),0.8)]">
         <h3 className="mg-subtitle text-lg mb-3">STRATEGIC ALLIANCES</h3>
         <p className="text-sm text-[rgba(var(--mg-text),0.8)] leading-relaxed mb-4">
-          AydoCorp maintains several crucial partnerships that strengthen its position in the interstellar logistics market. Our security alliance with Crusader Security provides essential protection for high-value shipments, while our trade agreements with Xi&apos;an and Banu merchants have opened new routes previously unavailable to human corporations.
+          AydoCorp maintains several crucial partnerships that strengthen its position in the
+          interstellar logistics market. Our security alliance with Crusader Security provides
+          essential protection for high-value shipments, while our trade agreements with Xi&apos;an
+          and Banu merchants have opened new routes previously unavailable to human corporations.
         </p>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="relative overflow-hidden rounded h-36">
-            <Image 
-              src={cdn('/jan-urschel-a.jpg')} 
-              alt="Banu Partnership" 
+            <Image
+              src={cdn('/jan-urschel-a.jpg')}
+              alt="Banu Partnership"
               fill
               className="object-cover"
             />
@@ -32,25 +37,25 @@ const AlliesSection = () => {
                 Banu Defender - Cross-Species Security Fleet
               </p>
             </div>
-            
+
             {/* Animated overlay effect */}
-            <motion.div 
+            <motion.div
               className="absolute inset-0 border border-[rgba(var(--mg-primary),0.4)]"
-              animate={{ 
+              animate={{
                 boxShadow: [
                   'inset 0 0 0px rgba(0, 215, 255, 0.2)',
                   'inset 0 0 20px rgba(0, 215, 255, 0.4)',
-                  'inset 0 0 0px rgba(0, 215, 255, 0.2)'
-                ]
+                  'inset 0 0 0px rgba(0, 215, 255, 0.2)',
+                ],
               }}
               transition={{ duration: 2, repeat: Infinity }}
             ></motion.div>
           </div>
-          
+
           <div className="relative overflow-hidden rounded h-36">
-            <Image 
-              src={cdn('/Firing_Concept.jpg')} 
-              alt="Escort Fleet" 
+            <Image
+              src={cdn('/Firing_Concept.jpg')}
+              alt="Escort Fleet"
               fill
               className="object-cover"
             />
@@ -60,33 +65,33 @@ const AlliesSection = () => {
                 Aegis Sabre - Elite Escort Squadron
               </p>
             </div>
-            
+
             {/* Animated overlay effect */}
-            <motion.div 
+            <motion.div
               className="absolute inset-0 border border-[rgba(var(--mg-primary),0.4)]"
-              animate={{ 
+              animate={{
                 boxShadow: [
                   'inset 0 0 0px rgba(0, 215, 255, 0.2)',
                   'inset 0 0 20px rgba(0, 215, 255, 0.4)',
-                  'inset 0 0 0px rgba(0, 215, 255, 0.2)'
-                ]
+                  'inset 0 0 0px rgba(0, 215, 255, 0.2)',
+                ],
               }}
               transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
             ></motion.div>
           </div>
         </div>
-        
+
         <div className="grid grid-cols-3 gap-2">
           <div className="p-2 bg-[rgba(var(--mg-background),0.6)] border border-[rgba(var(--mg-primary),0.3)]">
             <div className="text-center">
-              <motion.div 
+              <motion.div
                 className="text-lg font-bold text-[rgba(var(--mg-primary),1)]"
-                animate={{ 
+                animate={{
                   textShadow: [
                     '0 0 3px rgba(0, 215, 255, 0.3)',
                     '0 0 6px rgba(0, 215, 255, 0.6)',
-                    '0 0 3px rgba(0, 215, 255, 0.3)'
-                  ]
+                    '0 0 3px rgba(0, 215, 255, 0.3)',
+                  ],
                 }}
                 transition={{ duration: 2, repeat: Infinity }}
               >
@@ -97,14 +102,14 @@ const AlliesSection = () => {
           </div>
           <div className="p-2 bg-[rgba(var(--mg-background),0.6)] border border-[rgba(var(--mg-primary),0.3)]">
             <div className="text-center">
-              <motion.div 
+              <motion.div
                 className="text-lg font-bold text-[rgba(var(--mg-primary),1)]"
-                animate={{ 
+                animate={{
                   textShadow: [
                     '0 0 3px rgba(0, 215, 255, 0.3)',
                     '0 0 6px rgba(0, 215, 255, 0.6)',
-                    '0 0 3px rgba(0, 215, 255, 0.3)'
-                  ]
+                    '0 0 3px rgba(0, 215, 255, 0.3)',
+                  ],
                 }}
                 transition={{ duration: 2, repeat: Infinity, delay: 0.3 }}
               >
@@ -115,14 +120,14 @@ const AlliesSection = () => {
           </div>
           <div className="p-2 bg-[rgba(var(--mg-background),0.6)] border border-[rgba(var(--mg-primary),0.3)]">
             <div className="text-center">
-              <motion.div 
+              <motion.div
                 className="text-lg font-bold text-[rgba(var(--mg-primary),1)]"
-                animate={{ 
+                animate={{
                   textShadow: [
                     '0 0 3px rgba(0, 215, 255, 0.3)',
                     '0 0 6px rgba(0, 215, 255, 0.6)',
-                    '0 0 3px rgba(0, 215, 255, 0.3)'
-                  ]
+                    '0 0 3px rgba(0, 215, 255, 0.3)',
+                  ],
                 }}
                 transition={{ duration: 2, repeat: Infinity, delay: 0.6 }}
               >
@@ -137,4 +142,4 @@ const AlliesSection = () => {
   );
 };
 
-export default AlliesSection; 
+export default AlliesSection;

@@ -48,8 +48,8 @@ export default function ContactHero({ isScanning, setIsScanning }: ContactHeroPr
                   boxShadow: [
                     '0 0 0px rgba(var(--mg-primary), 0.3)',
                     '0 0 20px rgba(var(--mg-primary), 0.5)',
-                    '0 0 0px rgba(var(--mg-primary), 0.3)'
-                  ]
+                    '0 0 0px rgba(var(--mg-primary), 0.3)',
+                  ],
                 }}
                 transition={{ duration: 3, repeat: Infinity }}
               />
@@ -59,8 +59,19 @@ export default function ContactHero({ isScanning, setIsScanning }: ContactHeroPr
                   variant="primary"
                   size="md"
                   leftIcon={
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
                     </svg>
                   }
                   withScanline
@@ -77,7 +88,10 @@ export default function ContactHero({ isScanning, setIsScanning }: ContactHeroPr
             <div className="relative mb-8 mx-auto max-w-3xl">
               <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded blur-sm"></div>
               <p className="text-xl text-gray-300 relative bg-black/50 p-3 rounded">
-                <span className="mg-text">Establish direct communication with our operations team for inquiries about services, partnerships, or joining AydoCorp</span>
+                <span className="mg-text">
+                  Establish direct communication with our operations team for inquiries about
+                  services, partnerships, or joining AydoCorp
+                </span>
               </p>
             </div>
 
@@ -88,7 +102,7 @@ export default function ContactHero({ isScanning, setIsScanning }: ContactHeroPr
                   className="h-1.5 w-1.5 rounded-full bg-[rgba(var(--mg-primary),0.8)]"
                   animate={{
                     opacity: [0.5, 1, 0.5],
-                    scale: [1, 1.2, 1]
+                    scale: [1, 1.2, 1],
                   }}
                   transition={{ duration: 2, repeat: Infinity }}
                 />
@@ -99,7 +113,7 @@ export default function ContactHero({ isScanning, setIsScanning }: ContactHeroPr
                   className="h-1.5 w-1.5 rounded-full bg-[rgba(var(--mg-success),0.8)]"
                   animate={{
                     opacity: [0.5, 1, 0.5],
-                    scale: [1, 1.2, 1]
+                    scale: [1, 1.2, 1],
                   }}
                   transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
                 />
@@ -130,15 +144,23 @@ export default function ContactHero({ isScanning, setIsScanning }: ContactHeroPr
                   padding="md"
                   className="mb-12"
                 >
-
                   <div className="flex justify-end mb-4">
                     <MobiGlasButton
                       onClick={() => setIsScanning(false)}
                       variant="ghost"
                       size="sm"
                       rightIcon={
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                            clipRule="evenodd"
+                          />
                         </svg>
                       }
                     >
@@ -146,15 +168,17 @@ export default function ContactHero({ isScanning, setIsScanning }: ContactHeroPr
                     </MobiGlasButton>
                   </div>
 
-                  <div className="flex space-x-4">
-                    <div className="w-1/3">
+                  <div className="flex flex-col md:flex-row md:space-x-4 space-y-4 md:space-y-0">
+                    <div className="w-full md:w-1/3">
                       <div className="mb-4">
-                        <div className="text-xs text-[rgba(var(--mg-text),0.6)] mb-1">SIGNAL STRENGTH</div>
+                        <div className="text-xs text-[rgba(var(--mg-text),0.6)] mb-1">
+                          SIGNAL STRENGTH
+                        </div>
                         <div className="h-2 bg-[rgba(var(--mg-dark),0.5)] rounded-sm overflow-hidden">
                           <motion.div
-                            initial={{ width: "0%" }}
-                            animate={{ width: "94%" }}
-                            transition={{ duration: 3, ease: "easeOut" }}
+                            initial={{ width: '0%' }}
+                            animate={{ width: '94%' }}
+                            transition={{ duration: 3, ease: 'easeOut' }}
                             className="h-full bg-gradient-to-r from-[rgba(var(--mg-primary),0.7)] to-[rgba(var(--mg-accent),0.9)]"
                           />
                         </div>
@@ -166,12 +190,14 @@ export default function ContactHero({ isScanning, setIsScanning }: ContactHeroPr
                       </div>
 
                       <div className="mb-4">
-                        <div className="text-xs text-[rgba(var(--mg-text),0.6)] mb-1">ENCRYPTION</div>
+                        <div className="text-xs text-[rgba(var(--mg-text),0.6)] mb-1">
+                          ENCRYPTION
+                        </div>
                         <div className="h-2 bg-[rgba(var(--mg-dark),0.5)] rounded-sm overflow-hidden">
                           <motion.div
-                            initial={{ width: "0%" }}
-                            animate={{ width: "100%" }}
-                            transition={{ duration: 2, ease: "easeOut" }}
+                            initial={{ width: '0%' }}
+                            animate={{ width: '100%' }}
+                            transition={{ duration: 2, ease: 'easeOut' }}
                             className="h-full bg-gradient-to-r from-[rgba(var(--mg-success),0.7)] to-[rgba(var(--mg-success),0.9)]"
                           />
                         </div>
@@ -182,7 +208,7 @@ export default function ContactHero({ isScanning, setIsScanning }: ContactHeroPr
                       </div>
                     </div>
 
-                    <div className="w-2/3 relative border border-[rgba(var(--mg-primary),0.2)] bg-[rgba(var(--mg-dark),0.2)] rounded-sm p-3">
+                    <div className="w-full md:w-2/3 relative border border-[rgba(var(--mg-primary),0.2)] bg-[rgba(var(--mg-dark),0.2)] rounded-sm p-3">
                       <div className="text-xs text-[rgba(var(--mg-text),0.6)] mb-2">SYSTEM LOG</div>
                       <div className="font-mono text-xs text-[rgba(var(--mg-text),0.8)] space-y-1 h-32 overflow-y-auto">
                         <motion.div

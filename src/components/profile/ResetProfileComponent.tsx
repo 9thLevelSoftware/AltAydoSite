@@ -12,6 +12,7 @@ export default function ResetProfileComponent() {
   const [message, setMessage] = useState('');
   const [isResetting, setIsResetting] = useState(false);
   const hasPrompted = useRef(false);
+  const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (hasPrompted.current) return;
@@ -20,10 +21,11 @@ export default function ResetProfileComponent() {
     const promptAndReset = async () => {
       const confirmed = await confirm({
         title: 'Reset Profile',
-        message: 'This will reset all your profile data including fleet, preferences, and timezone. This action cannot be undone.',
+        message:
+          'This will reset all your profile data including fleet, preferences, and timezone. This action cannot be undone.',
         confirmLabel: 'Reset Everything',
         cancelLabel: 'Cancel',
-        variant: 'danger'
+        variant: 'danger',
       });
 
       if (!confirmed) {
@@ -42,12 +44,21 @@ export default function ResetProfileComponent() {
           keysToRemove.push(key);
         }
       }
-      keysToRemove.forEach(key => {
+      keysToRemove.forEach((key) => {
         localStorage.removeItem(key);
       });
 
-      // Also clear session storage
-      sessionStorage.clear();
+      // Also clear sessionStorage profile keys (scoped, not the whole store)
+      const sessionKeysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith('user_profile_')) {
+          sessionKeysToRemove.push(key);
+        }
+      }
+      sessionKeysToRemove.forEach((key) => {
+        sessionStorage.removeItem(key);
+      });
 
       // 2. Reset server-side profile to defaults via PUT
       try {
@@ -79,24 +90,26 @@ export default function ResetProfileComponent() {
           );
         } else {
           toast.error('Server profile reset failed -- local cache cleared');
-          setMessage(
-            `Partial reset. Local cache cleared but server reset failed. Redirecting...`
-          );
+          setMessage(`Partial reset. Local cache cleared but server reset failed. Redirecting...`);
         }
       } catch {
         toast.error('Could not reach server -- local cache cleared');
-        setMessage(
-          `Partial reset. Local cache cleared but server unreachable. Redirecting...`
-        );
+        setMessage(`Partial reset. Local cache cleared but server unreachable. Redirecting...`);
       }
 
       // Redirect back to the profile page after 2 seconds
-      setTimeout(() => {
+      redirectTimeoutRef.current = setTimeout(() => {
         router.push('/userprofile');
       }, 2000);
     };
 
     promptAndReset();
+
+    return () => {
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+      }
+    };
   }, [confirm, router, toast]);
 
   if (!isResetting) {

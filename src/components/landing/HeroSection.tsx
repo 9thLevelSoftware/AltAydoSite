@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
@@ -8,13 +8,16 @@ import Link from 'next/link';
 import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
 
 export default function HeroSection() {
-  const [time, setTime] = useState(new Date());
-  
+  const [time, setTime] = useState<Date | null>(null);
+
   useEffect(() => {
+    // Set the initial date after mount to avoid SSR/client divergence
+    setTime(new Date());
+
     const timer = setInterval(() => {
       setTime(new Date());
     }, 1000);
-    
+
     return () => clearInterval(timer);
   }, []);
 
@@ -29,13 +32,13 @@ export default function HeroSection() {
             <div className="holo-scan"></div>
             <div className="line-noise opacity-5"></div>
           </div>
-          
+
           {/* Minimal corner brackets */}
           <div className="absolute top-0 left-0 w-16 h-16 border-l-2 border-t-2 border-[rgba(var(--mg-primary),0.6)]"></div>
           <div className="absolute top-0 right-0 w-16 h-16 border-r-2 border-t-2 border-[rgba(var(--mg-primary),0.6)]"></div>
           <div className="absolute bottom-0 left-0 w-16 h-16 border-l-2 border-b-2 border-[rgba(var(--mg-primary),0.6)]"></div>
           <div className="absolute bottom-0 right-0 w-16 h-16 border-r-2 border-b-2 border-[rgba(var(--mg-primary),0.6)]"></div>
-          
+
           {/* Content */}
           <div className="relative z-10 p-8 md:p-16 flex flex-col md:flex-row items-center">
             {/* Left Column - Logo & Status */}
@@ -48,16 +51,16 @@ export default function HeroSection() {
               >
                 {/* Logo - Detached from parent alignment */}
                 <div className="w-full flex justify-center md:justify-center mb-6">
-                  <motion.div 
+                  <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.8, delay: 0.2 }}
                     className="relative inline-block"
                   >
                     <div className="relative w-48 h-48 md:w-56 md:h-56">
-                      <Image 
-                        src={cdn('/Aydo_Corp_logo_employees.png')} 
-                        alt="Aydo Intergalactic Corporation Logo" 
+                      <Image
+                        src={cdn('/Aydo_Corp_logo_employees.png')}
+                        alt="Aydo Intergalactic Corporation Logo"
                         fill
                         className="object-contain"
                       />
@@ -65,8 +68,8 @@ export default function HeroSection() {
                     </div>
                   </motion.div>
                 </div>
-                
-                <motion.div 
+
+                <motion.div
                   initial={{ y: 20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ duration: 0.5, delay: 0.3 }}
@@ -82,8 +85,8 @@ export default function HeroSection() {
                     CORPORATION
                   </span>
                 </motion.div>
-                
-                <motion.div 
+
+                <motion.div
                   initial={{ y: 20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ duration: 0.5, delay: 0.5 }}
@@ -94,7 +97,7 @@ export default function HeroSection() {
                   </span>
                 </motion.div>
 
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 1, delay: 0.8 }}
@@ -106,19 +109,25 @@ export default function HeroSection() {
                       <span className="text-[rgba(var(--mg-text),0.9)]">QTL NETWORK: ONLINE</span>
                     </div>
                   </div>
-                  
+
                   <div className="mg-container p-2 text-xs">
                     <div className="flex items-center">
                       <div className="w-2 h-2 rounded-full bg-[rgba(var(--mg-primary),0.8)] animate-pulse mr-2"></div>
                       <span className="text-[rgba(var(--mg-text),0.9)]">
-                        {time.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {time
+                          ? time.toLocaleDateString('en-US', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '--- --- ----'}
                       </span>
                     </div>
                   </div>
                 </motion.div>
               </motion.div>
             </div>
-            
+
             {/* Right Column - Headline & CTA */}
             <div className="md:w-1/2 md:pl-12">
               <motion.div
@@ -130,18 +139,21 @@ export default function HeroSection() {
                 <h2 className="text-xl md:text-2xl text-[rgba(var(--mg-text),0.9)] mb-6 leading-relaxed">
                   Shipping and resource consolidation across human and alien space
                 </h2>
-                
-                <motion.div 
+
+                <motion.div
                   className="mb-8 text-sm md:text-base text-[rgba(var(--mg-text),0.7)]"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.8, delay: 0.4 }}
                 >
                   <p className="mb-4">
-                    Based in the Ellis system on planet Green, our corporation offers premium logistics and transport services throughout known space. Our specialized fleet and experienced crew ensure your cargo reaches its destination safely and on time.
+                    Based in the Ellis system on planet Green, our corporation offers premium
+                    logistics and transport services throughout known space. Our specialized fleet
+                    and experienced crew ensure your cargo reaches its destination safely and on
+                    time.
                   </p>
                 </motion.div>
-                
+
                 <motion.div
                   initial={{ y: 20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
@@ -166,10 +178,7 @@ export default function HeroSection() {
                   </Link>
 
                   <Link href="#join">
-                    <MobiGlasButton
-                      variant="success"
-                      size="md"
-                    >
+                    <MobiGlasButton variant="success" size="md">
                       JOIN OUR TEAM
                     </MobiGlasButton>
                   </Link>
@@ -181,4 +190,4 @@ export default function HeroSection() {
       </div>
     </section>
   );
-} 
+}

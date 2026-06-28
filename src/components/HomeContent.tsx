@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
@@ -42,7 +42,39 @@ function markLoginAnimationAsShown(): void {
   }
 }
 
-function MobiGlasTerminal({ userName, onAnimationComplete }: { userName?: string, onAnimationComplete: () => void }) {
+// Shared MobiGlas button styling so navigational CTAs can render as links (<a>)
+// without nesting an interactive <button> inside the anchor (invalid HTML).
+// Mirrors the relevant variant/size styles from MobiGlasButton.
+const MG_LINK_BASE = 'relative inline-flex items-center tracking-wider transition-all duration-300';
+const MG_LINK_VARIANTS = {
+  primary:
+    'justify-center mg-button border border-[rgba(var(--mg-primary),0.5)] text-[rgba(var(--mg-primary),1)] hover:bg-[rgba(var(--mg-primary),0.2)] hover:border-[rgba(var(--mg-primary),0.8)]',
+  accent:
+    'justify-center mg-button border border-[rgba(var(--mg-accent),0.5)] text-[rgba(var(--mg-accent),1)] hover:bg-[rgba(var(--mg-accent),0.2)] hover:border-[rgba(var(--mg-accent),0.8)]',
+  ghost:
+    'justify-start bg-transparent border-none text-[rgba(var(--mg-text),0.8)] hover:text-[rgba(var(--mg-primary),1)] hover:bg-[rgba(var(--mg-primary),0.1)]',
+} as const;
+const MG_LINK_SIZES = {
+  sm: 'px-3 py-1.5 text-sm',
+  md: 'px-4 py-2 text-base',
+} as const;
+const MG_LINK_FONT = { fontFamily: "'Quantify', sans-serif" } as const;
+
+function mgLinkClass(
+  variant: keyof typeof MG_LINK_VARIANTS,
+  size: keyof typeof MG_LINK_SIZES,
+  extra = ''
+): string {
+  return `${MG_LINK_BASE} w-full ${MG_LINK_VARIANTS[variant]} ${MG_LINK_SIZES[size]} ${extra}`.trim();
+}
+
+function MobiGlasTerminal({
+  userName,
+  onAnimationComplete,
+}: {
+  userName?: string;
+  onAnimationComplete: () => void;
+}) {
   const [step, setStep] = useState(0); // 0: scanning, 1: success, 2: welcome, 3: fade
   const [visible, setVisible] = useState(true);
   const [messageIdx, setMessageIdx] = useState(0);
@@ -51,11 +83,14 @@ function MobiGlasTerminal({ userName, onAnimationComplete }: { userName?: string
   const [animationCompleted, setAnimationCompleted] = useState(false);
 
   // Shorter, in-universe scan messages
-  const scanMessages = useMemo(() => [
-    'Quantum handshake established...',
-    'Decrypting biometric hash...',
-    'Secure commlink active.'
-  ], []);
+  const scanMessages = useMemo(
+    () => [
+      'Quantum handshake established...',
+      'Decrypting biometric hash...',
+      'Secure commlink active.',
+    ],
+    []
+  );
 
   // On component mount, ensure we're not marked as already shown
   useEffect(() => {
@@ -68,16 +103,23 @@ function MobiGlasTerminal({ userName, onAnimationComplete }: { userName?: string
     if (messageIdx >= scanMessages.length) return;
     setTyped('');
     let i = 0;
+    let advanceTimeout: NodeJS.Timeout | undefined;
     const msg = scanMessages[messageIdx];
-    const typewriterInterval = setInterval(() => {
-      setTyped(msg.slice(0, i + 1));
-      i++;
-      if (i >= msg.length) {
-        clearInterval(typewriterInterval);
-        setTimeout(() => setMessageIdx((idx) => idx + 1), 350);
-      }
-    }, 10 + Math.random() * 15);
-    return () => clearInterval(typewriterInterval);
+    const typewriterInterval = setInterval(
+      () => {
+        setTyped(msg.slice(0, i + 1));
+        i++;
+        if (i >= msg.length) {
+          clearInterval(typewriterInterval);
+          advanceTimeout = setTimeout(() => setMessageIdx((idx) => idx + 1), 350);
+        }
+      },
+      10 + Math.random() * 15
+    );
+    return () => {
+      clearInterval(typewriterInterval);
+      if (advanceTimeout) clearTimeout(advanceTimeout);
+    };
   }, [messageIdx, step, scanMessages]);
 
   // Animation sequence with safeguards
@@ -86,15 +128,12 @@ function MobiGlasTerminal({ userName, onAnimationComplete }: { userName?: string
 
     if (step === 0 && messageIdx >= scanMessages.length) {
       timeoutId = setTimeout(() => setStep(1), 350);
-    }
-    else if (step === 1) {
+    } else if (step === 1) {
       timeoutId = setTimeout(() => setStep(2), 600);
-    }
-    else if (step === 2) {
+    } else if (step === 2) {
       // Extended welcome message display by 2 seconds (was 700ms)
       timeoutId = setTimeout(() => setStep(3), 2700);
-    }
-    else if (step === 3 && !animationCompleted) {
+    } else if (step === 3 && !animationCompleted) {
       timeoutId = setTimeout(() => {
         setVisible(false);
         setAnimationCompleted(true);
@@ -232,6 +271,12 @@ export default function HomeContent({ isLoggedIn, userName }: HomeContentProps) 
 
   // Animation for system scan effect
   const [scanning, setScanning] = useState(false);
+  // Refs backing the scan state machine so initiateSystemScan stays stable
+  // (doesn't depend on changing systemStatus/scanning values) and so all
+  // staged timeouts can be tracked and cancelled.
+  const scanningRef = useRef(false);
+  const systemStatusRef = useRef(systemStatus);
+  const scanTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   // Track if we should show the login animation
   const [showLoginAnimation, setShowLoginAnimation] = useState(false);
@@ -240,8 +285,8 @@ export default function HomeContent({ isLoggedIn, userName }: HomeContentProps) 
 
   // Featured ship images
   // Images in the public directory that are confirmed to exist
-// Some JPGs might be causing issues, so we'll include alternative formats or confirmed working images
-const shipImages = [
+  // Some JPGs might be causing issues, so we'll include alternative formats or confirmed working images
+  const shipImages = [
     cdn('/sc.jpg'), // Working
     cdn('/hull_e.png'), // Alternative for sc_banner_crusader.jpg
     cdn('/791602-Ships-Fantastic-world-Star-Citizen.jpg'), // Alternative for Star-Citizen-4K-Wallpaper-3.jpg
@@ -249,67 +294,79 @@ const shipImages = [
     cdn('/sc_cargo.jpeg'), // Working
     cdn('/CargoCapacity_ProposedFinal-Min.jpg'),
     cdn('/Hovering_mining_on_cliffside_1.jpg'), // replacement for RSI_AYDO_Corp_image.png
-    cdn('/Star_Citizen_Ships_510048_2560x1440.jpg') // replacement for spacebg.jpg
+    cdn('/Star_Citizen_Ships_510048_2560x1440.jpg'), // replacement for spacebg.jpg
   ];
-  
+
   // Fallback image in case one of the images fails to load
   const fallbackImage = cdn('/spacebg.png');
 
-  // Simulate system scan
-  const initiateSystemScan = useCallback(() => {
-    if (scanning) return;
+  // Keep a ref in sync with the latest systemStatus so the scan can read the
+  // current resting values without depending on them (avoids effect churn).
+  useEffect(() => {
+    systemStatusRef.current = systemStatus;
+  }, [systemStatus]);
 
+  // Clear any pending staged scan timeouts.
+  const clearScanTimeouts = useCallback(() => {
+    scanTimeoutsRef.current.forEach(clearTimeout);
+    scanTimeoutsRef.current = [];
+  }, []);
+
+  // Simulate system scan. Stable identity (no changing deps): reads current
+  // status via a ref and guards re-entry via a ref, so it doesn't re-create
+  // the interval effect on every systemStatus change.
+  const initiateSystemScan = useCallback(() => {
+    if (scanningRef.current) return;
+
+    // Cancel any leftover timeouts from a previous (interrupted) scan.
+    clearScanTimeouts();
+
+    scanningRef.current = true;
     setScanning(true);
 
-    // Simulate scan progress
-    const origIntegrity = systemStatus.integrity;
-    const origQuant = systemStatus.quantumLink;
-    const origSec = systemStatus.security;
+    // Capture the resting target values to animate back up to.
+    const origIntegrity = systemStatusRef.current.integrity;
+    const origQuant = systemStatusRef.current.quantumLink;
+    const origSec = systemStatusRef.current.security;
 
     // Reset values temporarily
     setSystemStatus({
       integrity: 0,
       quantumLink: 0,
-      security: 0
+      security: 0,
     });
 
-    // Animate them back up with delays - extended for longer animation
-    setTimeout(() => {
-      // Start integrity rise
-      setSystemStatus(prev => ({ ...prev, integrity: origIntegrity/3 }));
+    // Staged animation back up - each stage fires 800ms after the previous.
+    const stages: Array<() => void> = [
+      () => setSystemStatus((prev) => ({ ...prev, integrity: origIntegrity / 3 })),
+      () => setSystemStatus((prev) => ({ ...prev, integrity: origIntegrity / 2 })),
+      () =>
+        setSystemStatus((prev) => ({
+          ...prev,
+          integrity: origIntegrity,
+          quantumLink: origQuant / 3,
+        })),
+      () => setSystemStatus((prev) => ({ ...prev, quantumLink: origQuant / 2 })),
+      () => setSystemStatus((prev) => ({ ...prev, quantumLink: origQuant, security: origSec / 3 })),
+      () => setSystemStatus((prev) => ({ ...prev, security: origSec / 2 })),
+      () => {
+        setSystemStatus({ integrity: origIntegrity, quantumLink: origQuant, security: origSec });
+        scanningRef.current = false;
+        setScanning(false);
+      },
+    ];
 
-      setTimeout(() => {
-        // Continue integrity rise
-        setSystemStatus(prev => ({ ...prev, integrity: origIntegrity/2 }));
+    stages.forEach((stage, index) => {
+      scanTimeoutsRef.current.push(setTimeout(stage, 800 * (index + 1)));
+    });
+  }, [clearScanTimeouts]);
 
-        setTimeout(() => {
-          // Complete integrity rise and start quantum
-          setSystemStatus(prev => ({ ...prev, integrity: origIntegrity, quantumLink: origQuant/3 }));
-
-          setTimeout(() => {
-            // Continue quantum rise
-            setSystemStatus(prev => ({ ...prev, quantumLink: origQuant/2 }));
-
-            setTimeout(() => {
-              // Complete quantum rise and start security
-              setSystemStatus(prev => ({ ...prev, quantumLink: origQuant, security: origSec/3 }));
-
-              setTimeout(() => {
-                // Continue security rise
-                setSystemStatus(prev => ({ ...prev, security: origSec/2 }));
-
-                setTimeout(() => {
-                  // Complete security rise and finish animation
-                  setSystemStatus({ integrity: origIntegrity, quantumLink: origQuant, security: origSec });
-                  setScanning(false);
-                }, 800);
-              }, 800);
-            }, 800);
-          }, 800);
-        }, 800);
-      }, 800);
-    }, 800);
-  }, [scanning, systemStatus.integrity, systemStatus.quantumLink, systemStatus.security]);
+  // Clear any in-flight scan timeouts on unmount.
+  useEffect(() => {
+    return () => {
+      clearScanTimeouts();
+    };
+  }, [clearScanTimeouts]);
 
   useEffect(() => {
     setMounted(true);
@@ -368,7 +425,7 @@ const shipImages = [
         const rect = containerRef.current.getBoundingClientRect();
         setMousePosition({
           x: e.clientX - rect.left,
-          y: e.clientY - rect.top
+          y: e.clientY - rect.top,
         });
       }
     };
@@ -387,8 +444,8 @@ const shipImages = [
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
 
-    const moveX = (mousePosition.x - centerX) / centerX * 10 * depth;
-    const moveY = (mousePosition.y - centerY) / centerY * 6 * depth;
+    const moveX = ((mousePosition.x - centerX) / centerX) * 10 * depth;
+    const moveY = ((mousePosition.y - centerY) / centerY) * 6 * depth;
 
     return { x: moveX, y: moveY };
   };
@@ -399,21 +456,18 @@ const shipImages = [
     <>
       {/* Login animation that shows only on first successful login */}
       {showLoginAnimation && (
-        <MobiGlasTerminal 
-          userName={userName} 
-          onAnimationComplete={handleAnimationComplete} 
-        />
+        <MobiGlasTerminal userName={userName} onAnimationComplete={handleAnimationComplete} />
       )}
 
       {/* Main UI - hidden during login animation */}
       {!hideUI && (
-        <div 
+        <div
           ref={containerRef}
           className="relative min-h-[90vh] flex flex-col items-center justify-center py-8 overflow-hidden"
         >
           {/* Main holographic display */}
           <div className="relative z-20 container mx-auto px-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 1 }}
@@ -445,7 +499,10 @@ const shipImages = [
                   <div className="absolute top-0 right-0 w-full h-0.5 bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
                   <div className="absolute top-0 right-0 h-full w-0.5 bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
                   <div className="absolute top-2 right-2 w-3 h-3 border-r border-t border-[rgba(var(--mg-primary),0.8)]"></div>
-                  <div className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                  <div
+                    className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                    style={{ animationDelay: '0.5s' }}
+                  ></div>
                   <div className="absolute top-6 right-0 w-6 h-0.5 bg-[rgba(var(--mg-primary),0.4)]"></div>
                   <div className="absolute top-0 right-6 w-0.5 h-6 bg-[rgba(var(--mg-primary),0.4)]"></div>
                 </div>
@@ -454,7 +511,10 @@ const shipImages = [
                   <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
                   <div className="absolute bottom-0 left-0 h-full w-0.5 bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
                   <div className="absolute bottom-2 left-2 w-3 h-3 border-l border-b border-[rgba(var(--mg-primary),0.8)]"></div>
-                  <div className="absolute bottom-2 left-2 h-1.5 w-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '1s' }}></div>
+                  <div
+                    className="absolute bottom-2 left-2 h-1.5 w-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                    style={{ animationDelay: '1s' }}
+                  ></div>
                   <div className="absolute bottom-6 left-0 w-6 h-0.5 bg-[rgba(var(--mg-primary),0.4)]"></div>
                   <div className="absolute bottom-0 left-6 w-0.5 h-6 bg-[rgba(var(--mg-primary),0.4)]"></div>
                 </div>
@@ -463,7 +523,10 @@ const shipImages = [
                   <div className="absolute bottom-0 right-0 w-full h-0.5 bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
                   <div className="absolute bottom-0 right-0 h-full w-0.5 bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
                   <div className="absolute bottom-2 right-2 w-3 h-3 border-r border-b border-[rgba(var(--mg-primary),0.8)]"></div>
-                  <div className="absolute bottom-2 right-2 h-1.5 w-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+                  <div
+                    className="absolute bottom-2 right-2 h-1.5 w-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                    style={{ animationDelay: '1.5s' }}
+                  ></div>
                   <div className="absolute bottom-6 right-0 w-6 h-0.5 bg-[rgba(var(--mg-primary),0.4)]"></div>
                   <div className="absolute bottom-0 right-6 w-0.5 h-6 bg-[rgba(var(--mg-primary),0.4)]"></div>
                 </div>
@@ -486,9 +549,18 @@ const shipImages = [
 
                 {/* Random tech elements */}
                 <div className="absolute top-1/4 left-0 w-1 h-1 rounded-full bg-[rgba(var(--mg-primary),0.8)] animate-pulse"></div>
-                <div className="absolute top-3/4 left-0 w-1 h-1 rounded-full bg-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                <div className="absolute top-1/4 right-0 w-1 h-1 rounded-full bg-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '1s' }}></div>
-                <div className="absolute top-3/4 right-0 w-1 h-1 rounded-full bg-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+                <div
+                  className="absolute top-3/4 left-0 w-1 h-1 rounded-full bg-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                  style={{ animationDelay: '0.5s' }}
+                ></div>
+                <div
+                  className="absolute top-1/4 right-0 w-1 h-1 rounded-full bg-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                  style={{ animationDelay: '1s' }}
+                ></div>
+                <div
+                  className="absolute top-3/4 right-0 w-1 h-1 rounded-full bg-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                  style={{ animationDelay: '1.5s' }}
+                ></div>
 
                 {/* Content */}
                 <div className="relative z-10 p-4">
@@ -499,15 +571,16 @@ const shipImages = [
                       initial={{ y: -20, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
                       transition={{ duration: 0.8 }}
-                      style={{ 
+                      style={{
                         x: calculateParallax(0.3).x,
-                        y: calculateParallax(0.3).y 
+                        y: calculateParallax(0.3).y,
                       }}
                       className="text-center mb-8"
                     >
                       <div className="inline-block">
                         <h1 className="mg-title text-4xl md:text-5xl mb-2 tracking-wider">
-                          <span className="text-[rgba(var(--mg-primary),1)]">AYDO</span><span className="text-[rgba(var(--mg-text),0.9)]">CORP</span>
+                          <span className="text-[rgba(var(--mg-primary),1)]">AYDO</span>
+                          <span className="text-[rgba(var(--mg-text),0.9)]">CORP</span>
                         </h1>
                         <div className="mg-subtitle text-base md:text-lg opacity-90 tracking-widest">
                           <span className="mg-flicker">MOBIGLAS INTERFACE</span>
@@ -544,21 +617,30 @@ const shipImages = [
                           <div className="absolute top-0 right-0 w-5 h-5">
                             <div className="absolute top-0 right-0 w-full h-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
                             <div className="absolute top-0 right-0 h-full w-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
-                            <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                            <div
+                              className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                              style={{ animationDelay: '0.5s' }}
+                            ></div>
                           </div>
 
                           {/* Bottom Left */}
                           <div className="absolute bottom-0 left-0 w-5 h-5">
                             <div className="absolute bottom-0 left-0 w-full h-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
                             <div className="absolute bottom-0 left-0 h-full w-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
-                            <div className="absolute bottom-2 left-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '1s' }}></div>
+                            <div
+                              className="absolute bottom-2 left-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                              style={{ animationDelay: '1s' }}
+                            ></div>
                           </div>
 
                           {/* Bottom Right */}
                           <div className="absolute bottom-0 right-0 w-5 h-5">
                             <div className="absolute bottom-0 right-0 w-full h-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
                             <div className="absolute bottom-0 right-0 h-full w-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
-                            <div className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+                            <div
+                              className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                              style={{ animationDelay: '1.5s' }}
+                            ></div>
                           </div>
 
                           <div className="mg-header text-xs text-center">
@@ -573,7 +655,9 @@ const shipImages = [
                               className="text-xs cursor-default"
                               disabled={scanning}
                               leftIcon={
-                                <div className={`w-2 h-2 ${scanning ? 'bg-[rgba(var(--mg-warning),1)] animate-pulse' : 'bg-[rgba(var(--mg-primary),0.8)]'} rounded-full`}></div>
+                                <div
+                                  className={`w-2 h-2 ${scanning ? 'bg-[rgba(var(--mg-warning),1)] animate-pulse' : 'bg-[rgba(var(--mg-primary),0.8)]'} rounded-full`}
+                                ></div>
                               }
                             >
                               {scanning ? 'RECALIBRATING...' : 'SIGNAL SECURE'}
@@ -582,16 +666,18 @@ const shipImages = [
                             <div className="space-y-2">
                               <div className="flex justify-between text-xs">
                                 <span className="text-[rgba(var(--mg-text),0.7)]">INTEGRITY</span>
-                                <span className="text-[rgba(var(--mg-primary),1)]">{systemStatus.integrity.toFixed(1)}%</span>
+                                <span className="text-[rgba(var(--mg-primary),1)]">
+                                  {systemStatus.integrity.toFixed(1)}%
+                                </span>
                               </div>
-                              <motion.div 
+                              <motion.div
                                 className="w-full bg-[rgba(var(--mg-primary),0.1)] h-1"
                                 initial={{ width: 0 }}
                                 animate={{ width: '100%' }}
                                 transition={{ duration: 0.3 }}
                               >
-                                <motion.div 
-                                  className="bg-[rgba(var(--mg-primary),0.8)] h-1" 
+                                <motion.div
+                                  className="bg-[rgba(var(--mg-primary),0.8)] h-1"
                                   initial={{ width: 0 }}
                                   animate={{ width: `${systemStatus.integrity}%` }}
                                   transition={{ duration: 0.5 }}
@@ -599,17 +685,21 @@ const shipImages = [
                               </motion.div>
 
                               <div className="flex justify-between text-xs mt-3">
-                                <span className="text-[rgba(var(--mg-text),0.7)]">QUANTUM LINK</span>
-                                <span className="text-[rgba(var(--mg-success),1)]">{systemStatus.quantumLink}%</span>
+                                <span className="text-[rgba(var(--mg-text),0.7)]">
+                                  QUANTUM LINK
+                                </span>
+                                <span className="text-[rgba(var(--mg-success),1)]">
+                                  {systemStatus.quantumLink}%
+                                </span>
                               </div>
-                              <motion.div 
+                              <motion.div
                                 className="w-full bg-[rgba(var(--mg-primary),0.1)] h-1"
                                 initial={{ width: 0 }}
                                 animate={{ width: '100%' }}
                                 transition={{ duration: 0.3, delay: 0.1 }}
                               >
-                                <motion.div 
-                                  className="bg-[rgba(var(--mg-success),0.8)] h-1" 
+                                <motion.div
+                                  className="bg-[rgba(var(--mg-success),0.8)] h-1"
                                   initial={{ width: 0 }}
                                   animate={{ width: `${systemStatus.quantumLink}%` }}
                                   transition={{ duration: 0.5, delay: 0.1 }}
@@ -622,14 +712,14 @@ const shipImages = [
                                   {systemStatus.security < 100 ? 'AUTH REQ' : 'SECURE'}
                                 </span>
                               </div>
-                              <motion.div 
+                              <motion.div
                                 className="w-full bg-[rgba(var(--mg-primary),0.1)] h-1"
                                 initial={{ width: 0 }}
                                 animate={{ width: '100%' }}
                                 transition={{ duration: 0.3, delay: 0.2 }}
                               >
-                                <motion.div 
-                                  className="bg-[rgba(var(--mg-warning),0.8)] h-1" 
+                                <motion.div
+                                  className="bg-[rgba(var(--mg-warning),0.8)] h-1"
                                   initial={{ width: 0 }}
                                   animate={{ width: `${systemStatus.security}%` }}
                                   transition={{ duration: 0.5, delay: 0.2 }}
@@ -649,9 +739,9 @@ const shipImages = [
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0.5 }}
-                        style={{ 
+                        style={{
                           x: calculateParallax(0.2).x,
-                          y: calculateParallax(0.2).y 
+                          y: calculateParallax(0.2).y,
                         }}
                         className="col-span-12 md:col-span-6 relative"
                       >
@@ -674,21 +764,30 @@ const shipImages = [
                           <div className="absolute top-0 right-0 w-8 h-8">
                             <div className="absolute top-0 right-0 w-5 h-[2px] bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
                             <div className="absolute top-0 right-0 h-5 w-[2px] bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
-                            <div className="absolute top-2 right-2 w-2 h-2 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                            <div
+                              className="absolute top-2 right-2 w-2 h-2 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                              style={{ animationDelay: '0.5s' }}
+                            ></div>
                           </div>
 
                           {/* Bottom Left */}
                           <div className="absolute bottom-0 left-0 w-8 h-8">
                             <div className="absolute bottom-0 left-0 w-5 h-[2px] bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
                             <div className="absolute bottom-0 left-0 h-5 w-[2px] bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
-                            <div className="absolute bottom-2 left-2 w-2 h-2 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '1s' }}></div>
+                            <div
+                              className="absolute bottom-2 left-2 w-2 h-2 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                              style={{ animationDelay: '1s' }}
+                            ></div>
                           </div>
 
                           {/* Bottom Right */}
                           <div className="absolute bottom-0 right-0 w-8 h-8">
                             <div className="absolute bottom-0 right-0 w-5 h-[2px] bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
                             <div className="absolute bottom-0 right-0 h-5 w-[2px] bg-[rgba(var(--mg-primary),0.8)] shadow-[0_0_8px_rgba(var(--mg-primary),0.7)]"></div>
-                            <div className="absolute bottom-2 right-2 w-2 h-2 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+                            <div
+                              className="absolute bottom-2 right-2 w-2 h-2 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                              style={{ animationDelay: '1.5s' }}
+                            ></div>
                           </div>
 
                           {/* Diagonal accent lines */}
@@ -701,24 +800,28 @@ const shipImages = [
                           <div className="absolute left-0 top-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[rgba(var(--mg-primary),0.8)] to-transparent animate-scan"></div>
 
                           <div className="p-6 flex flex-col items-center justify-center">
-                            <motion.div 
+                            <motion.div
                               className="w-24 h-24 md:w-32 md:h-32 relative mb-6"
-                              animate={{ 
-                                boxShadow: ['0 0 10px rgba(var(--mg-primary), 0.3)', '0 0 20px rgba(var(--mg-primary), 0.5)', '0 0 10px rgba(var(--mg-primary), 0.3)']
+                              animate={{
+                                boxShadow: [
+                                  '0 0 10px rgba(var(--mg-primary), 0.3)',
+                                  '0 0 20px rgba(var(--mg-primary), 0.5)',
+                                  '0 0 10px rgba(var(--mg-primary), 0.3)',
+                                ],
                               }}
-                              transition={{ 
-                                duration: 3, 
+                              transition={{
+                                duration: 3,
                                 repeat: Infinity,
-                                ease: "easeInOut" 
+                                ease: 'easeInOut',
                               }}
                             >
                               <div className="absolute inset-0 border-2 border-[rgba(var(--mg-primary),0.3)] flex items-center justify-center overflow-hidden rounded-full">
                                 <div className="radar-sweep"></div>
                                 <div className="absolute inset-0 flex items-center justify-center flex-col">
                                   <div className="h-38 w-38 md:h-46 md:w-46 relative">
-                                    <Image 
-                                      src={cdn('/Aydo_Corp_3x3k_RSI.png')} 
-                                      alt="AydoCorp Logo" 
+                                    <Image
+                                      src={cdn('/Aydo_Corp_3x3k_RSI.png')}
+                                      alt="AydoCorp Logo"
                                       width={184}
                                       height={184}
                                       className="object-contain w-full h-full"
@@ -728,7 +831,7 @@ const shipImages = [
                               </div>
                             </motion.div>
 
-                            <motion.div 
+                            <motion.div
                               className="w-full relative mb-6 overflow-hidden rounded-lg"
                               style={{ height: '220px' }}
                             >
@@ -743,18 +846,20 @@ const shipImages = [
                                   className="absolute inset-0 flex items-center justify-center"
                                 >
                                   <div className="relative w-full h-full">
-                                    <Image 
-                                      src={shipImages[currentImageIndex]} 
-                                      alt="AydoCorp Fleet" 
+                                    <Image
+                                      src={shipImages[currentImageIndex]}
+                                      alt="AydoCorp Fleet"
                                       width={800}
                                       height={220}
                                       className="object-cover w-full h-full"
                                       unoptimized={true}
                                       priority={true}
-                                      loading="eager" 
+                                      loading="eager"
                                       onError={(e) => {
                                         // If image fails to load, fall back to a default image
-                                        console.error(`Failed to load image: ${shipImages[currentImageIndex]}`);
+                                        console.error(
+                                          `Failed to load image: ${shipImages[currentImageIndex]}`
+                                        );
                                         const target = e.target as HTMLImageElement;
                                         target.src = fallbackImage; // Use defined fallback image
                                       }}
@@ -796,29 +901,28 @@ const shipImages = [
                             ) : (
                               <>
                                 <div className="mg-text text-sm mb-6 text-center max-w-md">
-                                  <div className="mg-subtitle mb-2">BIOMETRIC VERIFICATION REQUIRED</div>
+                                  <div className="mg-subtitle mb-2">
+                                    BIOMETRIC VERIFICATION REQUIRED
+                                  </div>
                                   <p className="text-xs leading-relaxed text-[rgba(var(--mg-text),0.7)]">
-                                    MobiGlas interface requires secure authentication. All activities are logged and monitored.
+                                    MobiGlas interface requires secure authentication. All
+                                    activities are logged and monitored.
                                   </p>
                                 </div>
                                 <div className="w-full max-w-xs space-y-3">
-                                  <Link href="/login" className="block w-full">
-                                    <MobiGlasButton
-                                      variant="primary"
-                                      size="md"
-                                      fullWidth
-                                    >
-                                      ACCESS TERMINAL
-                                    </MobiGlasButton>
+                                  <Link
+                                    href="/login"
+                                    className={mgLinkClass('primary', 'md')}
+                                    style={MG_LINK_FONT}
+                                  >
+                                    ACCESS TERMINAL
                                   </Link>
-                                  <Link href="/signup" className="block w-full">
-                                    <MobiGlasButton
-                                      variant="accent"
-                                      size="md"
-                                      fullWidth
-                                    >
-                                      REGISTER NEW DEVICE
-                                    </MobiGlasButton>
+                                  <Link
+                                    href="/signup"
+                                    className={mgLinkClass('accent', 'md')}
+                                    style={MG_LINK_FONT}
+                                  >
+                                    REGISTER NEW DEVICE
                                   </Link>
                                 </div>
                               </>
@@ -847,21 +951,30 @@ const shipImages = [
                           <div className="absolute top-0 right-0 w-5 h-5">
                             <div className="absolute top-0 right-0 w-full h-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
                             <div className="absolute top-0 right-0 h-full w-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
-                            <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                            <div
+                              className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                              style={{ animationDelay: '0.5s' }}
+                            ></div>
                           </div>
 
                           {/* Bottom Left */}
                           <div className="absolute bottom-0 left-0 w-5 h-5">
                             <div className="absolute bottom-0 left-0 w-full h-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
                             <div className="absolute bottom-0 left-0 h-full w-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
-                            <div className="absolute bottom-2 left-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '1s' }}></div>
+                            <div
+                              className="absolute bottom-2 left-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                              style={{ animationDelay: '1s' }}
+                            ></div>
                           </div>
 
                           {/* Bottom Right */}
                           <div className="absolute bottom-0 right-0 w-5 h-5">
                             <div className="absolute bottom-0 right-0 w-full h-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
                             <div className="absolute bottom-0 right-0 h-full w-[1.5px] bg-[rgba(var(--mg-primary),0.8)]"></div>
-                            <div className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+                            <div
+                              className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full border border-[rgba(var(--mg-primary),0.8)] animate-pulse"
+                              style={{ animationDelay: '1.5s' }}
+                            ></div>
                           </div>
 
                           {/* Additional edge markers */}
@@ -877,44 +990,65 @@ const shipImages = [
                           <div className="p-3">
                             <ul className="space-y-2">
                               {[
-                                { title: 'SERVICES', path: '/services', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
-                                { title: 'ABOUT US', path: '/about', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-                                { title: 'JOIN US', path: '/join', icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z' },
-                                { title: 'CONTACT', path: '/contact', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' }
+                                {
+                                  title: 'SERVICES',
+                                  path: '/services',
+                                  icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z',
+                                },
+                                {
+                                  title: 'ABOUT US',
+                                  path: '/about',
+                                  icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+                                },
+                                {
+                                  title: 'JOIN US',
+                                  path: '/join',
+                                  icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z',
+                                },
+                                {
+                                  title: 'CONTACT',
+                                  path: '/contact',
+                                  icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+                                },
                               ].map((item, idx) => (
                                 <li key={idx}>
                                   <Link
                                     href={item.path}
-                                    className="block w-full"
+                                    className={mgLinkClass('ghost', 'sm', 'text-xs gap-2')}
+                                    style={MG_LINK_FONT}
                                     onMouseEnter={() => setActivePanel(item.title)}
                                     onMouseLeave={() => setActivePanel(null)}
                                   >
-                                    <MobiGlasButton
-                                      variant="ghost"
-                                      size="sm"
-                                      fullWidth
-                                      className="text-xs justify-start"
-                                      leftIcon={
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-[rgba(var(--mg-primary),0.8)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d={item.icon} />
-                                        </svg>
-                                      }
-                                    >
-                                      <span className="relative">
-                                        {item.title}
-                                        <AnimatePresence>
-                                          {activePanel === item.title && (
-                                            <motion.span
-                                              className="absolute -bottom-1 left-0 h-px bg-[rgba(var(--mg-primary),0.8)]"
-                                              initial={{ width: '0%' }}
-                                              animate={{ width: '100%' }}
-                                              exit={{ width: '0%' }}
-                                              transition={{ duration: 0.2 }}
-                                            ></motion.span>
-                                          )}
-                                        </AnimatePresence>
-                                      </span>
-                                    </MobiGlasButton>
+                                    <span className="flex-shrink-0">
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        className="h-3 w-3 text-[rgba(var(--mg-primary),0.8)]"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={1}
+                                          d={item.icon}
+                                        />
+                                      </svg>
+                                    </span>
+                                    <span className="relative">
+                                      {item.title}
+                                      <AnimatePresence>
+                                        {activePanel === item.title && (
+                                          <motion.span
+                                            className="absolute -bottom-1 left-0 h-px bg-[rgba(var(--mg-primary),0.8)]"
+                                            initial={{ width: '0%' }}
+                                            animate={{ width: '100%' }}
+                                            exit={{ width: '0%' }}
+                                            transition={{ duration: 0.2 }}
+                                          ></motion.span>
+                                        )}
+                                      </AnimatePresence>
+                                    </span>
                                   </Link>
                                 </li>
                               ))}
@@ -932,4 +1066,4 @@ const shipImages = [
       )}
     </>
   );
-} 
+}

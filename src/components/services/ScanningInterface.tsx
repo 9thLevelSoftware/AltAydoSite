@@ -1,42 +1,52 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { cdn } from '@/lib/cdn';
 import { motion } from 'motion/react';
-import { MobiGlasPanel, MobiGlasButton, ScanlineEffect, StatusIndicator } from '@/components/ui/mobiglas';
+import {
+  MobiGlasPanel,
+  MobiGlasButton,
+  ScanlineEffect,
+  StatusIndicator,
+} from '@/components/ui/mobiglas';
 
 const services = [
   {
     id: 'cargo-transport',
     title: 'Cargo Transport & Management',
-    description: 'End-to-end cargo transportation services across all major systems, featuring real-time tracking and advanced security protocols.',
+    description:
+      'End-to-end cargo transportation services across all major systems, featuring real-time tracking and advanced security protocols.',
     image: cdn('/bigcattt1024x576.jpg'),
   },
   {
     id: 'executive-transit',
     title: 'Executive & Personnel Transit',
-    description: 'Premium transportation services with the highest standards of comfort and security for corporate personnel.',
+    description:
+      'Premium transportation services with the highest standards of comfort and security for corporate personnel.',
     image: cdn('/starfarer_gemini.png'),
   },
   {
     id: 'supply-chain',
     title: 'Supply Chain Solutions',
-    description: 'Comprehensive resource acquisition and logistics management tailored to your operational requirements.',
+    description:
+      'Comprehensive resource acquisition and logistics management tailored to your operational requirements.',
     image: cdn('/Asteroids_122018-Min.png'),
   },
   {
     id: 'recovery',
     title: 'Recovery & Assistance',
-    description: 'Professional vessel recovery and assistance services, available continuously across all operational sectors.',
+    description:
+      'Professional vessel recovery and assistance services, available continuously across all operational sectors.',
     image: cdn('/AdbDOm.jpg'),
   },
   {
     id: 'strategic-ops',
     title: 'Strategic Operations',
-    description: 'Collaborative ventures and partnerships for complex logistics operations requiring multi-party coordination.',
+    description:
+      'Collaborative ventures and partnerships for complex logistics operations requiring multi-party coordination.',
     image: cdn('/carrack_expedition.png'),
-  }
+  },
 ];
 
 interface ScanningInterfaceProps {
@@ -54,8 +64,23 @@ export default function ScanningInterface({
   scanProgress,
   highlightedService,
   scanMessages,
-  onResetScan
+  onResetScan,
 }: ScanningInterfaceProps) {
+  // Clamp progress to a safe 0-100 range before using it for widths/text
+  const pct = Math.min(100, Math.max(0, scanProgress || 0));
+
+  // Capture the scan start time once when scanning begins, instead of
+  // recomputing new Date() on every render.
+  const [scanStartedAt, setScanStartedAt] = useState<Date | null>(null);
+  useEffect(() => {
+    if (isScanning) {
+      setScanStartedAt((prev) => prev ?? new Date());
+    } else if (!scanComplete) {
+      // Reset once the scan is dismissed so the next run gets a fresh timestamp
+      setScanStartedAt(null);
+    }
+  }, [isScanning, scanComplete]);
+
   if (!isScanning && !scanComplete) return null;
 
   return (
@@ -72,12 +97,20 @@ export default function ScanningInterface({
         >
           {/* Decorative grid lines */}
           <div className="absolute inset-0 grid grid-cols-12 gap-4 opacity-20 pointer-events-none">
-            {Array(12).fill(0).map((_, i) => (
-              <div key={`grid-col-${i}`} className="h-full w-px bg-cyan-500/30"></div>
-            ))}
-            {Array(6).fill(0).map((_, i) => (
-              <div key={`grid-row-${i}`} className="w-full h-px bg-cyan-500/30 absolute" style={{ top: `${i * 20}%` }}></div>
-            ))}
+            {Array(12)
+              .fill(0)
+              .map((_, i) => (
+                <div key={`grid-col-${i}`} className="h-full w-px bg-cyan-500/30"></div>
+              ))}
+            {Array(6)
+              .fill(0)
+              .map((_, i) => (
+                <div
+                  key={`grid-row-${i}`}
+                  className="w-full h-px bg-cyan-500/30 absolute"
+                  style={{ top: `${i * 20}%` }}
+                ></div>
+              ))}
           </div>
 
           {/* Scanning animation overlay */}
@@ -98,8 +131,19 @@ export default function ScanningInterface({
             {scanComplete ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-center space-x-2 text-green-400 font-bold text-xl">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
                   <span>SCAN COMPLETE - ALL SERVICES AVAILABLE</span>
                 </div>
@@ -108,8 +152,17 @@ export default function ScanningInterface({
                   variant="secondary"
                   size="md"
                   leftIcon={
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                   }
                 >
@@ -123,7 +176,7 @@ export default function ScanningInterface({
                   <div className="relative h-full">
                     <div
                       className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-100"
-                      style={{ width: `${scanProgress}%` }}
+                      style={{ width: `${pct}%` }}
                     ></div>
                     {/* Progress markers */}
                     {[25, 50, 75].map((mark) => (
@@ -135,20 +188,21 @@ export default function ScanningInterface({
                     ))}
                     {/* Percentage indicator */}
                     <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
-                      {scanProgress.toFixed(0)}%
+                      {pct.toFixed(0)}%
                     </div>
                   </div>
                 </div>
 
                 <div className="text-cyan-400 font-mono flex items-center justify-center gap-2">
                   <StatusIndicator status="loading" size="xs" withPulse />
-                  SCANNING: {scanProgress.toFixed(0)}% COMPLETE
+                  SCANNING: {pct.toFixed(0)}% COMPLETE
                 </div>
 
                 {/* Terminal-like message display */}
                 <div className="mt-4 p-3 bg-black/50 border border-cyan-900/50 rounded text-left h-32 overflow-y-auto font-mono text-sm">
                   <div className="flex items-center text-gray-400 mb-2">
-                    <span className="text-green-400 mr-2">&gt;&gt;&gt;</span> Scan initialized at {new Date().toLocaleTimeString()}
+                    <span className="text-green-400 mr-2">&gt;&gt;&gt;</span> Scan initialized at{' '}
+                    {(scanStartedAt ?? new Date()).toLocaleTimeString()}
                   </div>
                   {scanMessages.map((message, idx) => (
                     <div key={idx} className="text-gray-400 ml-4 mb-1">
@@ -184,28 +238,45 @@ export default function ScanningInterface({
                   fill
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
                 />
-                <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent ${highlightedService === index ? 'bg-blue-900/30' : ''}`} />
+                <div
+                  className={`absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent ${highlightedService === index ? 'bg-blue-900/30' : ''}`}
+                />
 
                 {/* Service card scan effect */}
                 {highlightedService === index && (
                   <div className="absolute inset-0 overflow-hidden">
                     {/* Horizontal scan line */}
-                    <div className="absolute left-0 right-0 h-1 bg-cyan-400/50 blur-sm animate-pulse"
+                    <div
+                      className="absolute left-0 right-0 h-1 bg-cyan-400/50 blur-sm animate-pulse"
                       style={{
                         top: '50%',
-                        boxShadow: '0 0 10px rgba(34, 211, 238, 0.5), 0 0 20px rgba(34, 211, 238, 0.3)'
-                      }}>
-                    </div>
+                        boxShadow:
+                          '0 0 10px rgba(34, 211, 238, 0.5), 0 0 20px rgba(34, 211, 238, 0.3)',
+                      }}
+                    ></div>
                     {/* Corner marker dots */}
                     <div className="absolute top-2 left-2 h-2 w-2 rounded-full bg-cyan-400 animate-ping"></div>
-                    <div className="absolute top-2 right-2 h-2 w-2 rounded-full bg-cyan-400 animate-ping" style={{ animationDelay: '0.5s' }}></div>
-                    <div className="absolute bottom-2 left-2 h-2 w-2 rounded-full bg-cyan-400 animate-ping" style={{ animationDelay: '0.3s' }}></div>
-                    <div className="absolute bottom-2 right-2 h-2 w-2 rounded-full bg-cyan-400 animate-ping" style={{ animationDelay: '0.8s' }}></div>
+                    <div
+                      className="absolute top-2 right-2 h-2 w-2 rounded-full bg-cyan-400 animate-ping"
+                      style={{ animationDelay: '0.5s' }}
+                    ></div>
+                    <div
+                      className="absolute bottom-2 left-2 h-2 w-2 rounded-full bg-cyan-400 animate-ping"
+                      style={{ animationDelay: '0.3s' }}
+                    ></div>
+                    <div
+                      className="absolute bottom-2 right-2 h-2 w-2 rounded-full bg-cyan-400 animate-ping"
+                      style={{ animationDelay: '0.8s' }}
+                    ></div>
                   </div>
                 )}
 
                 <div className="absolute bottom-0 left-0 right-0 p-6">
-                  <h3 className={`text-2xl font-bold mb-2 ${highlightedService === index ? 'text-cyan-400' : ''}`}>{service.title}</h3>
+                  <h3
+                    className={`text-2xl font-bold mb-2 ${highlightedService === index ? 'text-cyan-400' : ''}`}
+                  >
+                    {service.title}
+                  </h3>
                   <p className="text-gray-300">{service.description}</p>
                 </div>
               </div>

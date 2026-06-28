@@ -29,10 +29,10 @@ export default function ContactForm() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
     // Clear field error when user starts typing
     if (fieldErrors[name]) {
-      setFieldErrors(prev => {
+      setFieldErrors((prev) => {
         const newErrors = { ...prev };
         delete newErrors[name];
         return newErrors;
@@ -54,12 +54,23 @@ export default function ContactForm() {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
+      // Only parse the body as JSON when the server actually returned JSON.
+      // Non-JSON or empty bodies (e.g. proxy/gateway HTML error pages) would
+      // otherwise throw and collapse into the generic network catch below.
+      const contentType = response.headers.get('content-type') || '';
+      let data: any = null;
+      if (contentType.includes('application/json')) {
+        try {
+          data = await response.json();
+        } catch {
+          data = null;
+        }
+      }
 
       if (response.ok) {
-        setSuccessMessage(data.message || 'Message transmitted successfully!');
+        setSuccessMessage(data?.message || 'Message transmitted successfully!');
         setFormData({ name: '', email: '', subject: '', message: '' });
-      } else {
+      } else if (data) {
         // Handle validation errors
         if (data.details && Array.isArray(data.details)) {
           const errors: FieldErrors = {};
@@ -71,6 +82,9 @@ export default function ContactForm() {
         } else {
           setErrorMessage(data.error || 'Failed to send message. Please try again.');
         }
+      } else {
+        // Non-JSON or empty error body — surface a status-based message.
+        setErrorMessage(`Server error (HTTP ${response.status}). Please try again later.`);
       }
     } catch (error) {
       setErrorMessage('Network error. Please check your connection and try again.');
@@ -92,10 +106,22 @@ export default function ContactForm() {
       viewport={{ once: true }}
     >
       {successMessage && (
-        <div className="mb-6 p-4 bg-[rgba(var(--mg-success),0.1)] border border-[rgba(var(--mg-success),0.3)] rounded-sm" role="alert" aria-live="polite">
+        <div
+          className="mb-6 p-4 bg-[rgba(var(--mg-success),0.1)] border border-[rgba(var(--mg-success),0.3)] rounded-sm"
+          role="alert"
+          aria-live="polite"
+        >
           <div className="flex items-center">
-            <svg className="h-5 w-5 text-[rgba(var(--mg-success),0.8)] mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            <svg
+              className="h-5 w-5 text-[rgba(var(--mg-success),0.8)] mr-2"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                clipRule="evenodd"
+              />
             </svg>
             <p className="text-[rgba(var(--mg-success),0.9)]">{successMessage}</p>
           </div>
@@ -103,10 +129,22 @@ export default function ContactForm() {
       )}
 
       {errorMessage && (
-        <div className="mb-6 p-4 bg-[rgba(var(--mg-error),0.1)] border border-[rgba(var(--mg-error),0.3)] rounded-sm" role="alert" aria-live="polite">
+        <div
+          className="mb-6 p-4 bg-[rgba(var(--mg-error),0.1)] border border-[rgba(var(--mg-error),0.3)] rounded-sm"
+          role="alert"
+          aria-live="polite"
+        >
           <div className="flex items-center">
-            <svg className="h-5 w-5 text-[rgba(var(--mg-error),0.8)] mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            <svg
+              className="h-5 w-5 text-[rgba(var(--mg-error),0.8)] mr-2"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                clipRule="evenodd"
+              />
             </svg>
             <p className="text-[rgba(var(--mg-error),0.9)]">{errorMessage}</p>
           </div>
@@ -114,72 +152,83 @@ export default function ContactForm() {
       )}
 
       <form className="space-y-6" onSubmit={handleSubmit}>
-          <MobiGlasInput
-            label="NAME"
-            id="name"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            required
-            error={fieldErrors.name}
-            disabled={isLoading}
-          />
+        <MobiGlasInput
+          label="NAME"
+          id="name"
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          required
+          error={fieldErrors.name}
+          disabled={isLoading}
+        />
 
-          <MobiGlasInput
-            label="COMM RELAY ID"
-            type="email"
-            id="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            error={fieldErrors.email}
-            disabled={isLoading}
-          />
+        <MobiGlasInput
+          label="COMM RELAY ID"
+          type="email"
+          id="email"
+          name="email"
+          value={formData.email}
+          onChange={handleChange}
+          required
+          error={fieldErrors.email}
+          disabled={isLoading}
+        />
 
-          <MobiGlasInput
-            label="SUBJECT"
-            id="subject"
-            name="subject"
-            value={formData.subject}
-            onChange={handleChange}
-            required
-            error={fieldErrors.subject}
-            disabled={isLoading}
-          />
+        <MobiGlasInput
+          label="SUBJECT"
+          id="subject"
+          name="subject"
+          value={formData.subject}
+          onChange={handleChange}
+          required
+          error={fieldErrors.subject}
+          disabled={isLoading}
+        />
 
-          <MobiGlasTextArea
-            label="MESSAGE CONTENTS"
-            id="message"
-            name="message"
-            value={formData.message}
-            onChange={handleChange}
-            rows={4}
-            required
-            error={fieldErrors.message}
-            disabled={isLoading}
-          />
+        <MobiGlasTextArea
+          label="MESSAGE CONTENTS"
+          id="message"
+          name="message"
+          value={formData.message}
+          onChange={handleChange}
+          rows={4}
+          required
+          error={fieldErrors.message}
+          disabled={isLoading}
+        />
 
-          <MobiGlasButton
-            type="submit"
-            variant="primary"
-            size="lg"
-            fullWidth
-            withScanline
-            isLoading={isLoading}
-            rightIcon={
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            }
-          >
-            TRANSMIT MESSAGE
-          </MobiGlasButton>
-        </form>
+        <MobiGlasButton
+          type="submit"
+          variant="primary"
+          size="lg"
+          fullWidth
+          withScanline
+          isLoading={isLoading}
+          rightIcon={
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M14 5l7 7m0 0l-7 7m7-7H3"
+              />
+            </svg>
+          }
+        >
+          TRANSMIT MESSAGE
+        </MobiGlasButton>
+      </form>
 
-        <div className="absolute bottom-2 right-2 text-[rgba(var(--mg-text),0.4)] text-xs">
-          TRANSMISSION PROTOCOL v3.82
-        </div>
+      <div className="absolute bottom-2 right-2 text-[rgba(var(--mg-text),0.4)] text-xs">
+        TRANSMISSION PROTOCOL v3.82
+      </div>
     </MobiGlasPanel>
   );
 }

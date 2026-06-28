@@ -8,6 +8,7 @@ import { useShipDetail } from '@/hooks/useShipDetail';
 import ShipImageGallery from '@/components/ships/ShipImageGallery';
 import ShipSpecs from '@/components/ships/ShipSpecs';
 import MobiGlasButton from '@/components/ui/mobiglas/MobiGlasButton';
+import { useBodyScrollLock } from '@/lib/utils/bodyScrollLock';
 import { formatProductionStatus } from '@/lib/ships/format';
 import { shouldOptimizeShipImage } from '@/lib/ships/image';
 
@@ -100,15 +101,9 @@ export default function ShipDetailPanel({ shipId, onClose }: ShipDetailPanelProp
     setDescExpanded(false);
   }, [shipId]);
 
-  // Prevent body scroll when panel is open
-  useEffect(() => {
-    if (shipId) {
-      document.body.style.overflow = 'hidden';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [shipId]);
+  // Prevent body scroll when panel is open (shared reference-counted lock so
+  // overlapping overlays don't unlock each other).
+  useBodyScrollLock(Boolean(shipId));
 
   const handleBackdropClick = useCallback(() => {
     onClose();
@@ -158,9 +153,7 @@ export default function ShipDetailPanel({ shipId, onClose }: ShipDetailPanelProp
 
             {error && (
               <div className="p-4 space-y-2">
-                <p className="text-[rgba(var(--mg-danger),0.9)] text-sm">
-                  {error}
-                </p>
+                <p className="text-[rgba(var(--mg-danger),0.9)] text-sm">{error}</p>
                 <p className="text-[rgba(var(--mg-text),0.5)] text-xs">
                   Try selecting the ship again, or check your connection.
                 </p>

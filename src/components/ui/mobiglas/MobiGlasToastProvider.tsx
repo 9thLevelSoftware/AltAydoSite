@@ -23,6 +23,9 @@ export const ToastContext = createContext<ToastContextValue | null>(null);
 const MAX_VISIBLE_TOASTS = 5;
 const DEFAULT_DURATION = 5000;
 
+const genId = () =>
+  globalThis.crypto?.randomUUID?.() ?? `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 export function MobiGlasToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -36,32 +39,35 @@ export function MobiGlasToastProvider({ children }: { children: React.ReactNode 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const addToast = useCallback((type: ToastType, message: string, duration: number = DEFAULT_DURATION) => {
-    const id = crypto.randomUUID();
-    const toast: Toast = { id, type, message, duration };
+  const addToast = useCallback(
+    (type: ToastType, message: string, duration: number = DEFAULT_DURATION) => {
+      const id = genId();
+      const toast: Toast = { id, type, message, duration };
 
-    setToasts((prev) => {
-      const next = [...prev, toast];
-      // Remove oldest if exceeding max
-      if (next.length > MAX_VISIBLE_TOASTS) {
-        const removed = next.shift();
-        if (removed) {
-          const timer = timersRef.current.get(removed.id);
-          if (timer) {
-            clearTimeout(timer);
-            timersRef.current.delete(removed.id);
+      setToasts((prev) => {
+        const next = [...prev, toast];
+        // Remove oldest if exceeding max
+        if (next.length > MAX_VISIBLE_TOASTS) {
+          const removed = next.shift();
+          if (removed) {
+            const timer = timersRef.current.get(removed.id);
+            if (timer) {
+              clearTimeout(timer);
+              timersRef.current.delete(removed.id);
+            }
           }
         }
-      }
-      return next;
-    });
+        return next;
+      });
 
-    // Auto-dismiss
-    const timer = setTimeout(() => {
-      removeToast(id);
-    }, duration);
-    timersRef.current.set(id, timer);
-  }, [removeToast]);
+      // Auto-dismiss
+      const timer = setTimeout(() => {
+        removeToast(id);
+      }, duration);
+      timersRef.current.set(id, timer);
+    },
+    [removeToast]
+  );
 
   // Cleanup all timers on unmount
   useEffect(() => {
@@ -76,7 +82,13 @@ export function MobiGlasToastProvider({ children }: { children: React.ReactNode 
     <ToastContext.Provider value={{ addToast, removeToast }}>
       {children}
       {/* Toast container - rendered via portal-like fixed positioning */}
-      <div className="fixed top-20 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
+      <div
+        className="fixed top-20 right-6 z-[9999] flex flex-col gap-3 pointer-events-none"
+        role="region"
+        aria-label="Notifications"
+        aria-live="polite"
+        aria-atomic="false"
+      >
         <AnimatePresence mode="popLayout">
           {toasts.map((toast) => (
             <MobiGlasToast

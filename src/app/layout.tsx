@@ -8,7 +8,7 @@ import UserProviderWrapper from '../components/UserProviderWrapper';
 import StarfieldWrapper from '../components/StarfieldWrapper';
 import SecureConnectionIndicator from '../components/SecureConnectionIndicator';
 import { Suspense } from 'react';
-import ClientErrorBoundary from '../components/ClientErrorBoundary';
+import ErrorBoundary from '../components/ErrorBoundary';
 import Providers from '../components/providers';
 
 const quantify = localFont({
@@ -29,21 +29,19 @@ const quantify = localFont({
 
 export { metadata };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${quantify.variable} font-quantify bg-black text-white min-h-screen antialiased overflow-x-hidden text-sm`}>
+      <body
+        className={`${quantify.variable} font-quantify bg-black text-white min-h-screen antialiased overflow-x-hidden text-sm`}
+      >
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-[rgba(var(--mg-panel-dark),0.95)] focus:text-[rgba(var(--mg-accent),1)] focus:border focus:border-[rgba(var(--mg-accent),0.6)] focus:rounded-sm focus:text-sm focus:font-quantify"
         >
           Skip to main content
         </a>
-        <ClientErrorBoundary>
+        <ErrorBoundary>
           <Providers>
             <UserProviderWrapper>
               <div className="relative min-h-screen flex flex-col">
@@ -81,7 +79,13 @@ export default function RootLayout({
                     </Suspense>
                   </header>
                   <main id="main-content" className="flex-1">
-                    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading content...</div>}>
+                    <Suspense
+                      fallback={
+                        <div className="min-h-screen flex items-center justify-center">
+                          Loading content...
+                        </div>
+                      }
+                    >
                       {children}
                     </Suspense>
                   </main>
@@ -93,7 +97,7 @@ export default function RootLayout({
               </div>
             </UserProviderWrapper>
           </Providers>
-        </ClientErrorBoundary>
+        </ErrorBoundary>
       </body>
     </html>
   );

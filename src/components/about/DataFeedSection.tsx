@@ -20,8 +20,22 @@ export default function DataFeedSection({
   connectionMessages,
   onProgressUpdate,
   onConnectionComplete,
-  onAddMessage
+  onAddMessage,
 }: DataFeedSectionProps) {
+  // Transient flag that keeps the completion overlay mounted for the
+  // duration of its animation (~2s) after the connection finishes.
+  const [showCompletionAnimation, setShowCompletionAnimation] = useState(false);
+
+  // Show the completion animation briefly when the connection completes,
+  // then auto-clear it so the section can unmount.
+  useEffect(() => {
+    if (!connectionComplete) return;
+
+    setShowCompletionAnimation(true);
+    const timeout = setTimeout(() => setShowCompletionAnimation(false), 2000);
+    return () => clearTimeout(timeout);
+  }, [connectionComplete]);
+
   // Initialize data feed connection
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -29,14 +43,14 @@ export default function DataFeedSection({
     if (isDataFeedActive && !connectionComplete) {
       // Connection messages
       const techMessages = [
-        "Establishing quantum relay link...",
-        "Accessing corporate historical archives...",
-        "Decrypting temporal data matrices...",
-        "Synthesizing corporate evolution patterns...",
-        "Mapping historical significance nodes...",
-        "Reconstructing timeline interface...",
-        "Validating data chronology...",
-        "Rendering historical visualization..."
+        'Establishing quantum relay link...',
+        'Accessing corporate historical archives...',
+        'Decrypting temporal data matrices...',
+        'Synthesizing corporate evolution patterns...',
+        'Mapping historical significance nodes...',
+        'Reconstructing timeline interface...',
+        'Validating data chronology...',
+        'Rendering historical visualization...',
       ];
 
       // Add initial message
@@ -45,28 +59,37 @@ export default function DataFeedSection({
       }
 
       interval = setInterval(() => {
-        onProgressUpdate(connectionProgress + 1);
+        const nextProgress = Math.min(connectionProgress + 1, 100);
+        onProgressUpdate(nextProgress);
 
         // Add a new message at certain progress points
-        if ((connectionProgress + 1) % 14 === 0 && connectionProgress < 100) {
-          const messageIndex = Math.floor((connectionProgress + 1) / 14);
+        if (nextProgress % 14 === 0 && nextProgress < 100) {
+          const messageIndex = Math.floor(nextProgress / 14);
           if (messageIndex < techMessages.length) {
             onAddMessage(techMessages[messageIndex]);
           }
         }
 
-        if (connectionProgress >= 100) {
+        if (nextProgress >= 100) {
           clearInterval(interval);
           onConnectionComplete();
-          onAddMessage("Connection established successfully");
+          onAddMessage('Connection established successfully');
         }
       }, 40);
     }
 
     return () => clearInterval(interval);
-  }, [isDataFeedActive, connectionProgress, connectionComplete, connectionMessages.length, onProgressUpdate, onConnectionComplete, onAddMessage]);
+  }, [
+    isDataFeedActive,
+    connectionProgress,
+    connectionComplete,
+    connectionMessages.length,
+    onProgressUpdate,
+    onConnectionComplete,
+    onAddMessage,
+  ]);
 
-  if (!isDataFeedActive || connectionComplete) return null;
+  if (!isDataFeedActive || (connectionComplete && !showCompletionAnimation)) return null;
 
   return (
     <>
@@ -78,12 +101,23 @@ export default function DataFeedSection({
 
             {/* Decorative grid lines */}
             <div className="absolute inset-0 grid grid-cols-12 gap-4 opacity-20 pointer-events-none">
-              {Array(12).fill(0).map((_, i) => (
-                <div key={`grid-col-${i}`} className="h-full w-px bg-[rgba(var(--mg-primary),0.3)]"></div>
-              ))}
-              {Array(6).fill(0).map((_, i) => (
-                <div key={`grid-row-${i}`} className="w-full h-px bg-[rgba(var(--mg-primary),0.3)] absolute" style={{ top: `${i * 20}%` }}></div>
-              ))}
+              {Array(12)
+                .fill(0)
+                .map((_, i) => (
+                  <div
+                    key={`grid-col-${i}`}
+                    className="h-full w-px bg-[rgba(var(--mg-primary),0.3)]"
+                  ></div>
+                ))}
+              {Array(6)
+                .fill(0)
+                .map((_, i) => (
+                  <div
+                    key={`grid-row-${i}`}
+                    className="w-full h-px bg-[rgba(var(--mg-primary),0.3)] absolute"
+                    style={{ top: `${i * 20}%` }}
+                  ></div>
+                ))}
             </div>
 
             {/* Scanning animation overlay */}
@@ -91,8 +125,9 @@ export default function DataFeedSection({
               <div
                 className="absolute top-0 h-full w-2 bg-[rgba(var(--mg-primary),0.3)] blur-sm"
                 style={{
-                  boxShadow: '0 0 20px rgba(0, 215, 255, 0.5), 0 0 40px rgba(0, 215, 255, 0.3), 0 0 60px rgba(0, 215, 255, 0.2)',
-                  animation: 'scanline-vertical 2s linear infinite'
+                  boxShadow:
+                    '0 0 20px rgba(0, 215, 255, 0.5), 0 0 40px rgba(0, 215, 255, 0.3), 0 0 60px rgba(0, 215, 255, 0.2)',
+                  animation: 'scanline-vertical 2s linear infinite',
                 }}
               ></div>
             </div>
@@ -111,7 +146,8 @@ export default function DataFeedSection({
                       className="h-full rounded-full transition-all duration-100"
                       style={{
                         width: `${connectionProgress}%`,
-                        background: 'linear-gradient(to right, rgba(0, 215, 255, 0.6), rgba(0, 255, 200, 0.6))'
+                        background:
+                          'linear-gradient(to right, rgba(0, 215, 255, 0.6), rgba(0, 255, 200, 0.6))',
                       }}
                     ></div>
                     {/* Progress markers */}
@@ -137,11 +173,13 @@ export default function DataFeedSection({
                 {/* Terminal-like message display */}
                 <div className="mt-4 p-3 bg-black/70 border border-[rgba(var(--mg-primary),0.3)] rounded text-left h-32 overflow-y-auto font-mono text-xs">
                   <div className="flex items-center text-[rgba(var(--mg-text),0.7)] mb-2">
-                    <span className="text-[rgba(var(--mg-primary),0.9)] mr-2">&gt;&gt;&gt;</span> Feed initialization at {new Date().toLocaleTimeString()}
+                    <span className="text-[rgba(var(--mg-primary),0.9)] mr-2">&gt;&gt;&gt;</span>{' '}
+                    Feed initialization at {new Date().toLocaleTimeString()}
                   </div>
                   {connectionMessages.map((message, idx) => (
                     <div key={idx} className="text-[rgba(var(--mg-text),0.7)] ml-4 mb-1">
-                      <span className="text-[rgba(var(--mg-primary),0.9)] mr-2">&gt;</span> {message}
+                      <span className="text-[rgba(var(--mg-primary),0.9)] mr-2">&gt;</span>{' '}
+                      {message}
                     </div>
                   ))}
                   <div className="text-[rgba(var(--mg-text),0.7)] inline-flex ml-4">
@@ -156,7 +194,7 @@ export default function DataFeedSection({
       </section>
 
       {/* Connection complete animation - shows briefly when connection finishes */}
-      {connectionComplete && (
+      {showCompletionAnimation && (
         <motion.div
           initial={{ opacity: 1 }}
           animate={{ opacity: 0 }}

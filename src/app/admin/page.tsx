@@ -13,13 +13,14 @@ export default async function AdminDashboard() {
     redirect('/login');
   }
 
-  // TODO: Implement proper role check via NextAuth when integrated
-  // For now, we'll use a placeholder check
-  const isAdmin = session.user?.email === "shatteredobsidian@yahoo.com";
+  // Authorize via NextAuth session claims. Fail closed when role/clearance
+  // are missing (`?? 0`). Mirrors the guard used in API routes such as
+  // /api/storage-status.
+  const isAdmin = session.user?.role === 'admin' || (session.user?.clearanceLevel ?? 0) >= 4;
 
   if (!isAdmin) {
     return <AccessDenied />;
   }
 
   return <AdminDashboardContent />;
-} 
+}

@@ -4,6 +4,12 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import OrgChart, { ChartNodeData } from '@/components/dashboard/OrgChart';
 
+// Demo/feature flag: the org hierarchies below are curated sample data and are not
+// yet sourced from an authoritative org model/API. Until a real data source is wired,
+// the route stays behind an explicit demo flag, which also drives the "DEMO DATA" badge.
+// Set NEXT_PUBLIC_ORG_HIERARCHY_DEMO="false" once the data is backed by the real org model.
+const IS_DEMO_DATA = process.env.NEXT_PUBLIC_ORG_HIERARCHY_DEMO !== 'false';
+
 // Sample organizational data structures - Clean corporate hierarchy for testing
 const corporateHierarchy: ChartNodeData = {
   id: 'ceo',
@@ -16,7 +22,7 @@ const corporateHierarchy: ChartNodeData = {
       level: 'board',
       front: { title: 'Chief Technology Officer' },
       back: { loreName: 'Tech Overlord', handle: 'AydoCorp_CTO' },
-      children: []
+      children: [],
     },
     {
       id: 'coo',
@@ -29,39 +35,39 @@ const corporateHierarchy: ChartNodeData = {
           level: 'director',
           front: { title: 'Empyrion Industries Director' },
           back: { loreName: 'Mining Magnate', handle: 'EI_Director' },
-          children: []
+          children: [],
         },
         {
           id: 'aeDir',
           level: 'director',
           front: { title: 'AydoExpress Director' },
           back: { loreName: 'Cargo Master', handle: 'AE_Director' },
-          children: []
+          children: [],
         },
         {
           id: 'msDir',
           level: 'director',
           front: { title: 'Midnight Security Director' },
           back: { loreName: 'Shadow Commander', handle: 'MS_Director' },
-          children: []
-        }
-      ]
+          children: [],
+        },
+      ],
     },
     {
       id: 'cmo',
       level: 'board',
       front: { title: 'Chief Marketing Officer' },
       back: { loreName: 'Voice of AydoCorp', handle: 'AydoCorp_CMO' },
-      children: []
+      children: [],
     },
     {
       id: 'cso',
       level: 'board',
       front: { title: 'Chief Security Officer' },
       back: { loreName: 'Shield Master', handle: 'AydoCorp_CSO' },
-      children: []
-    }
-  ]
+      children: [],
+    },
+  ],
 };
 
 const empyrionHierarchy: ChartNodeData = {
@@ -87,13 +93,13 @@ const empyrionHierarchy: ChartNodeData = {
               level: 'manager',
               front: { title: 'Seasonal Hire' },
               back: { loreName: 'Temp Workers', handle: 'EI_Temps' },
-              children: []
-            }
-          ]
-        }
-      ]
-    }
-  ]
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+  ],
 };
 
 // AydoExpress hierarchy translated from the provided org chart
@@ -102,124 +108,286 @@ const aydoExpressHierarchy: ChartNodeData = {
   id: 'aeDirector',
   level: 'executive',
   front: { title: 'Director' },
-  back: { },
+  back: {},
   children: [
     {
       id: 'aeSubDirector',
       level: 'board',
       front: { title: 'Sub-Director' },
-      back: { },
+      back: {},
       children: [
         {
           id: 'aeSupervisor',
           level: 'director',
           front: { title: 'Supervisor' },
-          back: { },
+          back: {},
           children: [
             {
               id: 'aeLoadmaster',
               level: 'manager',
               front: { title: 'Loadmaster' },
-              back: { },
+              back: {},
               children: [
                 {
                   id: 'aeSeniorServiceAgent',
                   level: 'staff',
                   front: { title: 'Senior Service Agent' },
-                  back: { },
+                  back: {},
                   children: [
                     {
                       id: 'aeAssociate',
                       level: 'staff',
                       front: { title: 'Associate' },
-                      back: { },
+                      back: {},
                       children: [
                         {
                           id: 'aeTrainee',
                           level: 'staff',
                           front: { title: 'Trainee' },
-                          back: { },
-                          children: []
-                        }
-                      ]
-                    }
-                  ]
+                          back: {},
+                          children: [],
+                        },
+                      ],
+                    },
+                  ],
                 },
                 {
                   id: 'aeServiceAgent',
                   level: 'staff',
                   front: { title: 'Service Agent' },
-                  back: { },
-                  children: [] // Linked to Associate via extra connection
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ]
+                  back: {},
+                  children: [], // Linked to Associate via extra connection
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
 };
 
 const midnightSecurityHierarchy: ChartNodeData = {
   id: 'msDirector',
   level: 'executive',
   front: { title: 'Director' },
-  back: { },
+  back: {},
   children: [
     // Assistant Director appears on same row as Director (peer) and connects directly
-    { id: 'msAssistantDirector', level: 'executive', front: { title: 'Assistant Director' }, back: { }, children: [] },
+    {
+      id: 'msAssistantDirector',
+      level: 'executive',
+      front: { title: 'Assistant Director' },
+      back: {},
+      children: [],
+    },
 
     // Top-of-branch heads (still Upper Management, but shown below Dir/AD within same container)
-    { id: 'msHeadPilot', level: 'board', front: { title: 'Head Pilot' }, back: { }, children: [
-      { id: 'msFlightLead', level: 'director', front: { title: 'Flight Lead' }, back: { }, children: [
-        { id: 'msElementLead', level: 'director', front: { title: 'Element Lead' }, back: { }, children: [
-          { id: 'msSeasonedPilot', level: 'manager', front: { title: 'Seasoned Pilot' }, back: { }, children: [
-            { id: 'msPilot', level: 'staff', front: { title: 'Pilot' }, back: { }, children: [] }
-          ] }
-        ] }
-      ] }
-    ] },
-    { id: 'msSquadLead', level: 'board', front: { title: 'Squad Lead (Marines)' }, back: { }, children: [
-      { id: 'msTeamLead', level: 'director', front: { title: 'Team Lead' }, back: { }, children: [
-        { id: 'msVeteranMarine', level: 'director', front: { title: 'Veteran Marine' }, back: { }, children: [
-          { id: 'msSeasonedMarine', level: 'manager', front: { title: 'Seasoned Marine' }, back: { }, children: [
-            { id: 'msExperiencedMarine', level: 'manager', front: { title: 'Experienced Marine' }, back: { }, children: [
-              { id: 'msMarine', level: 'staff', front: { title: 'Marine' }, back: { }, children: [
-                { id: 'msMarineTrainee', level: 'staff', front: { title: 'Marine Trainee' }, back: { }, children: [] }
-              ] }
-            ] }
-          ] }
-        ] }
-      ] }
-    ] },
-    { id: 'msEngineeringManager', level: 'board', front: { title: 'Engineering Manager' }, back: { }, children: [
-      { id: 'msEngineeringLead', level: 'director', front: { title: 'Engineering Lead' }, back: { }, children: [
-        { id: 'msVeteranEngineer', level: 'director', front: { title: 'Veteran Engineer' }, back: { }, children: [
-          { id: 'msSeasonedEngineer', level: 'manager', front: { title: 'Seasoned Engineer' }, back: { }, children: [
-            { id: 'msExperiencedEngineer', level: 'manager', front: { title: 'Experienced Engineer' }, back: { }, children: [
-              { id: 'msEngineer', level: 'staff', front: { title: 'Engineer' }, back: { }, children: [
-                { id: 'msEngineerTrainee', level: 'staff', front: { title: 'Engineer Trainee' }, back: { }, children: [] }
-              ] }
-            ] }
-          ] }
-        ] }
-      ] }
-    ] },
-    { id: 'msGunneryManager', level: 'board', front: { title: 'Gunnery Manager' }, back: { }, children: [
-      { id: 'msGunneryLead', level: 'director', front: { title: 'Gunnery Lead' }, back: { }, children: [
-        { id: 'msVeteranGunner', level: 'director', front: { title: 'Veteran Gunner' }, back: { }, children: [
-          { id: 'msSeasonedGunner', level: 'manager', front: { title: 'Seasoned Gunner' }, back: { }, children: [
-            { id: 'msExperiencedGunner', level: 'manager', front: { title: 'Experienced Gunner' }, back: { }, children: [
-              { id: 'msGunner', level: 'staff', front: { title: 'Gunner' }, back: { }, children: [
-                { id: 'msGunnerTrainee', level: 'staff', front: { title: 'Gunner Trainee' }, back: { }, children: [] }
-              ] }
-            ] }
-          ] }
-        ] }
-      ] }
-    ] }
-  ]
+    {
+      id: 'msHeadPilot',
+      level: 'board',
+      front: { title: 'Head Pilot' },
+      back: {},
+      children: [
+        {
+          id: 'msFlightLead',
+          level: 'director',
+          front: { title: 'Flight Lead' },
+          back: {},
+          children: [
+            {
+              id: 'msElementLead',
+              level: 'director',
+              front: { title: 'Element Lead' },
+              back: {},
+              children: [
+                {
+                  id: 'msSeasonedPilot',
+                  level: 'manager',
+                  front: { title: 'Seasoned Pilot' },
+                  back: {},
+                  children: [
+                    {
+                      id: 'msPilot',
+                      level: 'staff',
+                      front: { title: 'Pilot' },
+                      back: {},
+                      children: [],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'msSquadLead',
+      level: 'board',
+      front: { title: 'Squad Lead (Marines)' },
+      back: {},
+      children: [
+        {
+          id: 'msTeamLead',
+          level: 'director',
+          front: { title: 'Team Lead' },
+          back: {},
+          children: [
+            {
+              id: 'msVeteranMarine',
+              level: 'director',
+              front: { title: 'Veteran Marine' },
+              back: {},
+              children: [
+                {
+                  id: 'msSeasonedMarine',
+                  level: 'manager',
+                  front: { title: 'Seasoned Marine' },
+                  back: {},
+                  children: [
+                    {
+                      id: 'msExperiencedMarine',
+                      level: 'manager',
+                      front: { title: 'Experienced Marine' },
+                      back: {},
+                      children: [
+                        {
+                          id: 'msMarine',
+                          level: 'staff',
+                          front: { title: 'Marine' },
+                          back: {},
+                          children: [
+                            {
+                              id: 'msMarineTrainee',
+                              level: 'staff',
+                              front: { title: 'Marine Trainee' },
+                              back: {},
+                              children: [],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'msEngineeringManager',
+      level: 'board',
+      front: { title: 'Engineering Manager' },
+      back: {},
+      children: [
+        {
+          id: 'msEngineeringLead',
+          level: 'director',
+          front: { title: 'Engineering Lead' },
+          back: {},
+          children: [
+            {
+              id: 'msVeteranEngineer',
+              level: 'director',
+              front: { title: 'Veteran Engineer' },
+              back: {},
+              children: [
+                {
+                  id: 'msSeasonedEngineer',
+                  level: 'manager',
+                  front: { title: 'Seasoned Engineer' },
+                  back: {},
+                  children: [
+                    {
+                      id: 'msExperiencedEngineer',
+                      level: 'manager',
+                      front: { title: 'Experienced Engineer' },
+                      back: {},
+                      children: [
+                        {
+                          id: 'msEngineer',
+                          level: 'staff',
+                          front: { title: 'Engineer' },
+                          back: {},
+                          children: [
+                            {
+                              id: 'msEngineerTrainee',
+                              level: 'staff',
+                              front: { title: 'Engineer Trainee' },
+                              back: {},
+                              children: [],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'msGunneryManager',
+      level: 'board',
+      front: { title: 'Gunnery Manager' },
+      back: {},
+      children: [
+        {
+          id: 'msGunneryLead',
+          level: 'director',
+          front: { title: 'Gunnery Lead' },
+          back: {},
+          children: [
+            {
+              id: 'msVeteranGunner',
+              level: 'director',
+              front: { title: 'Veteran Gunner' },
+              back: {},
+              children: [
+                {
+                  id: 'msSeasonedGunner',
+                  level: 'manager',
+                  front: { title: 'Seasoned Gunner' },
+                  back: {},
+                  children: [
+                    {
+                      id: 'msExperiencedGunner',
+                      level: 'manager',
+                      front: { title: 'Experienced Gunner' },
+                      back: {},
+                      children: [
+                        {
+                          id: 'msGunner',
+                          level: 'staff',
+                          front: { title: 'Gunner' },
+                          back: {},
+                          children: [
+                            {
+                              id: 'msGunnerTrainee',
+                              level: 'staff',
+                              front: { title: 'Gunner Trainee' },
+                              back: {},
+                              children: [],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
 };
 
 // Navigation Tabs component
@@ -235,11 +403,7 @@ const NavigationTabs: React.FC<{
   ];
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="mb-8"
-    >
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-8">
       <div className="flex flex-wrap gap-2 p-1 bg-[rgba(var(--mg-panel-dark),0.6)] rounded-lg border border-[rgba(var(--mg-primary),0.3)]">
         {tabs.map((tab) => (
           <button
@@ -294,7 +458,6 @@ export default function HierarchyPage() {
     }
   };
 
-
   // Dynamic header resolver to allow unlimited levels with custom labeling per level
   const getHeaderResolver = () => {
     if (activeTab === 'aydoexpress') {
@@ -304,9 +467,9 @@ export default function HierarchyPage() {
         1: 'Upper Management', // Sub-Director
         2: 'Lower Management', // Supervisor
         3: 'Lower Management', // Loadmaster
-        4: 'Employee',         // Senior Service Agent + Service Agent
-        5: 'Employee',         // Associate
-        6: 'Intern'            // Trainee
+        4: 'Employee', // Senior Service Agent + Service Agent
+        5: 'Employee', // Associate
+        6: 'Intern', // Trainee
       };
       return (levelIndex: number) => labelByLevel[levelIndex] || `Level ${levelIndex + 1}`;
     }
@@ -317,10 +480,10 @@ export default function HierarchyPage() {
         1: 'Upper Management', // Head Pilot, Squad Lead, Engineering Manager, Gunnery Manager
         2: 'Lower Management', // Leads
         3: 'Lower Management', // Element Lead / Veteran roles
-        4: 'Employee',         // Seasoned roles
-        5: 'Employee',         // Experienced roles
-        6: 'Employee',         // Base roles (Marine/Engineer/Gunner)
-        7: 'Intern'            // Trainees
+        4: 'Employee', // Seasoned roles
+        5: 'Employee', // Experienced roles
+        6: 'Employee', // Base roles (Marine/Engineer/Gunner)
+        7: 'Intern', // Trainees
       };
       return (levelIndex: number) => labelByLevel[levelIndex] || `Level ${levelIndex + 1}`;
     }
@@ -330,16 +493,14 @@ export default function HierarchyPage() {
   // Extra connections to support multi-parent relationships (e.g., Service Agent → Associate)
   const getExtraConnections = () => {
     if (activeTab !== 'aydoexpress') return [] as Array<{ from: string; to: string }>;
-    return [
-      { from: 'aeServiceAgent', to: 'aeAssociate' }
-    ];
+    return [{ from: 'aeServiceAgent', to: 'aeAssociate' }];
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[rgb(var(--mg-background))] via-[rgb(0,8,20)] to-[rgb(var(--mg-dark))] relative">
       {/* Holographic grid background */}
       <div className="absolute inset-0 mg-grid-bg opacity-20 pointer-events-none" />
-      
+
       {/* Floating particles effect */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {[...Array(12)].map((_, i) => (
@@ -372,13 +533,15 @@ export default function HierarchyPage() {
         >
           <h1 className="mg-title text-3xl md:text-4xl font-bold mb-3">
             Organizational Hierarchy
-            <span className="ml-3 inline-block align-middle text-xs px-2 py-0.5 rounded-sm border border-[rgba(var(--mg-warning),0.5)] bg-[rgba(var(--mg-warning),0.1)] text-[rgba(var(--mg-warning),0.9)] font-sans font-medium tracking-wide">
-              DEMO DATA
-            </span>
+            {IS_DEMO_DATA && (
+              <span className="ml-3 inline-block align-middle text-xs px-2 py-0.5 rounded-sm border border-[rgba(var(--mg-warning),0.5)] bg-[rgba(var(--mg-warning),0.1)] text-[rgba(var(--mg-warning),0.9)] font-sans font-medium tracking-wide">
+                DEMO DATA
+              </span>
+            )}
           </h1>
           <p className="mg-subtitle text-base opacity-80">
-            Dynamic organizational charts powered by the new OrgChart component. 
-            Click on cards to reveal additional information and explore the structure.
+            Dynamic organizational charts powered by the new OrgChart component. Click on cards to
+            reveal additional information and explore the structure.
           </p>
         </motion.div>
 
@@ -394,9 +557,7 @@ export default function HierarchyPage() {
           animate={{ opacity: 1, x: 0 }}
           className="mb-6 text-center max-w-4xl mx-auto"
         >
-          <h2 className="mg-subtitle text-xl font-medium">
-            {getTabTitle()}
-          </h2>
+          <h2 className="mg-subtitle text-xl font-medium">{getTabTitle()}</h2>
         </motion.div>
 
         {/* Org Chart Container with Uniform Spacing */}
@@ -415,9 +576,13 @@ export default function HierarchyPage() {
               headerResolver={getHeaderResolver()}
               extraConnections={getExtraConnections()}
               peerWithParentIds={activeTab === 'midnight' ? [] : []}
-              nodeOffsets={activeTab === 'midnight' ? { msAssistantDirector: { y: 0, x: -120 } } : {}}
+              nodeOffsets={
+                activeTab === 'midnight' ? { msAssistantDirector: { y: 0, x: -120 } } : {}
+              }
               isolateRowIds={activeTab === 'midnight' ? ['msAssistantDirector'] : []}
-              anchorXToId={activeTab === 'midnight' ? { msAssistantDirector: 'msGunneryManager' } : {}}
+              anchorXToId={
+                activeTab === 'midnight' ? { msAssistantDirector: 'msGunneryManager' } : {}
+              }
             />
           </motion.div>
         </AnimatePresence>

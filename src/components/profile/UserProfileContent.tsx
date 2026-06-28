@@ -46,7 +46,7 @@ export default function UserProfileContent() {
     payGrade: '',
     position: '',
     division: '',
-    timezone: ''
+    timezone: '',
   });
 
   // Batch-resolve fleet ships from FleetYards API
@@ -67,7 +67,7 @@ export default function UserProfileContent() {
   useEffect(() => {
     if (status === 'authenticated' && session?.user) {
       // Set basic data from session
-      setUserData(prevData => ({
+      setUserData((prevData) => ({
         ...prevData,
         name: session.user.name || '',
         email: session.user.email || '',
@@ -81,26 +81,17 @@ export default function UserProfileContent() {
     }
   }, [session, status]);
 
-  // Refresh profile data periodically while editing to catch potential ship updates
-  // But only refresh ships data, not form fields that user might be actively editing
-  useEffect(() => {
-    if (isEditing) {
-      const interval = setInterval(() => {
-        console.log('Refreshing ships data only (preserving form state)');
-        fetchShipsData();
-      }, 10000); // Check every 10 seconds while in edit mode (less frequent)
-
-      return () => clearInterval(interval);
-    }
-  }, [isEditing]);
+  // NOTE: We intentionally do NOT poll the server for ship updates while editing.
+  // During edit mode the fleet is owned in-memory (userShips) and persisted only on
+  // save. Polling here previously clobbered unsaved local edits (components-16).
 
   const fetchProfileData = async () => {
     try {
       const response = await fetch('/api/profile', {
         headers: {
-          'Cache-Control': 'no-cache' // Prevent caching issues
+          'Cache-Control': 'no-cache', // Prevent caching issues
         },
-        credentials: 'include' // Include session cookies
+        credentials: 'include', // Include session cookies
       });
 
       if (!response.ok) {
@@ -116,7 +107,7 @@ export default function UserProfileContent() {
       }
 
       const profileData = await response.json();
-      setUserData(prevData => ({
+      setUserData((prevData) => ({
         ...prevData,
         discordName: profileData.discordName || '',
         rsiAccountName: profileData.rsiAccountName || '',
@@ -125,7 +116,7 @@ export default function UserProfileContent() {
         payGrade: profileData.payGrade || '',
         position: profileData.position || '',
         division: profileData.division || '',
-        timezone: profileData.timezone || ''
+        timezone: profileData.timezone || '',
       }));
 
       // Set ships from profile data if available
@@ -142,34 +133,10 @@ export default function UserProfileContent() {
     }
   };
 
-  // Fetch only ships data without overwriting form fields (for background refresh)
-  const fetchShipsData = async () => {
-    try {
-      const response = await fetch('/api/profile', {
-        headers: {
-          'Cache-Control': 'no-cache'
-        },
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        return; // Silently fail for background refresh
-      }
-
-      const profileData = await response.json();
-
-      // Only update ships, not form fields
-      if (profileData.ships) {
-        console.log('Background refresh: Updated ships data');
-        setUserShips(profileData.ships);
-      }
-    } catch (error) {
-      console.error('Background ships refresh failed:', error);
-      // Silently fail for background refresh
-    }
-  };
-
-  // Handler for ship changes from the fleet builder
+  // Handler for ship changes from the fleet builder.
+  // The wrapper notifies us immediately (optimistically) on every local add/remove so
+  // that userShips is the single source of truth. Persistence happens on save
+  // (handleSaveProfile) — the wrapper no longer persists independently (components-18/39).
   const handleShipsChange = (ships: UserShip[]) => {
     console.log('Profile received ship changes:', ships);
     setUserShips(ships);
@@ -178,16 +145,34 @@ export default function UserProfileContent() {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate the file is an allowed image type (don't trust the file extension)
+      const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        setErrorMessage('Unsupported image type. Please upload a PNG, JPEG, or WebP image.');
+        return;
+      }
+
       // Check file size before upload (max 2MB)
       if (file.size > 2 * 1024 * 1024) {
-        setErrorMessage("Image size must be less than 2MB");
+        setErrorMessage('Image size must be less than 2MB');
         return;
       }
 
       const reader = new FileReader();
+      reader.onerror = () => {
+        console.error('Error reading image file:', reader.error);
+        setErrorMessage(
+          'Could not read the selected image. Please try again with a different file.'
+        );
+      };
       reader.onload = (event) => {
         if (event.target?.result) {
           const img = document.createElement('img');
+          img.onerror = () => {
+            setErrorMessage(
+              'Could not process the selected image. The file may be corrupted or not a valid image.'
+            );
+          };
           img.onload = () => {
             // Create a canvas to resize image if necessary
             const canvas = document.createElement('canvas');
@@ -215,9 +200,9 @@ export default function UserProfileContent() {
             // Convert to base64 with reduced quality
             const resizedImage = canvas.toDataURL('image/jpeg', 0.8);
 
-            setUserData(prev => ({
+            setUserData((prev) => ({
               ...prev,
-              photo: resizedImage
+              photo: resizedImage,
             }));
             setErrorMessage(null);
           };
@@ -228,16 +213,18 @@ export default function UserProfileContent() {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
-    setUserData(prev => ({
+    setUserData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleEditToggle = () => {
-    setIsEditing(prev => !prev);
+    setIsEditing((prev) => !prev);
     // Don't auto-revert changes when toggling edit mode
     // User can manually cancel if needed
   };
@@ -260,7 +247,7 @@ export default function UserProfileContent() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache' // Prevent caching issues
+          'Cache-Control': 'no-cache', // Prevent caching issues
         },
         credentials: 'include', // Include session cookies
         body: JSON.stringify({
@@ -272,12 +259,14 @@ export default function UserProfileContent() {
           position: userData.position,
           division: userData.division,
           timezone: userData.timezone, // Include timezone in the update
-          ships: userShips // Include the ships data in the update
+          ships: userShips, // Include the ships data in the update
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: 'Failed to parse error response' }));
         const message = errorData.error || 'Failed to update profile';
         setErrorMessage(message);
         console.error('Error saving profile:', new Error(message));
@@ -286,7 +275,7 @@ export default function UserProfileContent() {
 
       // Update local state with the response
       const updatedProfile = await response.json();
-      setUserData(prev => ({
+      setUserData((prev) => ({
         ...prev,
         discordName: updatedProfile.discordName || '',
         rsiAccountName: updatedProfile.rsiAccountName || '',
@@ -295,7 +284,7 @@ export default function UserProfileContent() {
         payGrade: updatedProfile.payGrade || '',
         position: updatedProfile.position || '',
         division: updatedProfile.division || '',
-        timezone: updatedProfile.timezone || ''
+        timezone: updatedProfile.timezone || '',
       }));
 
       // Update ships if provided in the response
@@ -376,11 +365,7 @@ export default function UserProfileContent() {
                 </MobiGlasButton>
               </div>
             ) : (
-              <MobiGlasButton
-                onClick={handleEditToggle}
-                variant="primary"
-                size="sm"
-              >
+              <MobiGlasButton onClick={handleEditToggle} variant="primary" size="sm">
                 EDIT PROFILE
               </MobiGlasButton>
             )}
@@ -422,9 +407,25 @@ export default function UserProfileContent() {
                     className="absolute bottom-0 right-0 bg-[rgba(var(--mg-panel-dark),0.9)] p-1.5 rounded-bl-sm text-[rgba(var(--mg-primary),0.9)] hover:text-[rgba(var(--mg-primary),1)]"
                     title="Upload Photo"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
                     </svg>
                     <input
                       ref={fileInputRef}
@@ -449,7 +450,12 @@ export default function UserProfileContent() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="mb-4">
-                  <label htmlFor="profile-email" className="mg-subtitle text-xs mb-1 block tracking-wider">EMAIL ADDRESS</label>
+                  <label
+                    htmlFor="profile-email"
+                    className="mg-subtitle text-xs mb-1 block tracking-wider"
+                  >
+                    EMAIL ADDRESS
+                  </label>
                   {isEditing ? (
                     <input
                       type="text"
@@ -467,7 +473,12 @@ export default function UserProfileContent() {
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="profile-discord" className="mg-subtitle text-xs mb-1 block tracking-wider">DISCORD NAME</label>
+                  <label
+                    htmlFor="profile-discord"
+                    className="mg-subtitle text-xs mb-1 block tracking-wider"
+                  >
+                    DISCORD NAME
+                  </label>
                   {isEditing ? (
                     <input
                       type="text"
@@ -485,7 +496,12 @@ export default function UserProfileContent() {
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="profile-rsi" className="mg-subtitle text-xs mb-1 block tracking-wider">RSI ACCOUNT</label>
+                  <label
+                    htmlFor="profile-rsi"
+                    className="mg-subtitle text-xs mb-1 block tracking-wider"
+                  >
+                    RSI ACCOUNT
+                  </label>
                   {isEditing ? (
                     <input
                       type="text"
@@ -503,7 +519,12 @@ export default function UserProfileContent() {
                 </div>
 
                 <div className="mb-4 md:col-span-2">
-                  <label htmlFor="profile-timezone" className="mg-subtitle text-xs mb-1 block tracking-wider">TIMEZONE</label>
+                  <label
+                    htmlFor="profile-timezone"
+                    className="mg-subtitle text-xs mb-1 block tracking-wider"
+                  >
+                    TIMEZONE
+                  </label>
                   {isEditing ? (
                     <div className="flex gap-2">
                       <select
@@ -514,7 +535,7 @@ export default function UserProfileContent() {
                         className="flex-1 py-2 px-3 bg-[rgba(var(--mg-panel-dark),0.4)] rounded-sm border border-[rgba(var(--mg-primary),0.2)] focus:border-[rgba(var(--mg-primary),0.5)] focus:outline-none"
                       >
                         <option value="">Select Timezone</option>
-                        {TIMEZONE_OPTIONS.map(tz => (
+                        {TIMEZONE_OPTIONS.map((tz) => (
                           <option key={tz.value} value={tz.value}>
                             {tz.label}
                           </option>
@@ -524,7 +545,7 @@ export default function UserProfileContent() {
                         type="button"
                         onClick={() => {
                           const detectedTz = detectUserTimezone();
-                          setUserData(prev => ({ ...prev, timezone: detectedTz }));
+                          setUserData((prev) => ({ ...prev, timezone: detectedTz }));
                         }}
                         className="px-3 py-2 bg-[rgba(var(--mg-primary),0.1)] hover:bg-[rgba(var(--mg-primary),0.2)] rounded-sm text-xs tracking-wider text-[rgba(var(--mg-primary),0.9)]"
                         title="Auto-detect timezone"
@@ -534,8 +555,9 @@ export default function UserProfileContent() {
                     </div>
                   ) : (
                     <div className="mg-value py-2 px-3 bg-[rgba(var(--mg-panel-dark),0.4)] rounded-sm">
-                      {userData.timezone ?
-                        TIMEZONE_OPTIONS.find(tz => tz.value === userData.timezone)?.label || userData.timezone
+                      {userData.timezone
+                        ? TIMEZONE_OPTIONS.find((tz) => tz.value === userData.timezone)?.label ||
+                          userData.timezone
                         : 'Not set (UTC default)'}
                     </div>
                   )}
@@ -547,7 +569,12 @@ export default function UserProfileContent() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="mb-4">
-                  <label htmlFor="profile-division" className="mg-subtitle text-xs mb-1 block tracking-wider">DIVISION</label>
+                  <label
+                    htmlFor="profile-division"
+                    className="mg-subtitle text-xs mb-1 block tracking-wider"
+                  >
+                    DIVISION
+                  </label>
                   {isEditing ? (
                     <select
                       id="profile-division"
@@ -574,7 +601,12 @@ export default function UserProfileContent() {
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="profile-position" className="mg-subtitle text-xs mb-1 block tracking-wider">POSITION</label>
+                  <label
+                    htmlFor="profile-position"
+                    className="mg-subtitle text-xs mb-1 block tracking-wider"
+                  >
+                    POSITION
+                  </label>
                   {isEditing ? (
                     <input
                       type="text"
@@ -592,7 +624,12 @@ export default function UserProfileContent() {
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="profile-paygrade" className="mg-subtitle text-xs mb-1 block tracking-wider">PAY GRADE</label>
+                  <label
+                    htmlFor="profile-paygrade"
+                    className="mg-subtitle text-xs mb-1 block tracking-wider"
+                  >
+                    PAY GRADE
+                  </label>
                   {isEditing ? (
                     <select
                       id="profile-paygrade"
@@ -619,7 +656,12 @@ export default function UserProfileContent() {
 
               {/* Biography Section */}
               <div className="mt-4">
-                <label htmlFor="profile-bio" className="mg-subtitle text-xs mb-1 block tracking-wider">BIOGRAPHY</label>
+                <label
+                  htmlFor="profile-bio"
+                  className="mg-subtitle text-xs mb-1 block tracking-wider"
+                >
+                  BIOGRAPHY
+                </label>
                 {isEditing ? (
                   <textarea
                     id="profile-bio"
@@ -640,14 +682,15 @@ export default function UserProfileContent() {
 
           {session?.user.role === 'admin' && (
             <div className="mt-6 pt-6 border-t border-[rgba(var(--mg-primary),0.2)]">
-              <div className="mg-subtitle text-xs mb-2 tracking-wider text-[rgba(var(--mg-warning),0.8)]">ADMIN ACCESS</div>
-              <p className="text-sm text-[rgba(var(--mg-text),0.7)]">You have administrative privileges. Access the admin dashboard for system management.</p>
+              <div className="mg-subtitle text-xs mb-2 tracking-wider text-[rgba(var(--mg-warning),0.8)]">
+                ADMIN ACCESS
+              </div>
+              <p className="text-sm text-[rgba(var(--mg-text),0.7)]">
+                You have administrative privileges. Access the admin dashboard for system
+                management.
+              </p>
               <div className="mt-3">
-                <MobiGlasButton
-                  onClick={() => router.push('/admin')}
-                  variant="primary"
-                  size="sm"
-                >
+                <MobiGlasButton onClick={() => router.push('/admin')} variant="primary" size="sm">
                   ADMIN DASHBOARD
                 </MobiGlasButton>
               </div>
@@ -656,10 +699,7 @@ export default function UserProfileContent() {
 
           {/* Fleet Builder Section (edit mode only) */}
           {isEditing && (
-            <UserFleetBuilderWrapper
-              isEditing={isEditing}
-              onShipsChange={handleShipsChange}
-            />
+            <UserFleetBuilderWrapper isEditing={isEditing} onShipsChange={handleShipsChange} />
           )}
 
           {/* MY FLEET view-only section (read mode) */}

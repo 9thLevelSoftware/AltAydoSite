@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface User {
   id: string;
@@ -16,44 +16,62 @@ interface UserSelectorProps {
   existingParticipantIds?: string[];
 }
 
-const UserSelector: React.FC<UserSelectorProps> = ({ 
-  users, 
-  onSelectUser, 
+const UserSelector: React.FC<UserSelectorProps> = ({
+  users,
+  onSelectUser,
   isLoading = false,
-  existingParticipantIds = []
+  existingParticipantIds = [],
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close the dropdown when a pointer/mouse press lands outside the selector
+  useEffect(() => {
+    if (!isDropdownOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isDropdownOpen]);
+
   // Filter users based on search term and exclude existing participants
   useEffect(() => {
     if (!searchTerm.trim()) {
       setFilteredUsers([]);
       return;
     }
-    
+
     const lowerSearchTerm = searchTerm.toLowerCase();
     const filtered = users
-      .filter(user => 
-        !existingParticipantIds.includes(user.id) && 
-        (user.aydoHandle.toLowerCase().includes(lowerSearchTerm) || 
-         (user.division && user.division.toLowerCase().includes(lowerSearchTerm)))
+      .filter(
+        (user) =>
+          !existingParticipantIds.includes(user.id) &&
+          (user.aydoHandle.toLowerCase().includes(lowerSearchTerm) ||
+            (user.division && user.division.toLowerCase().includes(lowerSearchTerm)))
       )
       .slice(0, 10); // Limit results
-    
+
     setFilteredUsers(filtered);
   }, [searchTerm, users, existingParticipantIds]);
-  
+
   // Handle user selection
   const handleSelectUser = (userId: string) => {
     onSelectUser(userId);
     setSearchTerm('');
     setIsDropdownOpen(false);
   };
-  
+
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapperRef}>
       <div className="flex gap-2">
         <input
           type="text"
@@ -67,12 +85,9 @@ const UserSelector: React.FC<UserSelectorProps> = ({
           onFocus={() => setIsDropdownOpen(true)}
         />
       </div>
-      
+
       {isDropdownOpen && (
-        <div 
-          className="absolute z-10 w-full mt-1 bg-[rgba(var(--mg-panel-dark),0.95)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm shadow-lg max-h-60 overflow-y-auto"
-          onBlur={() => setIsDropdownOpen(false)}
-        >
+        <div className="absolute z-10 w-full mt-1 bg-[rgba(var(--mg-panel-dark),0.95)] border border-[rgba(var(--mg-primary),0.2)] rounded-sm shadow-lg max-h-60 overflow-y-auto">
           {isLoading ? (
             <div className="p-4 text-center">
               <div className="mg-loader mx-auto"></div>
@@ -80,8 +95,8 @@ const UserSelector: React.FC<UserSelectorProps> = ({
             </div>
           ) : filteredUsers.length > 0 ? (
             <ul>
-              {filteredUsers.map(user => (
-                <li 
+              {filteredUsers.map((user) => (
+                <li
                   key={user.id}
                   className="hover:bg-[rgba(var(--mg-primary),0.1)] cursor-pointer"
                   onClick={() => handleSelectUser(user.id)}
@@ -89,16 +104,15 @@ const UserSelector: React.FC<UserSelectorProps> = ({
                   <div className="p-2">
                     <div className="font-medium">{user.aydoHandle}</div>
                     <div className="text-sm mg-text-secondary">
-                      {user.role}{user.division ? ` • ${user.division}` : ''}
+                      {user.role}
+                      {user.division ? ` • ${user.division}` : ''}
                     </div>
                   </div>
                 </li>
               ))}
             </ul>
           ) : searchTerm.trim() !== '' ? (
-            <div className="p-4 mg-text-secondary text-center">
-              No matching users found
-            </div>
+            <div className="p-4 mg-text-secondary text-center">No matching users found</div>
           ) : null}
         </div>
       )}
@@ -106,4 +120,4 @@ const UserSelector: React.FC<UserSelectorProps> = ({
   );
 };
 
-export default UserSelector; 
+export default UserSelector;

@@ -18,38 +18,32 @@ export default function CornerAccents({
   color = 'primary',
   opacity = 'medium',
   withDots = false,
-  className = ''
+  className = '',
 }: CornerAccentsProps) {
   const sizeMap = {
     xs: 'w-2 h-2',
     sm: 'w-3 h-3',
     md: 'w-5 h-5',
     lg: 'w-8 h-8',
-    xl: 'w-12 h-12'
-  };
-
-  const colorMap = {
-    primary: 'border-[rgba(var(--mg-primary),var(--opacity))]',
-    secondary: 'border-[rgba(var(--mg-secondary),var(--opacity))]',
-    accent: 'border-[rgba(var(--mg-accent),var(--opacity))]',
-    success: 'border-[rgba(var(--mg-success),var(--opacity))]',
-    warning: 'border-[rgba(var(--mg-warning),var(--opacity))]',
-    danger: 'border-[rgba(var(--mg-danger),var(--opacity))]'
+    xl: 'w-12 h-12',
   };
 
   const opacityMap = {
     low: '0.4',
     medium: '0.6',
-    high: '0.8'
+    high: '0.8',
   };
 
-  const borderClasses = colorMap[color].replace('var(--opacity)', opacityMap[opacity]);
+  const rgb = `var(--mg-${color})`;
+  const alpha = opacityMap[opacity];
+  const borderColor = `rgba(${rgb}, ${alpha})`;
+  const dotColor = `rgba(${rgb}, ${alpha})`;
 
   const corners = [
     { position: 'top-0 left-0', borders: 'border-t border-l' },
     { position: 'top-0 right-0', borders: 'border-t border-r' },
     { position: 'bottom-0 left-0', borders: 'border-b border-l' },
-    { position: 'bottom-0 right-0', borders: 'border-b border-r' }
+    { position: 'bottom-0 right-0', borders: 'border-b border-r' },
   ];
 
   if (variant === 'simple') {
@@ -58,7 +52,8 @@ export default function CornerAccents({
         {corners.map((corner, index) => (
           <div
             key={index}
-            className={`absolute ${corner.position} ${sizeMap[size]} ${corner.borders} ${borderClasses} ${className}`}
+            className={`absolute ${corner.position} ${sizeMap[size]} ${corner.borders} ${className}`}
+            style={{ borderColor }}
           />
         ))}
       </>
@@ -70,10 +65,11 @@ export default function CornerAccents({
       <>
         {corners.map((corner, index) => (
           <div key={index} className={`absolute ${corner.position} ${sizeMap[size]}`}>
-            <div className={`absolute inset-0 ${corner.borders} ${borderClasses}`} />
+            <div className={`absolute inset-0 ${corner.borders}`} style={{ borderColor }} />
             {withDots && (
               <div
-                className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-[rgba(var(--mg-${color}),${opacityMap[opacity]})]`}
+                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-1 rounded-full"
+                style={{ backgroundColor: dotColor }}
               />
             )}
           </div>
@@ -88,30 +84,32 @@ export default function CornerAccents({
         {corners.map((corner, index) => (
           <motion.div
             key={index}
-            className={`absolute ${corner.position} ${sizeMap[size]} ${corner.borders} ${borderClasses}`}
+            className={`absolute ${corner.position} ${sizeMap[size]} ${corner.borders}`}
+            style={{ borderColor }}
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{
               opacity: [0.4, parseFloat(opacityMap[opacity]), 0.4],
-              scale: [0.8, 1, 0.8]
+              scale: [0.8, 1, 0.8],
             }}
             transition={{
               duration: 3,
               repeat: Infinity,
               delay: index * 0.2,
-              ease: "easeInOut"
+              ease: 'easeInOut',
             }}
           >
             {withDots && (
               <motion.div
-                className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-[rgba(var(--mg-${color}),${opacityMap[opacity]})]`}
+                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-1 rounded-full"
+                style={{ backgroundColor: dotColor }}
                 animate={{
                   opacity: [0.5, 1, 0.5],
-                  scale: [1, 1.2, 1]
+                  scale: [1, 1.2, 1],
                 }}
                 transition={{
                   duration: 2,
                   repeat: Infinity,
-                  delay: index * 0.3
+                  delay: index * 0.3,
                 }}
               />
             )}

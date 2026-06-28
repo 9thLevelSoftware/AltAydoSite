@@ -9,7 +9,7 @@ import { MobiGlasButton, ScanlineEffect, CornerAccents } from '@/components/ui/m
 interface ServicesHeroProps {
   isScanning: boolean;
   scanComplete: boolean;
-  mousePosition: { x: number; y: 0 };
+  mousePosition: { x: number; y: number };
   containerRef: React.RefObject<HTMLDivElement>;
   onStartScan: () => void;
 }
@@ -19,7 +19,7 @@ export default function ServicesHero({
   scanComplete,
   mousePosition,
   containerRef,
-  onStartScan
+  onStartScan,
 }: ServicesHeroProps) {
   // Calculate parallax movement based on mouse position
   const calculateParallax = (depth: number = 1) => {
@@ -29,8 +29,8 @@ export default function ServicesHero({
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
 
-    const moveX = (mousePosition.x - centerX) / centerX * 6 * depth;
-    const moveY = (mousePosition.y - centerY) / centerY * 4 * depth;
+    const moveX = ((mousePosition.x - centerX) / centerX) * 6 * depth;
+    const moveY = ((mousePosition.y - centerY) / centerY) * 4 * depth;
 
     return { x: moveX, y: moveY };
   };
@@ -62,12 +62,14 @@ export default function ServicesHero({
           transition={{ duration: 0.8, delay: 1 }}
           style={{
             x: calculateParallax(0.3).x,
-            y: calculateParallax(0.3).y
+            y: calculateParallax(0.3).y,
           }}
           className="text-center mb-10"
         >
           <div className="inline-block relative">
-            <h1 className="mg-title text-5xl sm:text-6xl mb-2 tracking-wider text-[rgba(var(--mg-primary),1)]">SERVICE MANIFEST</h1>
+            <h1 className="mg-title text-5xl sm:text-6xl mb-2 tracking-wider text-[rgba(var(--mg-primary),1)]">
+              SERVICE MANIFEST
+            </h1>
 
             {/* Corner elements for the title */}
             <CornerAccents size="lg" />
@@ -88,8 +90,17 @@ export default function ServicesHero({
               size="lg"
               withScanline
               leftIcon={
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               }
             >
