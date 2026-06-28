@@ -83,21 +83,18 @@ export const PYRO_SYSTEM: SystemData = {
       designation: 'Pyro III',
     },
     {
-      name: 'Pyro IV',
-      designation: 'Pyro IV (Moon of Pyro V)',
-    },
-    {
       name: 'Pyro V',
       designation: 'Pyro V',
-      moons: ['Adir', 'Ignis', 'Fairo', 'Fuego', 'Vatra', 'Vuur'],
+      // Pyro IV is a moon of Pyro V (modeled here rather than as a top-level planet)
+      moons: ['Pyro IV', 'Adir', 'Ignis', 'Fairo', 'Fuego', 'Vatra', 'Vuur'],
     },
     {
       name: 'Terminus',
       designation: 'Pyro VI',
+      // Ruin Station is the single source of truth here (orbits Terminus / Pyro VI)
       stations: ['Ruin Station'],
     },
   ],
-  stations: [{ name: 'Ruin Station', orbiting: 'Pyro VI' }],
 };
 
 // Nyx System - Unclaimed frontier
@@ -147,10 +144,15 @@ export function getLocationOptions(): LocationOption[] {
     });
 
     for (const planet of system.planets) {
-      // Add planet option
-      const planetLabel = planet.designation
-        ? `${system.name} - ${planet.designation}`
-        : `${system.name} - ${planet.name}`;
+      // Add planet option.
+      // Use planet.name as the canonical base so parent and child labels stay
+      // consistent (children below also key off planet.name). When a body has a
+      // distinct designation (e.g. Monox / "Pyro II"), surface both names rather
+      // than hiding the canonical name behind the designation.
+      const planetLabel =
+        planet.designation && planet.designation !== planet.name
+          ? `${system.name} - ${planet.name} (${planet.designation})`
+          : `${system.name} - ${planet.name}`;
 
       options.push({
         value: planetLabel,

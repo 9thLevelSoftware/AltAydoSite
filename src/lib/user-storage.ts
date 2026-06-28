@@ -9,18 +9,55 @@ import { logger } from '@/lib/logger';
 // Re-export for backward compatibility (existing consumers import from user-storage)
 export { StaleDocumentError } from './storage-errors';
 
-// State to track if we should use local storage fallback
-let usingFallback = false;
-// Flag to prevent repeated connection attempts if we know it's down
-let connectionChecked = false;
+/**
+ * Thrown when a create/update would violate a unique identity constraint
+ * (email, aydoHandle, or discordId). API routes should catch this and return
+ * 409 Conflict. This is surfaced both from the interim storage-level guard and
+ * from MongoDB duplicate-key (E11000) errors so signup races fail cleanly.
+ */
+export type DuplicateUserField = 'email' | 'aydoHandle' | 'discordId' | 'unknown';
+
+export class DuplicateUserError extends Error {
+  field: DuplicateUserField;
+  constructor(field: DuplicateUserField) {
+    super(`A user with this ${field === 'aydoHandle' ? 'handle' : field} already exists`);
+    this.name = 'DuplicateUserError';
+    this.field = field;
+  }
+}
+
+// Time-boxed fallback: instead of a permanent latch, store a timestamp until
+// which we route to local storage. After the cooldown, shouldUseFallback
+// re-probes the primary so a transient MongoDB blip does not strand the whole
+// process on local fallback for auth-critical writes.
+const FALLBACK_COOLDOWN_MS = parseInt(process.env.USER_STORAGE_FALLBACK_COOLDOWN_MS || '30000', 10);
+let fallbackUntil = 0; // epoch ms; if > Date.now() we are currently in fallback
+let manualFallback = false; // set explicitly via setFallbackStorageMode (tests/manual)
+
+function enterFallback(): void {
+  fallbackUntil = Date.now() + FALLBACK_COOLDOWN_MS;
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: number }).code === 11000;
+}
+
+/** Best-effort mapping of a MongoDB E11000 error to the violated identity field. */
+function duplicateUserErrorFromMongo(
+  error: unknown,
+  candidate?: Partial<User>
+): DuplicateUserError {
+  const message = (error as { message?: string })?.message || '';
+  if (candidate?.discordId && /discordId/i.test(message))
+    return new DuplicateUserError('discordId');
+  if (/aydoHandleLower|aydoHandle/i.test(message)) return new DuplicateUserError('aydoHandle');
+  if (/emailLower|\bemail\b/i.test(message)) return new DuplicateUserError('email');
+  return new DuplicateUserError('unknown');
+}
 
 const caseInsensitiveCollation = { locale: 'en', strength: 2 } as const;
 
-async function findUserByLegacyField(
-  db: Db,
-  field: 'email' | 'aydoHandle',
-  value: string
-) {
+async function findUserByLegacyField(db: Db, field: 'email' | 'aydoHandle', value: string) {
   return await db.collection('users').findOne(
     { [field]: value },
     {
@@ -31,17 +68,20 @@ async function findUserByLegacyField(
 }
 
 async function shouldUseFallback(): Promise<boolean> {
-  if (usingFallback) return true;
-  if (connectionChecked) return false;
+  if (manualFallback) return true;
+  if (fallbackUntil > Date.now()) return true;
 
+  // Cooldown elapsed (or never tripped) -- re-probe the primary. getDb() returns
+  // a cached connection when healthy, so this is cheap; a successful probe clears
+  // fallback automatically.
   try {
     await getDb(); // If this succeeds, MongoDB is reachable
-    connectionChecked = true;
     return false;
   } catch (error) {
-    logger.warn('MongoDB connection failed, switching to local fallback storage', { collection: 'users' });
-    usingFallback = true;
-    connectionChecked = true;
+    logger.warn('MongoDB connection failed, switching to local fallback storage', {
+      collection: 'users',
+    });
+    enterFallback();
     return true;
   }
 }
@@ -62,8 +102,12 @@ export async function getUserById(id: string): Promise<User | null> {
     if ((doc as any).__v === undefined) (doc as any).__v = 0;
     return doc as unknown as User;
   } catch (error) {
-    logger.error('MongoDB getUserById failed, trying fallback', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'users', userId: id });
-    usingFallback = true;
+    logger.error(
+      'MongoDB getUserById failed, trying fallback',
+      error instanceof Error ? error : new Error(String(error)),
+      { storage: 'MongoDB', collection: 'users', userId: id }
+    );
+    enterFallback();
     return await localStorage.getUserById(id);
   }
 }
@@ -78,10 +122,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   try {
     const db = await getDb();
     const emailLower = email.toLowerCase();
-    let doc = await db.collection('users').findOne(
-      { emailLower },
-      { projection: { _id: 0 } }
-    );
+    let doc = await db.collection('users').findOne({ emailLower }, { projection: { _id: 0 } });
 
     if (!doc) {
       // Legacy production records may predate normalized fields. Collation keeps
@@ -93,8 +134,12 @@ export async function getUserByEmail(email: string): Promise<User | null> {
     if ((doc as any).__v === undefined) (doc as any).__v = 0;
     return doc as unknown as User;
   } catch (error) {
-    logger.error('MongoDB getUserByEmail failed, trying fallback', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'users', email });
-    usingFallback = true;
+    logger.error(
+      'MongoDB getUserByEmail failed, trying fallback',
+      error instanceof Error ? error : new Error(String(error)),
+      { storage: 'MongoDB', collection: 'users', email }
+    );
+    enterFallback();
     return await localStorage.getUserByEmail(email);
   }
 }
@@ -109,10 +154,7 @@ export async function getUserByHandle(aydoHandle: string): Promise<User | null> 
   try {
     const db = await getDb();
     const aydoHandleLower = aydoHandle.toLowerCase();
-    let doc = await db.collection('users').findOne(
-      { aydoHandleLower },
-      { projection: { _id: 0 } }
-    );
+    let doc = await db.collection('users').findOne({ aydoHandleLower }, { projection: { _id: 0 } });
 
     if (!doc) {
       // Legacy production records may predate normalized fields. Collation keeps
@@ -124,15 +166,23 @@ export async function getUserByHandle(aydoHandle: string): Promise<User | null> 
     if ((doc as any).__v === undefined) (doc as any).__v = 0;
     return doc as unknown as User;
   } catch (error) {
-    logger.error('MongoDB getUserByHandle failed, trying fallback', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'users', aydoHandle });
-    usingFallback = true;
+    logger.error(
+      'MongoDB getUserByHandle failed, trying fallback',
+      error instanceof Error ? error : new Error(String(error)),
+      { storage: 'MongoDB', collection: 'users', aydoHandle }
+    );
+    enterFallback();
     return await localStorage.getUserByHandle(aydoHandle);
   }
 }
 
 export async function getUserByDiscordId(discordId: string): Promise<User | null> {
   if (await shouldUseFallback()) {
-    logger.info('Getting user by Discord ID', { storage: 'Fallback', collection: 'users', discordId });
+    logger.info('Getting user by Discord ID', {
+      storage: 'Fallback',
+      collection: 'users',
+      discordId,
+    });
     return await localStorage.getUserByDiscordId(discordId);
   }
 
@@ -144,8 +194,12 @@ export async function getUserByDiscordId(discordId: string): Promise<User | null
     if ((doc as any).__v === undefined) (doc as any).__v = 0;
     return doc as unknown as User;
   } catch (error) {
-    logger.error('MongoDB getUserByDiscordId failed, trying fallback', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'users', discordId });
-    usingFallback = true;
+    logger.error(
+      'MongoDB getUserByDiscordId failed, trying fallback',
+      error instanceof Error ? error : new Error(String(error)),
+      { storage: 'MongoDB', collection: 'users', discordId }
+    );
+    enterFallback();
     return await localStorage.getUserByDiscordId(discordId);
   }
 }
@@ -162,35 +216,120 @@ export async function createUser(user: User): Promise<User> {
   }
 
   if (await shouldUseFallback()) {
-    logger.info('Creating user', { storage: 'Fallback', collection: 'users', aydoHandle: user.aydoHandle });
+    logger.info('Creating user', {
+      storage: 'Fallback',
+      collection: 'users',
+      aydoHandle: user.aydoHandle,
+    });
+    // Mirror the duplicate guard on the local path so fallback writes stay consistent.
+    if (await localStorage.getUserByEmail(user.email)) throw new DuplicateUserError('email');
+    if (await localStorage.getUserByHandle(user.aydoHandle))
+      throw new DuplicateUserError('aydoHandle');
+    if (user.discordId && (await localStorage.getUserByDiscordId(user.discordId)))
+      throw new DuplicateUserError('discordId');
     return await localStorage.createUser(user);
   }
 
-  logger.info('Creating user', { storage: 'MongoDB', collection: 'users', aydoHandle: user.aydoHandle });
+  logger.info('Creating user', {
+    storage: 'MongoDB',
+    collection: 'users',
+    aydoHandle: user.aydoHandle,
+  });
+
+  let db: Db;
   try {
-    const db = await getDb();
-    // Ensure normalized fields
-    const userDoc = {
-      ...user,
-      email: user.email.toLowerCase(),
-      emailLower: user.email.toLowerCase(),
-      aydoHandleLower: user.aydoHandle.toLowerCase(),
-      __v: 0,
-    };
-    await db.collection('users').insertOne(userDoc);
-    logger.info('User created successfully', { storage: 'MongoDB', collection: 'users', aydoHandle: user.aydoHandle });
-    return { ...userDoc } as User;
+    db = await getDb();
   } catch (error) {
-    logger.error('MongoDB createUser failed, trying fallback', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'users', aydoHandle: user.aydoHandle });
-    usingFallback = true;
+    // Could not reach the authoritative store. Do NOT silently write an
+    // auth-critical user to local fallback in production -- fail closed so the
+    // caller can return 503 instead of reporting success on a non-canonical write.
+    enterFallback();
+    if (process.env.NODE_ENV === 'production') {
+      logger.error(
+        'MongoDB unavailable for createUser; refusing local fallback in production',
+        error instanceof Error ? error : new Error(String(error)),
+        { storage: 'MongoDB', collection: 'users', aydoHandle: user.aydoHandle }
+      );
+      throw error;
+    }
+    logger.error(
+      'MongoDB createUser connection failed, trying fallback',
+      error instanceof Error ? error : new Error(String(error)),
+      { storage: 'MongoDB', collection: 'users', aydoHandle: user.aydoHandle }
+    );
     return await localStorage.createUser(user);
   }
+
+  // Interim storage-level duplicate guard. The unique indexes (see
+  // mongo-indexes.ts) are the authoritative defense against signup races; this
+  // narrows the window and yields a clean typed error in the common case.
+  if (await getUserByEmail(user.email)) throw new DuplicateUserError('email');
+  if (await getUserByHandle(user.aydoHandle)) throw new DuplicateUserError('aydoHandle');
+  if (user.discordId && (await getUserByDiscordId(user.discordId)))
+    throw new DuplicateUserError('discordId');
+
+  // Ensure normalized fields
+  const userDoc = {
+    ...user,
+    email: user.email.toLowerCase(),
+    emailLower: user.email.toLowerCase(),
+    aydoHandleLower: user.aydoHandle.toLowerCase(),
+    __v: 0,
+  };
+
+  try {
+    await db.collection('users').insertOne(userDoc);
+  } catch (error) {
+    // Lost a race to a unique index -> surface as a conflict, never fall back.
+    if (isDuplicateKeyError(error)) {
+      throw duplicateUserErrorFromMongo(error, user);
+    }
+    // Transient primary write failure. Fail closed in production (see above).
+    enterFallback();
+    if (process.env.NODE_ENV === 'production') {
+      logger.error(
+        'MongoDB createUser failed; refusing local fallback in production',
+        error instanceof Error ? error : new Error(String(error)),
+        { storage: 'MongoDB', collection: 'users', aydoHandle: user.aydoHandle }
+      );
+      throw error;
+    }
+    logger.error(
+      'MongoDB createUser failed, trying fallback',
+      error instanceof Error ? error : new Error(String(error)),
+      { storage: 'MongoDB', collection: 'users', aydoHandle: user.aydoHandle }
+    );
+    return await localStorage.createUser(user);
+  }
+
+  logger.info('User created successfully', {
+    storage: 'MongoDB',
+    collection: 'users',
+    aydoHandle: user.aydoHandle,
+  });
+  return { ...userDoc } as User;
 }
 
-export async function updateUser(id: string, userData: Partial<User>, expectedVersion?: number): Promise<User | null> {
+export async function updateUser(
+  id: string,
+  userData: Partial<User>,
+  expectedVersion?: number
+): Promise<User | null> {
+  // Normalize identity fields so the lowercase lookup indexes stay in sync with
+  // the canonical values whenever email/handle change. Applied up front so both
+  // the MongoDB and local-fallback paths persist consistent data.
+  const normalizedData: Partial<User> & Record<string, unknown> = { ...userData };
+  if (normalizedData.email !== undefined) {
+    normalizedData.email = normalizedData.email.toLowerCase();
+    normalizedData.emailLower = normalizedData.email.toLowerCase();
+  }
+  if (normalizedData.aydoHandle !== undefined) {
+    normalizedData.aydoHandleLower = normalizedData.aydoHandle.toLowerCase();
+  }
+
   if (await shouldUseFallback()) {
     logger.info('Updating user', { storage: 'Fallback', collection: 'users', userId: id });
-    return await localStorage.updateUser(id, userData);
+    return await localStorage.updateUser(id, normalizedData);
   }
 
   logger.info('Updating user', { storage: 'MongoDB', collection: 'users', userId: id });
@@ -211,7 +350,7 @@ export async function updateUser(id: string, userData: Partial<User>, expectedVe
     }
 
     // Remove fields that should not be $set directly
-    const { id: _ignoreId, __v: _ignoreV, ...updateFields } = userData as any;
+    const { id: _ignoreId, __v: _ignoreV, ...updateFields } = normalizedData as any;
 
     const result = await db.collection('users').findOneAndUpdate(
       { id, ...versionFilter },
@@ -238,9 +377,18 @@ export async function updateUser(id: string, userData: Partial<User>, expectedVe
     if (error instanceof StaleDocumentError) {
       throw error; // Re-throw StaleDocumentError -- do NOT fall back to local storage for version conflicts
     }
-    logger.error('MongoDB updateUser failed, trying fallback', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'users', userId: id });
-    usingFallback = true;
-    return await localStorage.updateUser(id, userData);
+    // A unique-index violation (e.g. changing email/handle to one already taken)
+    // is a user-facing conflict, not a reason to fall back to local storage.
+    if (isDuplicateKeyError(error)) {
+      throw duplicateUserErrorFromMongo(error, normalizedData);
+    }
+    logger.error(
+      'MongoDB updateUser failed, trying fallback',
+      error instanceof Error ? error : new Error(String(error)),
+      { storage: 'MongoDB', collection: 'users', userId: id }
+    );
+    enterFallback();
+    return await localStorage.updateUser(id, normalizedData);
   }
 }
 
@@ -256,8 +404,12 @@ export async function deleteUser(id: string): Promise<void> {
     const db = await getDb();
     await db.collection('users').deleteOne({ id });
   } catch (error) {
-    logger.error('MongoDB deleteUser failed, trying fallback', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'users', userId: id });
-    usingFallback = true;
+    logger.error(
+      'MongoDB deleteUser failed, trying fallback',
+      error instanceof Error ? error : new Error(String(error)),
+      { storage: 'MongoDB', collection: 'users', userId: id }
+    );
+    enterFallback();
     await localStorage.deleteUser(id);
   }
 }
@@ -271,14 +423,21 @@ export async function getAllUsers(): Promise<User[]> {
   logger.info('Getting all users', { storage: 'MongoDB', collection: 'users' });
   try {
     const db = await getDb();
-    const docs = await db.collection('users').find({}, { projection: { _id: 0 } }).toArray();
-    return docs.map(doc => {
+    const docs = await db
+      .collection('users')
+      .find({}, { projection: { _id: 0 } })
+      .toArray();
+    return docs.map((doc) => {
       if ((doc as any).__v === undefined) (doc as any).__v = 0;
       return doc as unknown as User;
     });
   } catch (error) {
-    logger.error('MongoDB getAllUsers failed, trying fallback', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'users' });
-    usingFallback = true;
+    logger.error(
+      'MongoDB getAllUsers failed, trying fallback',
+      error instanceof Error ? error : new Error(String(error)),
+      { storage: 'MongoDB', collection: 'users' }
+    );
+    enterFallback();
     return await localStorage.getAllUsers();
   }
 }
@@ -290,7 +449,10 @@ export interface PaginatedUsersResult {
   pageSize: number;
 }
 
-export async function getUsersPaginated(page: number = 1, pageSize: number = 25): Promise<PaginatedUsersResult> {
+export async function getUsersPaginated(
+  page: number = 1,
+  pageSize: number = 25
+): Promise<PaginatedUsersResult> {
   if (await shouldUseFallback()) {
     logger.info('Getting paginated users', { storage: 'Fallback', collection: 'users' });
     const allUsers = await localStorage.getAllUsers();
@@ -301,27 +463,37 @@ export async function getUsersPaginated(page: number = 1, pageSize: number = 25)
     return { users, total, page, pageSize };
   }
 
-  logger.info('Getting paginated users', { storage: 'MongoDB', collection: 'users', page, pageSize });
+  logger.info('Getting paginated users', {
+    storage: 'MongoDB',
+    collection: 'users',
+    page,
+    pageSize,
+  });
   try {
     const db = await getDb();
     const query = {};
     const total = await db.collection('users').countDocuments(query);
-    const docs = await db.collection('users')
+    const docs = await db
+      .collection('users')
       .find(query, { projection: { _id: 0, passwordHash: 0 } })
       .sort({ aydoHandle: 1 })
       .skip((page - 1) * pageSize)
       .limit(pageSize)
       .toArray();
 
-    const users = docs.map(doc => {
+    const users = docs.map((doc) => {
       if ((doc as any).__v === undefined) (doc as any).__v = 0;
       return doc as unknown as User;
     });
 
     return { users, total, page, pageSize };
   } catch (error) {
-    logger.error('MongoDB getUsersPaginated failed, trying fallback', error instanceof Error ? error : new Error(String(error)), { storage: 'MongoDB', collection: 'users' });
-    usingFallback = true;
+    logger.error(
+      'MongoDB getUsersPaginated failed, trying fallback',
+      error instanceof Error ? error : new Error(String(error)),
+      { storage: 'MongoDB', collection: 'users' }
+    );
+    enterFallback();
     const allUsers = await localStorage.getAllUsers();
     allUsers.sort((a, b) => (a.aydoHandle || '').localeCompare(b.aydoHandle || ''));
     const total = allUsers.length;
@@ -332,11 +504,12 @@ export async function getUsersPaginated(page: number = 1, pageSize: number = 25)
 }
 
 export function isUsingFallbackStorage(): boolean {
-  return usingFallback;
+  return manualFallback || fallbackUntil > Date.now();
 }
 
 export function setFallbackStorageMode(useLocalStorage: boolean) {
   logger.info('Setting fallback storage mode', { collection: 'users', useLocalStorage });
-  usingFallback = useLocalStorage;
-  connectionChecked = true; // Prevent auto-recheck if manually set
+  manualFallback = useLocalStorage;
+  // Clear any time-boxed fallback so an explicit "off" re-enables the primary.
+  if (!useLocalStorage) fallbackUntil = 0;
 }

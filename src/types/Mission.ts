@@ -1,7 +1,22 @@
-export type MissionStatus = 'Planning' | 'Briefing' | 'In Progress' | 'Debriefing' | 'Completed' | 'Archived' | 'Cancelled';
+export type MissionStatus =
+  | 'Planning'
+  | 'Briefing'
+  | 'In Progress'
+  | 'Debriefing'
+  | 'Completed'
+  | 'Archived'
+  | 'Cancelled';
 
-export type MissionType = 'Cargo Haul' | 'Salvage Operation' | 'Bounty Hunting' | 'Exploration' | 
-  'Reconnaissance' | 'Medical Support' | 'Combat Patrol' | 'Escort Duty' | 'Mining Expedition';
+export type MissionType =
+  | 'Cargo Haul'
+  | 'Salvage Operation'
+  | 'Bounty Hunting'
+  | 'Exploration'
+  | 'Reconnaissance'
+  | 'Medical Support'
+  | 'Combat Patrol'
+  | 'Escort Duty'
+  | 'Mining Expedition';
 
 export interface MissionParticipant {
   userId: string;
@@ -10,7 +25,7 @@ export interface MissionParticipant {
   shipName?: string;
   shipType?: string;
   manufacturer?: string;
-  fleetyardsId?: string;      // FleetYards UUID (optional -- not all participants have ships)
+  fleetyardsId?: string; // FleetYards UUID (optional -- not all participants have ships)
   image?: string;
   crewRequirement?: number;
   isGroundSupport?: boolean;
@@ -34,4 +49,6 @@ export interface Mission {
   updatedAt: string; // ISO date string
 }
 
-export interface MissionResponse extends Mission {} 
+export interface MissionResponse extends Mission {
+  version?: number; // Optimistic-locking version (maps from MongoDB __v); used for expectedVersion checks
+}

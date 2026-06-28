@@ -11,26 +11,28 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
-// Email configuration
-const emailConfig = {
-  host: process.env.EMAIL_HOST,
-  port: parseInt(process.env.EMAIL_PORT || '587'),
-  secure: process.env.EMAIL_SECURE === 'true',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-};
-
 // Create a transporter
+// Build the email configuration lazily so that process.env is read at call
+// time. This keeps runtime callers correct and ensures scripts that load
+// .env.local after importing this module still pick up the right values.
 const createTransporter = () => {
+  const emailConfig = {
+    host: process.env.EMAIL_HOST,
+    port: parseInt(process.env.EMAIL_PORT || '587'),
+    secure: process.env.EMAIL_SECURE === 'true',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+  };
+
   return nodemailer.createTransport(emailConfig);
 };
 
 // Send a password reset email
 export async function sendPasswordResetEmail(
-  email: string, 
-  resetToken: string, 
+  email: string,
+  resetToken: string,
   aydoHandle: string
 ): Promise<boolean> {
   try {
@@ -74,7 +76,9 @@ export async function sendPasswordResetEmail(
     logger.info('Password reset email sent', { module: 'email', messageId: info.messageId });
     return true;
   } catch (error) {
-    logger.error('Error sending password reset email', error instanceof Error ? error : undefined, { module: 'email' });
+    logger.error('Error sending password reset email', error instanceof Error ? error : undefined, {
+      module: 'email',
+    });
     return false;
   }
 }
@@ -88,7 +92,8 @@ export async function sendContactFormEmail(
 ): Promise<boolean> {
   try {
     const transporter = createTransporter();
-    const recipientEmail = process.env.CONTACT_EMAIL || process.env.EMAIL_USER || 'aydocorp@gmail.com';
+    const recipientEmail =
+      process.env.CONTACT_EMAIL || process.env.EMAIL_USER || 'aydocorp@gmail.com';
 
     const mailOptions = {
       from: `"AydoCorp Contact Form" <${process.env.EMAIL_USER}>`,
@@ -129,7 +134,9 @@ ${escapeHtml(message)}
     logger.info('Contact form email sent', { module: 'email', messageId: info.messageId });
     return true;
   } catch (error) {
-    logger.error('Error sending contact form email', error instanceof Error ? error : undefined, { module: 'email' });
+    logger.error('Error sending contact form email', error instanceof Error ? error : undefined, {
+      module: 'email',
+    });
     return false;
   }
 }
@@ -141,7 +148,9 @@ export async function verifyEmailConfig(): Promise<boolean> {
     await transporter.verify();
     return true;
   } catch (error) {
-    logger.error('Email configuration error', error instanceof Error ? error : undefined, { module: 'email' });
+    logger.error('Email configuration error', error instanceof Error ? error : undefined, {
+      module: 'email',
+    });
     return false;
   }
-} 
+}

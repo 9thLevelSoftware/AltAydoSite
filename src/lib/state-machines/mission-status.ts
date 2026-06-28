@@ -18,15 +18,16 @@ import { MissionStatus } from '@/types/Mission';
  * - Archived: Terminal state, no transitions
  * - Cancelled: Can be restored to Planning
  */
-export const MISSION_STATUS_TRANSITIONS: Record<MissionStatus, MissionStatus[]> = {
-  'Planning': ['Briefing', 'Cancelled'],
-  'Briefing': ['In Progress', 'Planning', 'Cancelled'],
-  'In Progress': ['Debriefing', 'Completed', 'Cancelled'],
-  'Debriefing': ['Completed', 'In Progress'],
-  'Completed': ['Archived'],
-  'Archived': [],
-  'Cancelled': ['Planning']
-};
+export const MISSION_STATUS_TRANSITIONS: Record<MissionStatus, readonly MissionStatus[]> =
+  Object.freeze({
+    Planning: Object.freeze(['Briefing', 'Cancelled']),
+    Briefing: Object.freeze(['In Progress', 'Planning', 'Cancelled']),
+    'In Progress': Object.freeze(['Debriefing', 'Completed', 'Cancelled']),
+    Debriefing: Object.freeze(['Completed', 'In Progress']),
+    Completed: Object.freeze(['Archived']),
+    Archived: Object.freeze([]),
+    Cancelled: Object.freeze(['Planning']),
+  } as Record<MissionStatus, readonly MissionStatus[]>);
 
 /**
  * Check if a status transition is valid.
@@ -48,5 +49,5 @@ export function isValidMissionTransition(from: MissionStatus, to: MissionStatus)
  * @returns Array of valid target statuses (may be empty for terminal states)
  */
 export function getValidTransitions(from: MissionStatus): MissionStatus[] {
-  return MISSION_STATUS_TRANSITIONS[from] || [];
+  return [...(MISSION_STATUS_TRANSITIONS[from] ?? [])];
 }

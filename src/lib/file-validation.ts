@@ -11,12 +11,7 @@ import { logger } from '@/lib/logger';
 /** Maximum allowed image upload size in bytes (5 MB). */
 export const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
-const ALLOWED_IMAGE_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-]);
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
 export { ALLOWED_IMAGE_TYPES };
 
@@ -37,6 +32,11 @@ export async function validateImageBuffer(
   buffer: Buffer,
   declaredType: string
 ): Promise<ValidationResult> {
+  // Enforce the exported size limit (defense-in-depth alongside route-level body limits)
+  if (buffer.length > MAX_IMAGE_SIZE) {
+    return { valid: false, error: 'File exceeds maximum size' };
+  }
+
   // Dynamic import required: file-type v19+ is ESM-only
   const { fileTypeFromBuffer } = await import('file-type');
   const detected = await fileTypeFromBuffer(buffer);

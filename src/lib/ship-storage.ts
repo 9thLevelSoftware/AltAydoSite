@@ -23,6 +23,14 @@ import { randomUUID } from 'crypto';
 /** UUID v4 pattern for distinguishing FleetYards UUIDs from slugs */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Defensive cap on regex-fallback search length to avoid pathological inputs */
+const MAX_SEARCH_LENGTH = 100;
+
+/** Escape a user-supplied string for safe use as a literal inside a RegExp. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Get the ships collection from the database.
  */
@@ -112,11 +120,21 @@ export async function upsertShips(
     const updatedShips = result.modifiedCount;
     const unchangedShips = result.matchedCount - result.modifiedCount;
 
-    logger.info('Bulk upsert complete', { storage: 'MongoDB', collection: 'ships', newShips, updatedShips, unchangedShips });
+    logger.info('Bulk upsert complete', {
+      storage: 'MongoDB',
+      collection: 'ships',
+      newShips,
+      updatedShips,
+      unchangedShips,
+    });
 
     return { newShips, updatedShips, unchangedShips };
   } catch (bulkError) {
-    logger.error('bulkWrite failed, falling back to individual upserts', bulkError instanceof Error ? bulkError : new Error(String(bulkError)), { collection: 'ships' });
+    logger.error(
+      'bulkWrite failed, falling back to individual upserts',
+      bulkError instanceof Error ? bulkError : new Error(String(bulkError)),
+      { collection: 'ships' }
+    );
 
     // Fallback: individual upserts with per-document error handling
     let newShips = 0;
@@ -144,15 +162,29 @@ export async function upsertShips(
         }
       } catch (docError) {
         errorCount++;
-        logger.error('Error upserting ship', docError instanceof Error ? docError : new Error(String(docError)), { collection: 'ships', fleetyardsId: ship.fleetyardsId, shipName: ship.name });
+        logger.error(
+          'Error upserting ship',
+          docError instanceof Error ? docError : new Error(String(docError)),
+          { collection: 'ships', fleetyardsId: ship.fleetyardsId, shipName: ship.name }
+        );
       }
     }
 
     if (errorCount > 0) {
-      logger.error('Individual upsert completed with errors', undefined, { collection: 'ships', errorCount, totalShips: ships.length });
+      logger.error('Individual upsert completed with errors', undefined, {
+        collection: 'ships',
+        errorCount,
+        totalShips: ships.length,
+      });
     }
 
-    logger.info('Individual upsert complete', { storage: 'MongoDB', collection: 'ships', newShips, updatedShips, unchangedShips });
+    logger.info('Individual upsert complete', {
+      storage: 'MongoDB',
+      collection: 'ships',
+      newShips,
+      updatedShips,
+      unchangedShips,
+    });
 
     return { newShips, updatedShips, unchangedShips };
   }
@@ -178,7 +210,11 @@ export async function getShipTimestamps(): Promise<Map<string, string>> {
     }
     return map;
   } catch (error) {
-    logger.error('Error in getShipTimestamps', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
+    logger.error(
+      'Error in getShipTimestamps',
+      error instanceof Error ? error : new Error(String(error)),
+      { collection: 'ships' }
+    );
     return new Map();
   }
 }
@@ -214,7 +250,11 @@ export async function getShipSyncStates(): Promise<Map<string, ShipSyncState>> {
     }
     return map;
   } catch (error) {
-    logger.error('Error in getShipSyncStates', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
+    logger.error(
+      'Error in getShipSyncStates',
+      error instanceof Error ? error : new Error(String(error)),
+      { collection: 'ships' }
+    );
     return new Map();
   }
 }
@@ -228,7 +268,11 @@ export async function getShipCount(): Promise<number> {
     const shipsCollection = await getShipsCollection();
     return await shipsCollection.countDocuments({});
   } catch (error) {
-    logger.error('Error in getShipCount', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
+    logger.error(
+      'Error in getShipCount',
+      error instanceof Error ? error : new Error(String(error)),
+      { collection: 'ships' }
+    );
     return 0;
   }
 }
@@ -236,18 +280,17 @@ export async function getShipCount(): Promise<number> {
 /**
  * Find a ship by its FleetYards UUID.
  */
-export async function getShipByFleetyardsId(
-  fleetyardsId: string
-): Promise<ShipDocument | null> {
+export async function getShipByFleetyardsId(fleetyardsId: string): Promise<ShipDocument | null> {
   try {
     const shipsCollection = await getShipsCollection();
-    const doc = await shipsCollection.findOne(
-      { fleetyardsId },
-      { projection: { _id: 0 } }
-    );
+    const doc = await shipsCollection.findOne({ fleetyardsId }, { projection: { _id: 0 } });
     return doc as ShipDocument | null;
   } catch (error) {
-    logger.error('Error in getShipByFleetyardsId', error instanceof Error ? error : new Error(String(error)), { collection: 'ships', fleetyardsId });
+    logger.error(
+      'Error in getShipByFleetyardsId',
+      error instanceof Error ? error : new Error(String(error)),
+      { collection: 'ships', fleetyardsId }
+    );
     return null;
   }
 }
@@ -258,13 +301,14 @@ export async function getShipByFleetyardsId(
 export async function getShipBySlug(slug: string): Promise<ShipDocument | null> {
   try {
     const shipsCollection = await getShipsCollection();
-    const doc = await shipsCollection.findOne(
-      { slug },
-      { projection: { _id: 0 } }
-    );
+    const doc = await shipsCollection.findOne({ slug }, { projection: { _id: 0 } });
     return doc as ShipDocument | null;
   } catch (error) {
-    logger.error('Error in getShipBySlug', error instanceof Error ? error : new Error(String(error)), { collection: 'ships', slug });
+    logger.error(
+      'Error in getShipBySlug',
+      error instanceof Error ? error : new Error(String(error)),
+      { collection: 'ships', slug }
+    );
     return null;
   }
 }
@@ -277,22 +321,34 @@ export async function getShipBySlug(slug: string): Promise<ShipDocument | null> 
  * Save a sync status audit record. This is an append-only log --
  * each sync run creates a new document, never updates an existing one.
  */
-export async function saveSyncStatus(
-  status: Omit<SyncStatusDocument, '_id'>
-): Promise<void> {
+export async function saveSyncStatus(status: Omit<SyncStatusDocument, '_id'>): Promise<void> {
   try {
     const syncStatusCollection = await getSyncStatusCollection();
     await syncStatusCollection.insertOne(status);
-    logger.info('Sync status saved', { storage: 'MongoDB', collection: 'sync-status', status: status.status, syncVersion: status.syncVersion });
+    logger.info('Sync status saved', {
+      storage: 'MongoDB',
+      collection: 'sync-status',
+      status: status.status,
+      syncVersion: status.syncVersion,
+    });
   } catch (error) {
-    logger.error('Error in saveSyncStatus', error instanceof Error ? error : new Error(String(error)), { collection: 'sync-status' });
+    logger.error(
+      'Error in saveSyncStatus',
+      error instanceof Error ? error : new Error(String(error)),
+      { collection: 'sync-status' }
+    );
     throw error;
   }
 }
 
 /**
  * Retrieve the most recent sync status record.
- * Returns null if no sync has ever been recorded.
+ *
+ * Returns null only when no sync has ever been recorded (genuinely missing
+ * document). A read failure is rethrown so callers can distinguish "no sync
+ * has run yet" from "the storage read failed" -- the sync-status route turns a
+ * thrown error into a 500 rather than reporting a healthy-looking 'unknown'
+ * state.
  */
 export async function getLatestSyncStatus(): Promise<SyncStatusDocument | null> {
   try {
@@ -303,8 +359,12 @@ export async function getLatestSyncStatus(): Promise<SyncStatusDocument | null> 
     );
     return doc as SyncStatusDocument | null;
   } catch (error) {
-    logger.error('Error in getLatestSyncStatus', error instanceof Error ? error : new Error(String(error)), { collection: 'sync-status' });
-    return null;
+    logger.error(
+      'Error in getLatestSyncStatus',
+      error instanceof Error ? error : new Error(String(error)),
+      { collection: 'sync-status' }
+    );
+    throw error;
   }
 }
 
@@ -319,7 +379,9 @@ export async function getLatestSyncStatus(): Promise<SyncStatusDocument | null> 
  * running overlapping FleetYards/R2 jobs. Expiry makes it self-healing if the
  * process dies mid-sync.
  */
-export async function acquireShipSyncLock(ttlMs = 2 * 60 * 60 * 1000): Promise<AcquiredSyncLock | null> {
+export async function acquireShipSyncLock(
+  ttlMs = 2 * 60 * 60 * 1000
+): Promise<AcquiredSyncLock | null> {
   const syncLocksCollection = await getSyncLocksCollection();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + ttlMs);
@@ -329,10 +391,7 @@ export async function acquireShipSyncLock(ttlMs = 2 * 60 * 60 * 1000): Promise<A
   const updateResult = await syncLocksCollection.updateOne(
     {
       _id: lockId,
-      $or: [
-        { expiresAt: { $lte: now } },
-        { expiresAt: { $exists: false } },
-      ],
+      $or: [{ expiresAt: { $lte: now } }, { expiresAt: { $exists: false } }],
     },
     {
       $set: {
@@ -451,14 +510,14 @@ export async function findShips(options: ShipQueryOptions): Promise<ShipQueryRes
   }
 
   // Sort and projection depend on whether we are doing a text search
-  const sort: Sort = search
-    ? { score: { $meta: 'textScore' } }
-    : { name: 1 };
+  const sort: Sort = search ? { score: { $meta: 'textScore' } } : { name: 1 };
   // Keep full ship documents in search responses; projecting only `score`
   // would strip fields needed by UI renderers (name, manufacturer, etc.).
   const projection: Record<string, unknown> = { _id: 0 };
 
-  const skip = (page - 1) * pageSize;
+  // Bound skip defensively so a malformed/huge page never produces a negative
+  // or absurd offset, even if upstream validation is bypassed.
+  const skip = Math.max(0, (page - 1) * pageSize);
 
   try {
     const [items, total] = await Promise.all([
@@ -482,11 +541,19 @@ export async function findShips(options: ShipQueryOptions): Promise<ShipQueryRes
     // If the $text index is missing, the $text query will fail.
     // Fall back to a $regex search on the name field.
     if (search) {
-      logger.error('$text query failed, falling back to $regex', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
+      logger.error(
+        '$text query failed, falling back to $regex',
+        error instanceof Error ? error : new Error(String(error)),
+        { collection: 'ships' }
+      );
 
-      // Rebuild filter replacing $text with $regex on name
+      // Rebuild filter replacing $text with a $regex on name. The search text
+      // is escaped so user input is treated as a literal substring rather than
+      // an arbitrary (and potentially catastrophic) regular expression, and is
+      // length-capped to avoid pathological patterns.
       delete filter.$text;
-      filter.name = { $regex: search, $options: 'i' };
+      const safeSearch = escapeRegExp(search.slice(0, MAX_SEARCH_LENGTH));
+      filter.name = { $regex: safeSearch, $options: 'i' };
 
       const fallbackSort = { name: 1 as const };
       const fallbackProjection: Record<string, unknown> = { _id: 0 };
@@ -511,7 +578,9 @@ export async function findShips(options: ShipQueryOptions): Promise<ShipQueryRes
     }
 
     // Non-search query failure -- rethrow
-    logger.error('Error in findShips', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
+    logger.error('Error in findShips', error instanceof Error ? error : new Error(String(error)), {
+      collection: 'ships',
+    });
     throw error;
   }
 }
@@ -533,7 +602,10 @@ export async function getShipByIdOrSlug(idOrSlug: string): Promise<ShipDocument 
  * Retrieve multiple ships by an array of FleetYards UUIDs in a single
  * database round-trip using $in.
  *
- * Returns an empty array if the input is empty or on failure.
+ * Returns an empty array only for genuinely empty input. A database failure is
+ * rethrown so callers can distinguish "no matching ships" from "lookup failed"
+ * (the batch route turns a thrown error into a 500 and avoids caching an empty
+ * result as if it were authoritative).
  */
 export async function getShipsByFleetyardsIds(ids: string[]): Promise<ShipDocument[]> {
   if (ids.length === 0) {
@@ -543,15 +615,16 @@ export async function getShipsByFleetyardsIds(ids: string[]): Promise<ShipDocume
   try {
     const shipsCollection = await getShipsCollection();
     const docs = await shipsCollection
-      .find(
-        { fleetyardsId: { $in: ids } },
-        { projection: { _id: 0 } }
-      )
+      .find({ fleetyardsId: { $in: ids } }, { projection: { _id: 0 } })
       .toArray();
     return docs as ShipDocument[];
   } catch (error) {
-    logger.error('Error in getShipsByFleetyardsIds', error instanceof Error ? error : new Error(String(error)), { collection: 'ships', idCount: ids.length });
-    return [];
+    logger.error(
+      'Error in getShipsByFleetyardsIds',
+      error instanceof Error ? error : new Error(String(error)),
+      { collection: 'ships', idCount: ids.length }
+    );
+    throw error;
   }
 }
 
@@ -559,7 +632,9 @@ export async function getShipsByFleetyardsIds(ids: string[]): Promise<ShipDocume
  * Aggregate distinct manufacturers from the ships collection with ship counts.
  *
  * Returns an alphabetically sorted list of manufacturers, each with their
- * name, code, slug, and the number of ships they produce.
+ * name, code, slug, and the number of ships they produce. An empty array means
+ * the collection is genuinely empty; a database failure is rethrown so the
+ * route returns a 500 instead of caching an empty list as authoritative.
  */
 export async function getManufacturers(): Promise<ManufacturerInfo[]> {
   try {
@@ -591,7 +666,11 @@ export async function getManufacturers(): Promise<ManufacturerInfo[]> {
       .toArray();
     return results as ManufacturerInfo[];
   } catch (error) {
-    logger.error('Error in getManufacturers', error instanceof Error ? error : new Error(String(error)), { collection: 'ships' });
-    return [];
+    logger.error(
+      'Error in getManufacturers',
+      error instanceof Error ? error : new Error(String(error)),
+      { collection: 'ships' }
+    );
+    throw error;
   }
 }

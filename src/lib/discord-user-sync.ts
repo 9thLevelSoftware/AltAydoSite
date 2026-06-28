@@ -9,7 +9,11 @@ import { parseDiscordRoles } from '@/lib/discord-oauth';
 /**
  * Fetch with automatic retry on rate limit (429)
  */
-async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const response = await fetch(url, options);
 
@@ -25,7 +29,7 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
         maxRetries,
       });
 
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
       continue;
     }
 
@@ -85,7 +89,7 @@ async function fetchAllGuildMembers(guildId: string): Promise<DiscordGuildMember
   }
 
   logger.info(`Fetching all members from Discord guild`, { module: 'discord-sync', guildId });
-  
+
   const members: DiscordGuildMember[] = [];
   let after = '0';
   let hasMore = true;
@@ -96,7 +100,7 @@ async function fetchAllGuildMembers(guildId: string): Promise<DiscordGuildMember
       `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000&after=${after}`,
       {
         headers: {
-          'Authorization': `Bot ${botToken}`,
+          Authorization: `Bot ${botToken}`,
           'Content-Type': 'application/json',
         },
       }
@@ -115,10 +119,16 @@ async function fetchAllGuildMembers(guildId: string): Promise<DiscordGuildMember
       after = batch[batch.length - 1].user.id;
     }
 
-    logger.info(`Fetched Discord members batch`, { module: 'discord-sync', memberCount: members.length });
+    logger.info(`Fetched Discord members batch`, {
+      module: 'discord-sync',
+      memberCount: members.length,
+    });
   }
 
-  logger.info(`Total Discord members fetched`, { module: 'discord-sync', totalMembers: members.length });
+  logger.info(`Total Discord members fetched`, {
+    module: 'discord-sync',
+    totalMembers: members.length,
+  });
   return members;
 }
 
@@ -131,15 +141,12 @@ async function fetchGuildRoles(guildId: string): Promise<DiscordRole[]> {
     throw new Error('Discord bot token not configured');
   }
 
-  const response = await fetchWithRetry(
-    `https://discord.com/api/v10/guilds/${guildId}/roles`,
-    {
-      headers: {
-        'Authorization': `Bot ${botToken}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+  const response = await fetchWithRetry(`https://discord.com/api/v10/guilds/${guildId}/roles`, {
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch guild roles: ${response.status} ${response.statusText}`);
@@ -171,7 +178,7 @@ function matchUsersWithDiscordMembers(
 
     // First, try to match by stored Discord ID (most reliable)
     if (user.discordId) {
-      match = discordMembers.find(member => member.user.id === user.discordId) || null;
+      match = discordMembers.find((member) => member.user.id === user.discordId) || null;
       if (match) {
         matchedBy = 'discordId';
       }
@@ -180,9 +187,10 @@ function matchUsersWithDiscordMembers(
     // If no Discord ID match, try multiple matching strategies
     if (!match && user.discordName) {
       // First try exact match with stored discordName (username#discriminator format)
-      match = discordMembers.find(member => 
-        `${member.user.username}#${member.user.discriminator}` === user.discordName
-      ) || null;
+      match =
+        discordMembers.find(
+          (member) => `${member.user.username}#${member.user.discriminator}` === user.discordName
+        ) || null;
       if (match) {
         matchedBy = 'discordName';
       }
@@ -190,9 +198,10 @@ function matchUsersWithDiscordMembers(
       // If no exact match, try matching just the username part (before #)
       if (!match) {
         const storedUsername = user.discordName.split('#')[0];
-        match = discordMembers.find(member => 
-          member.user.username.toLowerCase() === storedUsername.toLowerCase()
-        ) || null;
+        match =
+          discordMembers.find(
+            (member) => member.user.username.toLowerCase() === storedUsername.toLowerCase()
+          ) || null;
         if (match) {
           matchedBy = 'discordNamePartial';
         }
@@ -201,9 +210,10 @@ function matchUsersWithDiscordMembers(
 
     // Try to match AydoCorp handle with Discord username
     if (!match && user.aydoHandle) {
-      match = discordMembers.find(member => 
-        member.user.username.toLowerCase() === user.aydoHandle.toLowerCase()
-      ) || null;
+      match =
+        discordMembers.find(
+          (member) => member.user.username.toLowerCase() === user.aydoHandle.toLowerCase()
+        ) || null;
       if (match) {
         matchedBy = 'aydoHandleUsername';
       }
@@ -211,48 +221,77 @@ function matchUsersWithDiscordMembers(
 
     // Try to match AydoCorp handle with Discord nickname
     if (!match && user.aydoHandle) {
-      match = discordMembers.find(member => 
-        member.nick?.toLowerCase() === user.aydoHandle.toLowerCase()
-      ) || null;
+      match =
+        discordMembers.find(
+          (member) => member.nick?.toLowerCase() === user.aydoHandle.toLowerCase()
+        ) || null;
       if (match) {
         matchedBy = 'aydoHandleNickname';
       }
     }
 
-    // Try fuzzy matching - remove common prefixes/suffixes and special characters
+    // Try fuzzy matching - remove common prefixes/suffixes and special characters.
+    // Fuzzy matching is not based on a stable ID, so it is only safe to auto-link
+    // when exactly ONE member matches. If several members collapse to the same
+    // cleaned handle, the match is ambiguous: skip and flag for manual review
+    // rather than linking to an arbitrary first hit.
     if (!match && user.aydoHandle) {
-      const cleanHandle = user.aydoHandle.toLowerCase()
+      const cleanHandle = user.aydoHandle
+        .toLowerCase()
         .replace(/[\[\](){}]/g, '') // Remove brackets and parentheses
         .replace(/[_-]/g, '') // Remove underscores and hyphens
         .trim();
 
-      match = discordMembers.find(member => {
-        const cleanUsername = member.user.username.toLowerCase()
+      const fuzzyCandidates = discordMembers.filter((member) => {
+        const cleanUsername = member.user.username
+          .toLowerCase()
           .replace(/[\[\](){}]/g, '')
           .replace(/[_-]/g, '')
           .trim();
-        const cleanNick = member.nick?.toLowerCase()
+        const cleanNick = member.nick
+          ?.toLowerCase()
           .replace(/[\[\](){}]/g, '')
           .replace(/[_-]/g, '')
           .trim();
 
         return cleanUsername === cleanHandle || cleanNick === cleanHandle;
-      }) || null;
-      
-      if (match) {
+      });
+
+      if (fuzzyCandidates.length === 1) {
+        match = fuzzyCandidates[0];
         matchedBy = 'fuzzyMatch';
+      } else if (fuzzyCandidates.length > 1) {
+        logger.warn(`Skipping ambiguous fuzzy Discord match; multiple candidates`, {
+          module: 'discord-sync',
+          aydoHandle: user.aydoHandle,
+          candidateCount: fuzzyCandidates.length,
+          candidates: fuzzyCandidates.map((m) => `${m.user.username}#${m.user.discriminator}`),
+        });
       }
     }
 
-    // Last resort: check if aydoHandle is contained within Discord username or nickname
+    // Last resort: check if aydoHandle is contained within Discord username or
+    // nickname. This substring match is the weakest signal, so likewise only
+    // auto-link when exactly ONE member matches; never persist a discordId from
+    // a non-unique substring match.
     if (!match && user.aydoHandle && user.aydoHandle.length > 3) {
       const handleLower = user.aydoHandle.toLowerCase();
-      match = discordMembers.find(member => 
-        member.user.username.toLowerCase().includes(handleLower) ||
-        member.nick?.toLowerCase().includes(handleLower)
-      ) || null;
-      if (match) {
+      const containsCandidates = discordMembers.filter(
+        (member) =>
+          member.user.username.toLowerCase().includes(handleLower) ||
+          (member.nick?.toLowerCase().includes(handleLower) ?? false)
+      );
+
+      if (containsCandidates.length === 1) {
+        match = containsCandidates[0];
         matchedBy = 'containsMatch';
+      } else if (containsCandidates.length > 1) {
+        logger.warn(`Skipping ambiguous 'contains' Discord match; multiple candidates`, {
+          module: 'discord-sync',
+          aydoHandle: user.aydoHandle,
+          candidateCount: containsCandidates.length,
+          candidates: containsCandidates.map((m) => `${m.user.username}#${m.user.discriminator}`),
+        });
       }
     }
 
@@ -291,7 +330,7 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
     matchedUsers: 0,
     updatedUsers: 0,
     errors: [],
-    matches: []
+    matches: [],
   };
 
   try {
@@ -330,9 +369,10 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
         const updateData: Partial<User> = {
           discordId: member.user.id,
           discordName: correctDiscordName,
-          discordAvatar: member.user.avatar ? 
-            `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png` : null,
-          updatedAt: new Date().toISOString()
+          discordAvatar: member.user.avatar
+            ? `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png`
+            : null,
+          updatedAt: new Date().toISOString(),
         };
 
         logger.info(`Updating Discord info for user`, {
@@ -352,13 +392,16 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
         if (discordProfile.payGrade) {
           updateData.payGrade = discordProfile.payGrade;
         }
-        if (discordProfile.clearanceLevel) {
+        // Only set clearance when Discord roles produced a recognized mapping
+        // (parseDiscordRoles returns null otherwise). Preserve the user's
+        // existing clearance for unmatched role sets rather than downgrading.
+        if (discordProfile.clearanceLevel != null) {
           updateData.clearanceLevel = discordProfile.clearanceLevel;
         }
 
         // Update the user
         const updatedUser = await userStorage.updateUser(user.id, updateData);
-        
+
         if (updatedUser) {
           result.updatedUsers++;
           result.matches.push({
@@ -368,7 +411,7 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
             matchedBy: matchedBy as any,
             division: discordProfile.division || undefined,
             position: discordProfile.position || undefined,
-            updated: true
+            updated: true,
           });
 
           logger.info(`Updated user profile from Discord`, {
@@ -386,15 +429,19 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
             aydoHandle: user.aydoHandle,
             discordName: `${member.user.username}#${member.user.discriminator}`,
             matchedBy: matchedBy as any,
-            updated: false
+            updated: false,
           });
         }
       } catch (error) {
         const errorMsg = `Error updating user ${user.aydoHandle}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        logger.error(`Error updating user during Discord sync`, error instanceof Error ? error : undefined, {
-          module: 'discord-sync',
-          aydoHandle: user.aydoHandle,
-        });
+        logger.error(
+          `Error updating user during Discord sync`,
+          error instanceof Error ? error : undefined,
+          {
+            module: 'discord-sync',
+            aydoHandle: user.aydoHandle,
+          }
+        );
         result.errors.push(errorMsg);
       }
     }
@@ -410,7 +457,9 @@ export async function syncAllUsersWithDiscord(): Promise<SyncResult> {
     return result;
   } catch (error) {
     const errorMsg = `Discord sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
-    logger.error('Discord sync failed', error instanceof Error ? error : undefined, { module: 'discord-sync' });
+    logger.error('Discord sync failed', error instanceof Error ? error : undefined, {
+      module: 'discord-sync',
+    });
     result.errors.push(errorMsg);
     return result;
   }
@@ -432,7 +481,7 @@ export async function syncSingleUserWithDiscord(userId: string): Promise<SyncRes
     matchedUsers: 0,
     updatedUsers: 0,
     errors: [],
-    matches: []
+    matches: [],
   };
 
   try {
@@ -449,7 +498,7 @@ export async function syncSingleUserWithDiscord(userId: string): Promise<SyncRes
 
     // Match this user with Discord members
     const matches = matchUsersWithDiscordMembers([user], discordMembers);
-    
+
     if (matches.length === 0) {
       result.errors.push(`No Discord match found for user ${user.aydoHandle}`);
       return result;
@@ -469,16 +518,24 @@ export async function syncSingleUserWithDiscord(userId: string): Promise<SyncRes
     const updateData: Partial<User> = {
       discordId: member.user.id,
       discordName: `${member.user.username}#${member.user.discriminator}`,
-      discordAvatar: member.user.avatar ? 
-        `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png` : null,
+      discordAvatar: member.user.avatar
+        ? `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png`
+        : null,
       division: discordProfile.division || user.division,
       position: discordProfile.position || user.position,
       payGrade: discordProfile.payGrade || user.payGrade,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
+    // Only set clearance when Discord roles produced a recognized mapping
+    // (parseDiscordRoles returns null otherwise). Preserve the user's existing
+    // clearance for unmatched role sets rather than downgrading to level 1.
+    if (discordProfile.clearanceLevel != null) {
+      updateData.clearanceLevel = discordProfile.clearanceLevel;
+    }
+
     const updatedUser = await userStorage.updateUser(user.id, updateData);
-    
+
     if (updatedUser) {
       result.updatedUsers = 1;
       result.matches.push({
@@ -488,7 +545,7 @@ export async function syncSingleUserWithDiscord(userId: string): Promise<SyncRes
         matchedBy: matchedBy as any,
         division: discordProfile.division || undefined,
         position: discordProfile.position || undefined,
-        updated: true
+        updated: true,
       });
     } else {
       result.errors.push(`Failed to update user ${user.aydoHandle}`);

@@ -29,6 +29,22 @@ const MAX_RETRIES = 3;
 /** Safety limit to prevent infinite pagination loops */
 const MAX_PAGES = 20;
 
+/**
+ * Maximum time to wait for a single page fetch before aborting (env-overridable
+ * via FLEETYARDS_FETCH_TIMEOUT_MS). Defaults to 15s.
+ */
+const FLEETYARDS_FETCH_TIMEOUT_MS = (() => {
+  const parsed = Number(process.env.FLEETYARDS_FETCH_TIMEOUT_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 15_000;
+})();
+
+/** Maximum number of seconds to honor from a 429 Retry-After header */
+const MAX_RETRY_AFTER_SECONDS = 60;
+
+/** Trusted origin and path prefix for FleetYards API URLs (used to validate Link headers) */
+const FLEETYARDS_API_ORIGIN = 'https://api.fleetyards.net';
+const FLEETYARDS_MODELS_PATH_PREFIX = '/v1/models';
+
 interface FleetYardsPagination {
   currentPage?: number;
   totalPages?: number;
@@ -91,6 +107,104 @@ function parseLinkHeader(linkHeader: string | null): { next?: string } {
   return result;
 }
 
+/**
+ * Validates that a `rel="next"` URL points at the trusted FleetYards models
+ * endpoint before we follow it. Prevents pagination from being redirected to an
+ * arbitrary host by a malformed or malicious Link header.
+ */
+function isValidNextUrl(candidate: string): boolean {
+  try {
+    const parsed = new URL(candidate);
+    return (
+      parsed.origin === FLEETYARDS_API_ORIGIN &&
+      parsed.pathname.startsWith(FLEETYARDS_MODELS_PATH_PREFIX)
+    );
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Abort Signal Helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates an AbortSignal that fires after `timeoutMs`, preferring the native
+ * `AbortSignal.timeout` and falling back to a manual `AbortController` + timer.
+ * Mirrors the helper in `src/lib/ships/r2-image-mirror.ts`.
+ */
+function createAbortSignal(timeoutMs: number): { signal?: AbortSignal; cleanup?: () => void } {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return { signal: AbortSignal.timeout(timeoutMs) };
+  }
+
+  if (typeof AbortController !== 'undefined') {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    return {
+      signal: controller.signal,
+      cleanup: () => clearTimeout(timeoutId),
+    };
+  }
+
+  return {};
+}
+
+// ---------------------------------------------------------------------------
+// Retry-After Parser
+// ---------------------------------------------------------------------------
+
+/**
+ * Parses a 429 `Retry-After` header, supporting both the delta-seconds form
+ * (e.g. `120`) and the HTTP-date form (e.g. `Wed, 21 Oct 2015 07:28:00 GMT`).
+ *
+ * The result is clamped to [0, MAX_RETRY_AFTER_SECONDS] so a hostile or buggy
+ * server cannot stall the sync indefinitely. Logs a warning when the header is
+ * unparseable (falls back to the default) or when the value is capped.
+ *
+ * @returns The number of seconds to wait before retrying.
+ */
+function parseRetryAfter(headerValue: string | null, page: number): number {
+  const DEFAULT_SECONDS = 5;
+  if (!headerValue) return DEFAULT_SECONDS;
+
+  const trimmed = headerValue.trim();
+  let seconds: number;
+
+  // delta-seconds form (try Number first)
+  const asNumber = Number(trimmed);
+  if (trimmed !== '' && Number.isFinite(asNumber)) {
+    seconds = asNumber;
+  } else {
+    // HTTP-date form
+    const dateMs = Date.parse(trimmed);
+    if (Number.isNaN(dateMs)) {
+      logger.warn('FleetYards API Retry-After header unparseable, using default', {
+        module: 'fleetyards',
+        page,
+        retryAfter: headerValue,
+        defaultSeconds: DEFAULT_SECONDS,
+      });
+      return DEFAULT_SECONDS;
+    }
+    seconds = (dateMs - Date.now()) / 1000;
+  }
+
+  // Clamp to a sane range
+  if (seconds < 0) seconds = 0;
+  if (seconds > MAX_RETRY_AFTER_SECONDS) {
+    logger.warn('FleetYards API Retry-After exceeds maximum, capping', {
+      module: 'fleetyards',
+      page,
+      requestedSeconds: seconds,
+      cappedSeconds: MAX_RETRY_AFTER_SECONDS,
+    });
+    seconds = MAX_RETRY_AFTER_SECONDS;
+  }
+
+  return seconds;
+}
+
 // ---------------------------------------------------------------------------
 // Fetch with Retry
 // ---------------------------------------------------------------------------
@@ -100,6 +214,8 @@ function parseLinkHeader(linkHeader: string | null): { next?: string } {
  *
  * Retry policy:
  * - Network errors: retry with exponential backoff (1s, 2s, 3s)
+ * - Timeouts (request exceeds FLEETYARDS_FETCH_TIMEOUT_MS): treated like a
+ *   network error -- retry with exponential backoff
  * - 5xx responses: retry with exponential backoff
  * - 429 (rate limited): wait Retry-After header value (or 5s default), then retry
  * - 4xx (not 429): do NOT retry -- these indicate a client-side problem
@@ -115,9 +231,18 @@ async function fetchWithRetry(
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(url, {
-        headers: { Accept: 'application/json' },
-      });
+      const abort = createAbortSignal(FLEETYARDS_FETCH_TIMEOUT_MS);
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          signal: abort.signal,
+        });
+      } finally {
+        // Clear the fallback timer once the request settles so a returned
+        // response is not aborted mid body-read by a late timeout.
+        abort.cleanup?.();
+      }
 
       // Success
       if (response.ok) {
@@ -127,12 +252,12 @@ async function fetchWithRetry(
       // Rate limited -- respect Retry-After
       if (response.status === 429) {
         const retryAfterHeader = response.headers.get('Retry-After');
-        const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 5;
-        const waitMs = (isNaN(retryAfterSeconds) ? 5 : retryAfterSeconds) * 1000;
+        const waitSeconds = parseRetryAfter(retryAfterHeader, page);
+        const waitMs = waitSeconds * 1000;
         logger.warn('FleetYards API rate limited (429)', {
           module: 'fleetyards',
           page,
-          waitSeconds: waitMs / 1000,
+          waitSeconds,
           attempt,
           retries,
         });
@@ -182,19 +307,29 @@ async function fetchWithRetry(
       });
       return { response: null, error };
     } catch (error) {
-      // Network error -- retry with backoff
-      lastError = `FleetYards API network error for page ${page}: ${
-        error instanceof Error ? error.message : String(error)
-      }`;
+      // Timeout (AbortSignal.timeout -> TimeoutError, AbortController -> AbortError)
+      // and network errors are both transient -- retry with backoff.
+      const isTimeout =
+        error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      lastError = isTimeout
+        ? `FleetYards API request timed out after ${FLEETYARDS_FETCH_TIMEOUT_MS}ms for page ${page}`
+        : `FleetYards API network error for page ${page}: ${errorMessage}`;
       const waitMs = 1000 * attempt;
-      logger.warn('FleetYards API network error, retrying', {
-        module: 'fleetyards',
-        page,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        attempt,
-        retries,
-        waitMs,
-      });
+      logger.warn(
+        isTimeout
+          ? 'FleetYards API request timed out, retrying'
+          : 'FleetYards API network error, retrying',
+        {
+          module: 'fleetyards',
+          page,
+          ...(isTimeout ? { timeoutMs: FLEETYARDS_FETCH_TIMEOUT_MS } : {}),
+          errorMessage,
+          attempt,
+          retries,
+          waitMs,
+        }
+      );
       await new Promise((r) => setTimeout(r, waitMs));
     }
   }
@@ -298,8 +433,19 @@ export async function fetchAllShips(): Promise<{
       const links = parseLinkHeader(linkHeader);
 
       if (links.next) {
-        // Link header provides the next URL directly
-        nextUrl = links.next;
+        // Link header signals more pages. Only follow the URL if it points at
+        // the trusted FleetYards models endpoint; otherwise construct the next
+        // page URL from the trusted base.
+        if (isValidNextUrl(links.next)) {
+          nextUrl = links.next;
+        } else {
+          logger.warn('FleetYards Link rel=next URL failed origin validation, using trusted URL', {
+            module: 'fleetyards',
+            page,
+            untrustedNextUrl: links.next,
+          });
+          nextUrl = `${FLEETYARDS_API_BASE}/models?page=${page + 1}&perPage=${PER_PAGE}`;
+        }
       } else if (pageShips.length < PER_PAGE) {
         // Response smaller than page size -- this was the last page
         nextUrl = undefined;

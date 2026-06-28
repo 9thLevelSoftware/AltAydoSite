@@ -262,14 +262,31 @@ export async function syncShipsFromFleetYards(): Promise<SyncStatusDocument> {
     for (const raw of changedRaw) {
       const result = FleetYardsShipSchema.safeParse(raw);
       if (result.success) {
-        const transformed = transformFleetYardsShip(result.data, syncVersion);
-        const existing = storedSyncStates.get(transformed.fleetyardsId);
-        const mirrored = await mirrorShipAssets(transformed, existing);
+        try {
+          const transformed = transformFleetYardsShip(result.data, syncVersion);
+          const existing = storedSyncStates.get(transformed.fleetyardsId);
+          const mirrored = await mirrorShipAssets(transformed, existing);
 
-        validated.push(mirrored.ship);
-        mirroredImages += mirrored.mirroredImages;
-        failedImages += mirrored.failedImages;
-        mirrorErrors.push(...mirrored.errors);
+          validated.push(mirrored.ship);
+          mirroredImages += mirrored.mirroredImages;
+          failedImages += mirrored.failedImages;
+          mirrorErrors.push(...mirrored.errors);
+        } catch (error) {
+          // Isolate per-ship transform/mirror failures so one bad ship cannot
+          // abort the entire sync. Record the failure and continue; Steps 8-12
+          // still run and a partial sync status is upserted/saved.
+          const { id, name: shipName } = rawShipIdentity(raw);
+          const message = error instanceof Error ? error.message : String(error);
+          mirrorErrors.push(
+            `Transform/mirror failed for "${shipName}"${id ? ` (${id})` : ''}: ${message}`
+          );
+          logger.warn('Ship transform/mirror failed', {
+            module: 'ship-sync',
+            shipName,
+            shipId: id,
+            error: message,
+          });
+        }
       } else {
         const { name: shipName } = rawShipIdentity(raw);
         const errorMsg = `Validation failed for "${shipName}": ${result.error.issues.map((i) => i.message).join(', ')}`;

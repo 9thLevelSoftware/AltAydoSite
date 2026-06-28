@@ -1,8 +1,20 @@
-export type EscortRequestStatus = 'Submitted' | 'Under Review' | 'Approved' | 'Assigned' | 'In Progress' | 'Completed' | 'Cancelled' | 'Rejected';
+export type EscortRequestStatus =
+  | 'Submitted'
+  | 'Under Review'
+  | 'Approved'
+  | 'Assigned'
+  | 'In Progress'
+  | 'Completed'
+  | 'Cancelled'
+  | 'Rejected';
 
 export type ThreatLevel = 'Low' | 'Medium' | 'High' | 'Critical' | 'Unknown';
 
-export type SecurityAssetType = 'Escort Ships Only' | 'Ground Security Only' | 'On Ship Security Only' | 'Combined Operations';
+export type SecurityAssetType =
+  | 'Escort Ships Only'
+  | 'Ground Security Only'
+  | 'On Ship Security Only'
+  | 'Combined Operations';
 
 export interface EscortRequestParticipant {
   userId: string;
@@ -42,7 +54,7 @@ export interface EscortRequestResponse extends EscortRequest {
 
 export interface EscortRequestFilters {
   status?: EscortRequestStatus | 'all';
-  priority?: string | 'all';
+  priority?: EscortRequest['priority'] | 'all';
   assignedTo?: string;
   requestedBy?: string;
-} 
+}

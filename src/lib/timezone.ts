@@ -33,7 +33,7 @@ export function convertToUserTimezone(utcDate: Date, userTimezone: string): Date
   if (!userTimezone || userTimezone === 'UTC') {
     return utcDate;
   }
-  
+
   try {
     // Create a new date in the user's timezone
     const userTime = new Date(utcDate.toLocaleString('en-US', { timeZone: userTimezone }));
@@ -44,34 +44,116 @@ export function convertToUserTimezone(utcDate: Date, userTimezone: string): Date
   }
 }
 
+// Short weekday names (en-US) -> JS getDay() index (0=Sun ... 6=Sat)
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+/**
+ * Calendar fields of a UTC instant as observed in a given timezone.
+ * These are LOCAL wall-clock fields and must be kept separate from the
+ * underlying UTC instant they were derived from.
+ */
+export interface ZonedParts {
+  year: number;
+  month: number; // 1-12
+  day: number;
+  weekday: number; // 0=Sun ... 6=Sat
+  hour: number; // 0-23
+  minute: number;
+}
+
+/**
+ * Extract the target zone's calendar fields for a UTC instant using
+ * Intl.DateTimeFormat.formatToParts. This avoids reparsing a locale string
+ * (which would corrupt the absolute instant) and keeps UTC instants and
+ * local calendar fields strictly separate.
+ */
+export function getZonedParts(date: Date, userTimezone: string): ZonedParts {
+  const timeZone = userTimezone || 'UTC';
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(date);
+
+    const lookup: Record<string, string> = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') lookup[part.type] = part.value;
+    }
+
+    // Some engines emit '24' for midnight under hour12: false.
+    let hour = parseInt(lookup.hour, 10);
+    if (hour === 24) hour = 0;
+
+    return {
+      year: parseInt(lookup.year, 10),
+      month: parseInt(lookup.month, 10),
+      day: parseInt(lookup.day, 10),
+      weekday: WEEKDAY_INDEX[lookup.weekday] ?? date.getUTCDay(),
+      hour,
+      minute: parseInt(lookup.minute, 10),
+    };
+  } catch (error) {
+    logger.warn('Invalid timezone, falling back to UTC', { module: 'timezone', userTimezone });
+    return {
+      year: date.getUTCFullYear(),
+      month: date.getUTCMonth() + 1,
+      day: date.getUTCDate(),
+      weekday: date.getUTCDay(),
+      hour: date.getUTCHours(),
+      minute: date.getUTCMinutes(),
+    };
+  }
+}
+
+/**
+ * Get the local weekday (0=Sun ... 6=Sat) of a UTC instant in a given timezone.
+ */
+export function getWeekdayInTimezone(date: Date, userTimezone: string): number {
+  return getZonedParts(date, userTimezone).weekday;
+}
+
 /**
  * Format a date in the user's timezone
  */
 export function formatDateInTimezone(
-  date: Date, 
-  userTimezone: string, 
+  date: Date,
+  userTimezone: string,
   options: Intl.DateTimeFormatOptions = {}
 ): string {
   if (!userTimezone || userTimezone === 'UTC') {
-    return date.toLocaleString('en-US', { 
-      ...options, 
+    return date.toLocaleString('en-US', {
+      ...options,
       timeZone: 'UTC',
-      timeZoneName: 'short'
+      timeZoneName: 'short',
     });
   }
-  
+
   try {
     return date.toLocaleString('en-US', {
       ...options,
       timeZone: userTimezone,
-      timeZoneName: 'short'
+      timeZoneName: 'short',
     });
   } catch (error) {
     logger.warn('Invalid timezone, falling back to UTC', { module: 'timezone', userTimezone });
     return date.toLocaleString('en-US', {
       ...options,
       timeZone: 'UTC',
-      timeZoneName: 'short'
+      timeZoneName: 'short',
     });
   }
 }
@@ -82,7 +164,7 @@ export function formatDateInTimezone(
 export function getTimeInTimezone(date: Date, userTimezone: string): string {
   return formatDateInTimezone(date, userTimezone, {
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   });
 }
 
@@ -96,7 +178,7 @@ export function getDateTimeInTimezone(date: Date, userTimezone: string): string 
     month: 'long',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   });
 }
 
@@ -107,14 +189,14 @@ export function getTimezoneAbbreviation(userTimezone: string): string {
   if (!userTimezone || userTimezone === 'UTC') {
     return 'UTC';
   }
-  
+
   try {
     const now = new Date();
     const timeString = now.toLocaleString('en-US', {
       timeZone: userTimezone,
-      timeZoneName: 'short'
+      timeZoneName: 'short',
     });
-    
+
     // Extract timezone abbreviation from the formatted string
     const parts = timeString.split(' ');
     return parts[parts.length - 1] || userTimezone;
@@ -134,4 +216,4 @@ export function detectUserTimezone(): string {
     logger.warn('Could not detect user timezone, falling back to UTC', { module: 'timezone' });
     return 'UTC';
   }
-} 
+}
