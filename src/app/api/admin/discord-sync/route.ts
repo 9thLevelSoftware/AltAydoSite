@@ -15,17 +15,21 @@ export async function GET(request: NextRequest) {
   try {
     // Check authentication and admin permissions
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check if user has admin privileges (clearance level 4+ or admin role)
-    if (session.user.clearanceLevel < 4 && session.user.role !== 'admin') {
+    const clearance = session.user.clearanceLevel ?? 0;
+    if (clearance < 4 && session.user.role !== 'admin') {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    logger.info('Discord sync initiated', { route: '/api/admin/discord-sync', initiatedBy: session.user.aydoHandle });
+    logger.info('Discord sync initiated', {
+      route: '/api/admin/discord-sync',
+      initiatedBy: session.user.aydoHandle,
+    });
 
     // Check if this is a single user sync
     const url = new URL(request.url);
@@ -45,17 +49,23 @@ export async function GET(request: NextRequest) {
       message: userId ? 'Single user sync completed' : 'Discord user sync completed',
       result: syncResult,
       timestamp: new Date().toISOString(),
-      initiatedBy: session.user.aydoHandle
+      initiatedBy: session.user.aydoHandle,
     });
-
   } catch (error) {
-    logger.error('Discord sync API error', error instanceof Error ? error : new Error(String(error)), { route: '/api/admin/discord-sync', method: 'GET' });
+    logger.error(
+      'Discord sync API error',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/admin/discord-sync', method: 'GET' }
+    );
 
-    return NextResponse.json({
-      success: false,
-      error: 'Discord sync failed',
-      timestamp: new Date().toISOString()
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Discord sync failed',
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -67,29 +77,47 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication and admin permissions
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check if user has admin privileges (clearance level 4+ or admin role)
-    if (session.user.clearanceLevel < 4 && session.user.role !== 'admin') {
+    const clearance = session.user.clearanceLevel ?? 0;
+    if (clearance < 4 && session.user.role !== 'admin') {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      logger.warn('Discord sync POST - Invalid JSON in request body', {
+        route: '/api/admin/discord-sync',
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+      });
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
     const { userId, dryRun = false } = body;
 
-    logger.info('Discord sync POST initiated', { route: '/api/admin/discord-sync', initiatedBy: session.user.aydoHandle, userId, dryRun });
+    logger.info('Discord sync POST initiated', {
+      route: '/api/admin/discord-sync',
+      initiatedBy: session.user.aydoHandle,
+      userId,
+      dryRun,
+    });
 
     if (dryRun) {
-      // For dry run, we could implement a preview mode
-      return NextResponse.json({
-        success: true,
-        message: 'Dry run mode - no actual changes made',
-        note: 'Dry run functionality not yet implemented',
-        timestamp: new Date().toISOString()
-      });
+      // Dry run preview is not yet implemented; do not report success for a no-op.
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Dry run not implemented',
+          timestamp: new Date().toISOString(),
+        },
+        { status: 501 }
+      );
     }
 
     let syncResult;
@@ -104,16 +132,22 @@ export async function POST(request: NextRequest) {
       message: userId ? 'Single user sync completed' : 'Discord user sync completed',
       result: syncResult,
       timestamp: new Date().toISOString(),
-      initiatedBy: session.user.aydoHandle
+      initiatedBy: session.user.aydoHandle,
     });
-
   } catch (error) {
-    logger.error('Discord sync POST API error', error instanceof Error ? error : new Error(String(error)), { route: '/api/admin/discord-sync', method: 'POST' });
+    logger.error(
+      'Discord sync POST API error',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/admin/discord-sync', method: 'POST' }
+    );
 
-    return NextResponse.json({
-      success: false,
-      error: 'Discord sync failed',
-      timestamp: new Date().toISOString()
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Discord sync failed',
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 }
+    );
   }
 }

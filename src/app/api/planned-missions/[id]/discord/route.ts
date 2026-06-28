@@ -12,6 +12,29 @@ import { logger } from '@/lib/logger';
 const DEFAULT_DISCORD_EVENT_DURATION_MINUTES = 120;
 const MISSION_ADMIN_CLEARANCE_LEVEL = 4;
 
+/**
+ * Resolve the canonical base URL used when generating external links inside
+ * Discord events.
+ *
+ * Prefer an explicitly configured app URL so we never embed a value derived
+ * from the client-controlled `Origin` header (which can be spoofed). Falls back
+ * to the request origin only when no canonical URL is configured.
+ */
+function resolveCanonicalBaseUrl(request: NextRequest): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL;
+  if (configured && configured.trim().length > 0) {
+    try {
+      return new URL(configured.trim()).origin;
+    } catch {
+      logger.warn('Invalid configured app URL - falling back to request origin', {
+        route: '/api/planned-missions/[id]/discord',
+        configured,
+      });
+    }
+  }
+  return `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+}
+
 function getMissionStartDate(mission: PlannedMissionResponse): Date | null {
   const startDate = new Date(mission.scheduledDateTime);
   return Number.isNaN(startDate.getTime()) ? null : startDate;
@@ -156,8 +179,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Discord is not configured' }, { status: 500 });
     }
 
-    // Get base URL from request
-    const baseUrl = request.headers.get('origin') || process.env.NEXTAUTH_URL || '';
+    // Use a configured canonical app URL instead of the client-controlled Origin header
+    const baseUrl = resolveCanonicalBaseUrl(request);
 
     // Build description
     const description = buildEventDescription(mission, baseUrl);
@@ -181,16 +204,54 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       image,
     });
 
-    // Update mission with Discord event reference
-    const updatedMission = await plannedMissionStorage.updatePlannedMission(id, {
-      discordEvent: {
-        eventId: discordEvent.id,
-        guildId: discordEvent.guild_id,
-        createdAt: new Date().toISOString(),
+    // Update mission with Discord event reference. If local persistence fails we
+    // must compensate by deleting the Discord event we just created, otherwise we
+    // leave an orphaned event that the mission no longer references.
+    let updatedMission: PlannedMissionResponse | null;
+    try {
+      updatedMission = await plannedMissionStorage.updatePlannedMission(id, {
+        discordEvent: {
+          eventId: discordEvent.id,
+          guildId: discordEvent.guild_id,
+          createdAt: new Date().toISOString(),
+          status: 'SCHEDULED',
+        },
         status: 'SCHEDULED',
-      },
-      status: 'SCHEDULED',
-    });
+      });
+    } catch (persistError) {
+      updatedMission = null;
+      logger.error(
+        'Failed to persist Discord event reference - compensating by deleting the Discord event',
+        persistError instanceof Error ? persistError : new Error(String(persistError)),
+        {
+          route: '/api/planned-missions/[id]/discord',
+          missionId: id,
+          discordEventId: discordEvent.id,
+        }
+      );
+    }
+
+    if (!updatedMission) {
+      // Persistence either failed or could not find the mission. Roll back the
+      // Discord event so we do not orphan it.
+      try {
+        await discord.deleteScheduledEvent(discordEvent.id);
+      } catch (cleanupError) {
+        logger.error(
+          'Failed to clean up orphaned Discord event after persistence failure',
+          cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)),
+          {
+            route: '/api/planned-missions/[id]/discord',
+            missionId: id,
+            discordEventId: discordEvent.id,
+          }
+        );
+      }
+      return NextResponse.json(
+        { error: 'Failed to link Discord event to mission. The Discord event has been removed.' },
+        { status: 500 }
+      );
+    }
 
     logger.info('Mission published to Discord', {
       route: '/api/planned-missions/[id]/discord',
@@ -266,29 +327,51 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         discordEventId: mission.discordEvent.eventId,
         error: message,
       });
-      return discordRsvpUnavailableResponse(mission, 'Discord RSVP data is temporarily unavailable');
+      return discordRsvpUnavailableResponse(
+        mission,
+        'Discord RSVP data is temporarily unavailable'
+      );
     }
 
     if (!discordEvent) {
       return discordRsvpUnavailableResponse(mission, 'Discord event was not found');
     }
 
-    // Sync mission status with Discord event status
+    // Sync mission status with Discord event status. This is a write side effect,
+    // so it is only performed for callers who are allowed to modify the mission;
+    // unprivileged callers still receive the latest RSVP/event data read-only.
     let updatedMission = mission;
     let statusSynced = false;
     if (discordEvent?.status) {
       const newStatus = mapDiscordStatusToMissionStatus(discordEvent.status, mission.status);
       if (newStatus && newStatus !== mission.status) {
-        logger.info('Syncing mission status from Discord', {
-          route: '/api/planned-missions/[id]/discord',
-          missionId: id,
-          oldStatus: mission.status,
-          newStatus,
-          discordEventStatus: discordEvent.status,
-        });
-        updatedMission =
-          (await plannedMissionStorage.updatePlannedMission(id, { status: newStatus })) || mission;
-        statusSynced = true;
+        const userId = session.user.id;
+        const userClearance = session.user.clearanceLevel ?? 1;
+        const canModify =
+          userClearance >= MISSION_ADMIN_CLEARANCE_LEVEL ||
+          (await plannedMissionStorage.canUserModifyMission(userId, id));
+
+        if (canModify) {
+          logger.info('Syncing mission status from Discord', {
+            route: '/api/planned-missions/[id]/discord',
+            missionId: id,
+            oldStatus: mission.status,
+            newStatus,
+            discordEventStatus: discordEvent.status,
+          });
+          updatedMission =
+            (await plannedMissionStorage.updatePlannedMission(id, { status: newStatus })) ||
+            mission;
+          statusSynced = true;
+        } else {
+          logger.info('Skipping Discord status sync - caller lacks modify permission', {
+            route: '/api/planned-missions/[id]/discord',
+            missionId: id,
+            currentStatus: mission.status,
+            proposedStatus: newStatus,
+            discordEventStatus: discordEvent.status,
+          });
+        }
       }
     }
 
@@ -376,11 +459,46 @@ export async function DELETE(
     // Delete Discord event
     await discord.deleteScheduledEvent(mission.discordEvent.eventId);
 
-    // Update mission to remove Discord reference
-    const updatedMission = await plannedMissionStorage.updatePlannedMission(id, {
-      discordEvent: undefined,
-      status: 'DRAFT',
-    });
+    // Clear the local Discord reference. The Discord event is already gone, so a
+    // failure here leaves a recoverable stale reference (not an orphaned event).
+    // Retry once before surfacing an inconsistent-but-recoverable state.
+    let updatedMission: PlannedMissionResponse | null = null;
+    let cleanupError: unknown = null;
+    for (let attempt = 0; attempt < 2 && !updatedMission; attempt++) {
+      try {
+        updatedMission = await plannedMissionStorage.updatePlannedMission(id, {
+          discordEvent: undefined,
+          status: 'DRAFT',
+        });
+      } catch (error) {
+        cleanupError = error;
+      }
+    }
+
+    if (!updatedMission) {
+      logger.error(
+        'Discord event deleted but mission still references it - stale reference left behind',
+        cleanupError instanceof Error
+          ? cleanupError
+          : cleanupError
+            ? new Error(String(cleanupError))
+            : new Error('updatePlannedMission returned no mission'),
+        {
+          route: '/api/planned-missions/[id]/discord',
+          missionId: id,
+          discordEventId: mission.discordEvent.eventId,
+        }
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          inconsistent: true,
+          error:
+            'The Discord event was deleted, but the mission could not be updated to remove the now-stale reference. Please retry to finish unpublishing.',
+        },
+        { status: 409 }
+      );
+    }
 
     logger.info('Mission unpublished from Discord', {
       route: '/api/planned-missions/[id]/discord',
@@ -450,8 +568,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Discord is not configured' }, { status: 500 });
     }
 
-    // Get base URL from request
-    const baseUrl = request.headers.get('origin') || process.env.NEXTAUTH_URL || '';
+    // Use a configured canonical app URL instead of the client-controlled Origin header
+    const baseUrl = resolveCanonicalBaseUrl(request);
 
     const currentDiscordEvent = await discord.getScheduledEvent(mission.discordEvent.eventId);
     if (!currentDiscordEvent) {

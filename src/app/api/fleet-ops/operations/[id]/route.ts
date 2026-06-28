@@ -11,26 +11,44 @@ const operationParticipantSchema = z.object({
   shipName: z.string().optional(),
   shipManufacturer: z.string().optional(),
   role: z.string(),
-  notes: z.string().optional()
+  notes: z.string().optional(),
 });
+
+// Only allow http(s) URLs for diagram links so unsafe schemes
+// (javascript:, data:, etc.) can never be stored or later rendered as hrefs.
+const httpUrlSchema = z.string().refine(
+  (val) => {
+    try {
+      const url = new URL(val);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  },
+  { message: 'Diagram links must be valid http(s) URLs' }
+);
 
 const updateOperationSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters').optional(),
   description: z.string().optional(),
-  status: z.enum(['Planning', 'Briefing', 'Active', 'Completed', 'Debriefing', 'Cancelled']).optional(),
-  plannedDateTime: z.string().optional(),
+  status: z
+    .enum(['Planning', 'Briefing', 'Active', 'Completed', 'Debriefing', 'Cancelled'])
+    .optional(),
+  plannedDateTime: z
+    .string()
+    .refine((v) => !isNaN(new Date(v).getTime()), {
+      message: 'plannedDateTime must be a valid date',
+    })
+    .optional(),
   location: z.string().optional(),
   objectives: z.string().optional(),
   participants: z.array(operationParticipantSchema).optional(),
-  diagramLinks: z.array(z.string()).optional(),
-  commsChannel: z.string().optional()
+  diagramLinks: z.array(httpUrlSchema).optional(),
+  commsChannel: z.string().optional(),
 });
 
 // GET handler - Get a specific operation
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
     const auth = await requireAuth();
@@ -48,7 +66,7 @@ export async function GET(
     // Check if the user has access to this operation
     const leadershipRoles = ['Director', 'Manager', 'Board Member'];
     const isLeadership = leadershipRoles.includes(auth.role) || auth.clearanceLevel >= 3;
-    const isParticipant = operation.participants.some(p => p.userId === userId);
+    const isParticipant = operation.participants.some((p) => p.userId === userId);
     const isLeader = operation.leaderId === userId;
 
     if (!isLeadership && !isParticipant && !isLeader) {
@@ -61,23 +79,20 @@ export async function GET(
     // Return the operation with leader name
     return NextResponse.json({
       ...operation,
-      leaderName: leader ? leader.aydoHandle : 'Unknown'
+      leaderName: leader ? leader.aydoHandle : 'Unknown',
     });
-
   } catch (error) {
-    logger.error('Error fetching operation', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations/[id]' });
-    return NextResponse.json(
-      { error: 'Failed to fetch operation' },
-      { status: 500 }
+    logger.error(
+      'Error fetching operation',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/fleet-ops/operations/[id]' }
     );
+    return NextResponse.json({ error: 'Failed to fetch operation' }, { status: 500 });
   }
 }
 
 // PUT handler - Update an operation
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
     // Leadership OR operation leader can modify
@@ -107,16 +122,13 @@ export async function PUT(
     try {
       body = await request.json();
     } catch (parseError) {
-      return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
 
     const validationResult = updateOperationSchema.safeParse(body);
     if (!validationResult.success) {
       const errorMessage = validationResult.error.errors
-        .map(e => `${e.path.join('.')}: ${e.message}`)
+        .map((e) => `${e.path.join('.')}: ${e.message}`)
         .join(', ');
 
       return NextResponse.json({ error: errorMessage }, { status: 400 });
@@ -136,23 +148,20 @@ export async function PUT(
     // Return the updated operation with leader name
     return NextResponse.json({
       ...updatedOperation,
-      leaderName: leader ? leader.aydoHandle : 'Unknown'
+      leaderName: leader ? leader.aydoHandle : 'Unknown',
     });
-
   } catch (error) {
-    logger.error('Error updating operation', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations/[id]' });
-    return NextResponse.json(
-      { error: 'Failed to update operation' },
-      { status: 500 }
+    logger.error(
+      'Error updating operation',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/fleet-ops/operations/[id]' }
     );
+    return NextResponse.json({ error: 'Failed to update operation' }, { status: 500 });
   }
 }
 
 // DELETE handler - Delete an operation
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
     // Leadership OR operation leader can delete
@@ -187,12 +196,12 @@ export async function DELETE(
 
     // Return success response
     return NextResponse.json({ success: true });
-
   } catch (error) {
-    logger.error('Error deleting operation', error instanceof Error ? error : new Error(String(error)), { route: '/api/fleet-ops/operations/[id]' });
-    return NextResponse.json(
-      { error: 'Failed to delete operation' },
-      { status: 500 }
+    logger.error(
+      'Error deleting operation',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/fleet-ops/operations/[id]' }
     );
+    return NextResponse.json({ error: 'Failed to delete operation' }, { status: 500 });
   }
-} 
+}

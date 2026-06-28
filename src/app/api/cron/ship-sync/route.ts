@@ -1,5 +1,6 @@
 import { after, NextRequest, NextResponse } from 'next/server';
 import { syncShipsFromFleetYards } from '@/lib/ship-sync';
+import { getLatestSyncStatus, saveSyncStatus } from '@/lib/ship-storage';
 import { logger } from '@/lib/logger';
 import type { SyncStatusDocument } from '@/types/ship';
 
@@ -43,14 +44,75 @@ function buildSyncResponseBody(result: SyncStatusDocument) {
       lockSkipped: result.lockSkipped ?? false,
       durationMs: result.durationMs,
       pagesProcessed: result.pagesProcessed,
+      // Expose only sanitized counts to callers. Raw error strings can carry
+      // upstream URLs, IDs, and stack-ish detail; those stay in the server log
+      // (logSyncResult records the first 10). See api-routes-23.
       errorCount: result.errors.length,
       hasErrors: result.errors.length > 0,
-      errors: result.errors.slice(0, 10),
     },
     timestamp: new Date().toISOString(),
   };
 }
 
+/**
+ * Persist a 'failed' checkpoint when a background sync throws.
+ *
+ * This makes a crashed/aborted background job detectable via
+ * GET /api/ships/sync-status. It does NOT cover hard process termination
+ * (see the after() caveat on runSyncInBackground) -- if the worker is killed
+ * mid-run, after()'s catch never executes and the last persisted status will
+ * be the previous run. Operators should treat a sync that never advances its
+ * syncVersion within the expected window as stale.
+ */
+async function recordBackgroundFailure(error: unknown): Promise<void> {
+  try {
+    const previous = await getLatestSyncStatus();
+    const failedStatus: Omit<SyncStatusDocument, '_id'> = {
+      type: 'ship-sync',
+      syncVersion: previous?.syncVersion ?? 0,
+      lastSyncAt: new Date(),
+      shipCount: previous?.shipCount ?? 0,
+      newShips: 0,
+      updatedShips: 0,
+      unchangedShips: 0,
+      skippedShips: 0,
+      deferredShips: 0,
+      mirroredImages: 0,
+      failedImages: 0,
+      durationMs: 0,
+      status: 'failed',
+      errors: ['Background ship sync terminated before completion'],
+      pagesProcessed: 0,
+    };
+    await saveSyncStatus(failedStatus);
+  } catch (saveError) {
+    logger.error(
+      'Failed to persist background sync failure checkpoint',
+      saveError instanceof Error ? saveError : new Error(String(saveError)),
+      { route: '/api/cron/ship-sync' }
+    );
+  }
+}
+
+/**
+ * Run the sync after the response is sent via `after()`.
+ *
+ * Platform caveat: `after()` callbacks run in a post-response background task
+ * whose wall-clock budget is bounded by the host platform (e.g. serverless
+ * function execution-time limits). A full FleetYards sync that exceeds that
+ * budget can be terminated mid-run with no chance to write a checkpoint.
+ *
+ * Mitigations in place:
+ * - syncShipsFromFleetYards() is resumable/chunked: it processes at most
+ *   SHIP_SYNC_MAX_CHANGED_SHIPS_PER_RUN changed ships per invocation and
+ *   defers the rest, so each invocation stays within a bounded budget.
+ * - A 'failed' checkpoint is written on caught errors so an aborted job is
+ *   surfaced through sync-status.
+ *
+ * For workloads that outgrow this, move the sync to a durable worker/queue or
+ * an external scheduler that polls the chunked endpoint until deferredShips
+ * reaches 0, rather than relying on a single request-adjacent after() task.
+ */
 function runSyncInBackground() {
   after(async () => {
     try {
@@ -64,6 +126,7 @@ function runSyncInBackground() {
           route: '/api/cron/ship-sync',
         }
       );
+      await recordBackgroundFailure(error);
     }
   });
 }

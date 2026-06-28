@@ -10,13 +10,15 @@ import { logger } from '@/lib/logger';
  * z.coerce.number() handles the string-to-number conversion from URL params.
  */
 const ShipListQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
+  // Cap page to prevent expensive unbounded skip offsets (deep pagination).
+  page: z.coerce.number().int().positive().max(1000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   manufacturer: z.string().optional(),
   size: z.string().optional(),
   classification: z.string().optional(),
   productionStatus: z.string().optional(),
-  search: z.string().min(1).optional(),
+  // Cap search length to bound the regex-fallback input.
+  search: z.string().min(1).max(100).optional(),
 });
 
 /**
@@ -44,9 +46,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Invalid query parameters',
-          details: parseResult.error.errors.map(
-            (e) => `${e.path.join('.')}: ${e.message}`
-          ),
+          details: parseResult.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`),
         },
         { status: 400 }
       );
@@ -55,16 +55,14 @@ export async function GET(request: NextRequest) {
     const result = await shipStorage.findShips(parseResult.data);
 
     const response = NextResponse.json(result);
-    response.headers.set(
-      'Cache-Control',
-      'public, max-age=1800, stale-while-revalidate=86400'
-    );
+    response.headers.set('Cache-Control', 'public, max-age=1800, stale-while-revalidate=86400');
     return response;
   } catch (error) {
-    logger.error('Error fetching ship list', error instanceof Error ? error : new Error(String(error)), { route: '/api/ships' });
-    return NextResponse.json(
-      { error: 'Failed to fetch ships' },
-      { status: 500 }
+    logger.error(
+      'Error fetching ship list',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/ships' }
     );
+    return NextResponse.json({ error: 'Failed to fetch ships' }, { status: 500 });
   }
 }

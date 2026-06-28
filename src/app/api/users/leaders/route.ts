@@ -16,18 +16,22 @@ export async function GET(request: NextRequest) {
     // Get all users
     const allUsers = await userStorage.getAllUsers();
 
+    // Discord identifiers are sensitive and only required by leadership workflows
+    // (e.g. the mission planner builds Discord mentions for assigned leaders).
+    // Only expose them to requesters who themselves hold leadership clearance (3+).
+    const canSeeDiscordIds = (session.user.clearanceLevel ?? 0) >= 3;
+
     // Filter to clearance level 3+
     const leaders = allUsers
-      .filter(user => user.clearanceLevel >= 3)
-      .map(user => ({
+      .filter((user) => user.clearanceLevel >= 3)
+      .map((user) => ({
         id: user.id,
         aydoHandle: user.aydoHandle,
-        discordName: user.discordName,
-        discordId: user.discordId,
         position: user.position,
         division: user.division,
         clearanceLevel: user.clearanceLevel,
-        photo: user.photo
+        photo: user.photo,
+        ...(canSeeDiscordIds ? { discordName: user.discordName, discordId: user.discordId } : {}),
       }))
       .sort((a, b) => {
         // Sort by clearance level (highest first), then by handle
@@ -37,20 +41,23 @@ export async function GET(request: NextRequest) {
         return a.aydoHandle.localeCompare(b.aydoHandle);
       });
 
-    logger.info('Found users with leadership clearance', { route: '/api/users/leaders', count: leaders.length });
+    logger.info('Found users with leadership clearance', {
+      route: '/api/users/leaders',
+      count: leaders.length,
+    });
 
     const res = NextResponse.json({
       leaders,
-      count: leaders.length
+      count: leaders.length,
     });
     res.headers.set('Cache-Control', 'no-store, max-age=0');
     return res;
-
   } catch (error) {
-    logger.error('Error fetching leaders', error instanceof Error ? error : new Error(String(error)), { route: '/api/users/leaders' });
-    return NextResponse.json(
-      { error: 'Failed to fetch leaders' },
-      { status: 500 }
+    logger.error(
+      'Error fetching leaders',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/users/leaders' }
     );
+    return NextResponse.json({ error: 'Failed to fetch leaders' }, { status: 500 });
   }
 }

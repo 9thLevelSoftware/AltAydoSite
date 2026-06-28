@@ -11,6 +11,38 @@ const CONCURRENCY = 5;
 /** Image widths to pre-cache (covers card + thumbnail sizes) */
 const WARM_WIDTHS = [384, 96];
 
+/** Per-request timeout for each internal image fetch (ms) */
+const FETCH_TIMEOUT_MS = 15_000;
+
+/**
+ * Max number of unique images warmed per invocation. Caps total work so a
+ * single run cannot exceed serverless route limits; the remainder is reported
+ * and can be picked up by a subsequent invocation.
+ */
+const MAX_IMAGES_PER_RUN = 100;
+
+/**
+ * Resolve the canonical origin for internal /_next/image fetches.
+ *
+ * Prefer an explicitly configured origin so we never trust the incoming
+ * request host (which can be spoofed via the Host header). Falls back to the
+ * request origin only when no canonical origin is configured.
+ */
+function resolveOrigin(request: NextRequest): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL;
+  if (configured && configured.trim().length > 0) {
+    try {
+      return new URL(configured.trim()).origin;
+    } catch {
+      logger.warn('Invalid configured app URL - falling back to request origin', {
+        route: '/api/cron/warm-images',
+        configured,
+      });
+    }
+  }
+  return `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+}
+
 /**
  * GET /api/cron/warm-images
  *
@@ -58,16 +90,22 @@ export async function GET(request: NextRequest) {
         }
       }
     }
-    const imageUrls = Array.from(imageUrlsSet);
+    const allImageUrls = Array.from(imageUrlsSet);
+
+    // Cap work per invocation so a single run cannot exceed route limits.
+    const imageUrls = allImageUrls.slice(0, MAX_IMAGES_PER_RUN);
+    const remaining = allImageUrls.length - imageUrls.length;
 
     logger.info('Found ship images to warm', {
       route: '/api/cron/warm-images',
       count: imageUrls.length,
+      totalUnique: allImageUrls.length,
+      remaining,
       skippedUnoptimized,
     });
 
-    // Build the origin from the incoming request
-    const origin = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    // Use a configured canonical origin rather than trusting the request host.
+    const origin = resolveOrigin(request);
     let warmed = 0;
     let failed = 0;
 
@@ -78,7 +116,10 @@ export async function GET(request: NextRequest) {
         WARM_WIDTHS.map(async (w) => {
           const target = `${origin}/_next/image?url=${encodeURIComponent(url)}&w=${w}&q=75`;
           try {
-            const res = await fetch(target);
+            // Abort slow optimizer requests so a single image can't hang the run.
+            const res = await fetch(target, {
+              signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+            });
             if (res.ok) {
               warmed++;
             } else {
@@ -87,6 +128,7 @@ export async function GET(request: NextRequest) {
             // Consume body to free resources
             await res.arrayBuffer();
           } catch {
+            // Timeouts (AbortError) and network errors both count as failures.
             failed++;
           }
         })
@@ -94,12 +136,19 @@ export async function GET(request: NextRequest) {
       await Promise.all(requests);
     }
 
-    logger.info('Image cache warm-up complete', { route: '/api/cron/warm-images', warmed, failed });
+    logger.info('Image cache warm-up complete', {
+      route: '/api/cron/warm-images',
+      warmed,
+      failed,
+      remaining,
+    });
 
     return NextResponse.json({
       success: true,
       totalShips: ships.length,
-      uniqueImages: imageUrls.length,
+      uniqueImages: allImageUrls.length,
+      processedImages: imageUrls.length,
+      remaining,
       skippedUnoptimized,
       warmed,
       failed,

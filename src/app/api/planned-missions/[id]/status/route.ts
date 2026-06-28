@@ -5,7 +5,7 @@ import {
   getPlannedMissionById,
   updatePlannedMissionStatus,
   updatePlannedMission,
-  canUserModifyMission
+  canUserModifyMission,
 } from '@/lib/planned-mission-storage';
 import { PlannedMissionStatus } from '@/types/PlannedMission';
 import { getDiscordService } from '@/lib/discord';
@@ -27,26 +27,33 @@ function buildEventDescription(mission: any, baseUrl?: string): string {
   parts.push(`**Activities:** ${activities.join(', ')}`);
 
   if (mission.leaders && mission.leaders.length > 0) {
-    const leaderList = mission.leaders
-      .map((l: any) => `${l.role}: ${l.aydoHandle}`)
-      .join('\n');
+    const leaderList = mission.leaders.map((l: any) => `${l.role}: ${l.aydoHandle}`).join('\n');
     parts.push(`**Leadership:**\n${leaderList}`);
   }
 
   if (baseUrl) {
-    parts.push(`\n📋 **Full Briefing:** ${baseUrl}/dashboard/mission-planner?missionId=${mission.id}`);
+    parts.push(
+      `\n📋 **Full Briefing:** ${baseUrl}/dashboard/mission-planner?missionId=${mission.id}`
+    );
   }
 
   return parts.join('\n\n');
 }
 
 // Auto-publish mission to Discord
-async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ success: boolean; discordEvent?: any; error?: string }> {
+async function autoPublishToDiscord(
+  mission: any,
+  baseUrl?: string
+): Promise<{ success: boolean; discordEvent?: any; error?: string; skipped?: boolean }> {
   try {
     const discord = getDiscordService();
     if (!discord.isConfigured()) {
-      logger.info('Discord not configured, skipping auto-publish', { route: '/api/planned-missions/[id]/status', missionId: mission.id });
-      return { success: false, error: 'Discord not configured' };
+      logger.info('Discord not configured, skipping auto-publish', {
+        route: '/api/planned-missions/[id]/status',
+        missionId: mission.id,
+      });
+      // Not configured is a soft skip, not a publish failure — scheduling may proceed.
+      return { success: false, skipped: true, error: 'Discord not configured' };
     }
 
     const description = buildEventDescription(mission, baseUrl);
@@ -65,7 +72,7 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
       scheduledStartTime: mission.scheduledDateTime,
       scheduledEndTime: endTime,
       location: mission.location || 'Star Citizen',
-      image
+      image,
     });
 
     // Update mission with Discord event reference
@@ -74,14 +81,22 @@ async function autoPublishToDiscord(mission: any, baseUrl?: string): Promise<{ s
         eventId: discordEvent.id,
         guildId: discordEvent.guild_id,
         createdAt: new Date().toISOString(),
-        status: 'SCHEDULED'
-      }
+        status: 'SCHEDULED',
+      },
     });
 
-    logger.info('Auto-published mission to Discord', { route: '/api/planned-missions/[id]/status', missionId: mission.id, discordEventId: discordEvent.id });
+    logger.info('Auto-published mission to Discord', {
+      route: '/api/planned-missions/[id]/status',
+      missionId: mission.id,
+      discordEventId: discordEvent.id,
+    });
     return { success: true, discordEvent };
   } catch (error) {
-    logger.error('Failed to auto-publish to Discord', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/status', missionId: mission.id });
+    logger.error(
+      'Failed to auto-publish to Discord',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions/[id]/status', missionId: mission.id }
+    );
     return { success: false, error: 'Failed to publish to Discord' };
   }
 }
@@ -92,7 +107,7 @@ const VALID_STATUSES: PlannedMissionStatus[] = [
   'ACTIVE',
   'DEBRIEFING',
   'COMPLETED',
-  'CANCELLED'
+  'CANCELLED',
 ];
 
 // Valid status transitions
@@ -102,21 +117,15 @@ const STATUS_TRANSITIONS: Record<PlannedMissionStatus, PlannedMissionStatus[]> =
   ACTIVE: ['DEBRIEFING', 'COMPLETED', 'CANCELLED'],
   DEBRIEFING: ['COMPLETED', 'ACTIVE'],
   COMPLETED: [], // Terminal state
-  CANCELLED: ['DRAFT'] // Can restore to draft
+  CANCELLED: ['DRAFT'], // Can restore to draft
 };
 
 // PATCH - Update mission status
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
     const resolvedParams = await params;
@@ -135,10 +144,7 @@ export async function PATCH(
 
     const mission = await getPlannedMissionById(missionId);
     if (!mission) {
-      return NextResponse.json(
-        { error: 'Mission not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Mission not found' }, { status: 404 });
     }
 
     const body = await request.json();
@@ -156,7 +162,9 @@ export async function PATCH(
     const allowedTransitions = STATUS_TRANSITIONS[mission.status];
     if (!allowedTransitions.includes(status)) {
       return NextResponse.json(
-        { error: `Cannot transition from ${mission.status} to ${status}. Allowed transitions: ${allowedTransitions.join(', ') || 'none'}` },
+        {
+          error: `Cannot transition from ${mission.status} to ${status}. Allowed transitions: ${allowedTransitions.join(', ') || 'none'}`,
+        },
         { status: 400 }
       );
     }
@@ -165,17 +173,49 @@ export async function PATCH(
     const updatedMission = await updatePlannedMissionStatus(missionId, status);
 
     if (!updatedMission) {
-      return NextResponse.json(
-        { error: 'Failed to update status' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to update status' }, { status: 500 });
     }
 
     // Auto-publish to Discord when transitioning to SCHEDULED
-    let discordPublishResult: { success: boolean; discordEvent?: any; error?: string } | null = null;
+    let discordPublishResult: {
+      success: boolean;
+      discordEvent?: any;
+      error?: string;
+      skipped?: boolean;
+    } | null = null;
     if (status === 'SCHEDULED' && !mission.discordEvent) {
       const baseUrl = request.headers.get('origin') || process.env.NEXTAUTH_URL || '';
       discordPublishResult = await autoPublishToDiscord(updatedMission, baseUrl);
+
+      // A genuine publish failure (as opposed to Discord simply not being configured)
+      // means the SCHEDULED transition did not fully complete. Treat it as a failed
+      // transition: revert to the previous status so the operation can be retried,
+      // rather than silently committing SCHEDULED.
+      if (discordPublishResult && !discordPublishResult.success && !discordPublishResult.skipped) {
+        const revertedMission = await updatePlannedMissionStatus(missionId, mission.status);
+
+        logger.warn('Reverted mission status after failed Discord auto-publish', {
+          route: '/api/planned-missions/[id]/status',
+          missionId,
+          attemptedStatus: status,
+          revertedTo: mission.status,
+        });
+
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              'Mission could not be scheduled because publishing to Discord failed. The status has been reverted; please retry.',
+            mission: revertedMission || updatedMission,
+            previousStatus: mission.status,
+            attemptedStatus: status,
+            currentStatus: revertedMission?.status ?? mission.status,
+            discordPublished: false,
+            discordError: discordPublishResult.error,
+          },
+          { status: 502 }
+        );
+      }
     }
 
     return NextResponse.json({
@@ -184,29 +224,24 @@ export async function PATCH(
       previousStatus: mission.status,
       newStatus: status,
       discordPublished: discordPublishResult?.success || false,
-      discordError: discordPublishResult?.error
+      discordError: discordPublishResult?.error,
     });
   } catch (error) {
-    logger.error('Error updating mission status', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/status' });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+    logger.error(
+      'Error updating mission status',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions/[id]/status' }
     );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // GET - Get current status and allowed transitions
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
     const resolvedParams = await params;
@@ -214,21 +249,19 @@ export async function GET(
 
     const mission = await getPlannedMissionById(missionId);
     if (!mission) {
-      return NextResponse.json(
-        { error: 'Mission not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Mission not found' }, { status: 404 });
     }
 
     return NextResponse.json({
       currentStatus: mission.status,
-      allowedTransitions: STATUS_TRANSITIONS[mission.status]
+      allowedTransitions: STATUS_TRANSITIONS[mission.status],
     });
   } catch (error) {
-    logger.error('Error getting mission status', error instanceof Error ? error : new Error(String(error)), { route: '/api/planned-missions/[id]/status' });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+    logger.error(
+      'Error getting mission status',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/planned-missions/[id]/status' }
     );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

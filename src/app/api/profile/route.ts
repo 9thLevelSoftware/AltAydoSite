@@ -15,15 +15,22 @@ const userShipSchema = z.object({
   image: z.string().optional(),
 });
 
-// Profile update validation schema
+// Self-service profile update validation schema.
+//
+// Only fields a member is allowed to change about themselves are included here.
+// Organization-controlled fields (payGrade, position, division) are intentionally
+// omitted: Zod strips unknown keys by default, so any such fields sent by a client
+// are silently ignored rather than persisted. Those fields are roster/role data and
+// must be mutated through a leadership-gated route (see requireLeadership in
+// @/lib/auth-guards), not this self-service endpoint.
+//
+// NOTE (product confirmation pending): verify these fields do not drive any
+// permission/roster logic that would need a different handling before fully locking.
 const profileUpdateSchema = z.object({
   discordName: z.string().optional().nullable(),
   rsiAccountName: z.string().optional().nullable(),
   bio: z.string().optional().nullable(),
   photo: z.string().optional().nullable(),
-  payGrade: z.string().optional().nullable(),
-  position: z.string().optional().nullable(),
-  division: z.string().optional().nullable(),
   timezone: z.string().optional().nullable(),
   preferredGameplayLoops: z.array(z.string()).optional(),
   ships: z.array(userShipSchema).optional(),
@@ -33,20 +40,20 @@ const profileUpdateSchema = z.object({
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session || !session.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     // Get the user from storage
     const userId = session.user.id;
-    
+
     const user = await userStorage.getUserById(userId);
-    
+
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-    
+
     // Return the profile data (excluding sensitive info)
     const response = {
       id: user.id,
@@ -66,75 +73,83 @@ export async function GET() {
     };
 
     return NextResponse.json(response);
-
   } catch (error) {
-    logger.error('Profile fetch error', error instanceof Error ? error : new Error(String(error)), { route: '/api/profile' });
-    return NextResponse.json(
-      { error: 'Failed to fetch profile' },
-      { status: 500 }
-    );
+    logger.error('Profile fetch error', error instanceof Error ? error : new Error(String(error)), {
+      route: '/api/profile',
+    });
+    return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 });
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session || !session.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     const userId = session.user.id;
     let body;
-    
+
     try {
       body = await request.json();
     } catch (parseError) {
-      logger.warn('PUT Profile - Invalid JSON in request body', { route: '/api/profile', error: parseError instanceof Error ? parseError.message : String(parseError) });
+      logger.warn('PUT Profile - Invalid JSON in request body', {
+        route: '/api/profile',
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+      });
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
-    
+
     // Handle ships-only updates specially
-    const bodyKeys = Object.keys(body).filter(k => k !== '__v');
+    const bodyKeys = Object.keys(body).filter((k) => k !== '__v');
     const isShipsOnlyUpdate = bodyKeys.length === 1 && bodyKeys[0] === 'ships';
     if (isShipsOnlyUpdate) {
-      
       if (!Array.isArray(body.ships)) {
         logger.warn('PUT Profile - Ships data is not an array', { route: '/api/profile', userId });
-        return NextResponse.json(
-          { error: 'Ships data must be an array' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'Ships data must be an array' }, { status: 400 });
       }
-      
-      // Validate each ship in the array
-      for (let i = 0; i < body.ships.length; i++) {
-        const ship = body.ships[i];
-        if (!ship.manufacturer || !ship.name || !ship.fleetyardsId) {
-          logger.warn('PUT Profile - Invalid ship data', { route: '/api/profile', userId, index: i });
-          return NextResponse.json(
-            { error: `Ship at index ${i} is missing required fields` },
-            { status: 400 }
-          );
-        }
+
+      // Validate the ships array against the shared ship schema (same schema used
+      // by the full-profile path) so the fast path can't bypass validation.
+      const shipsResult = z.array(userShipSchema).safeParse(body.ships);
+      if (!shipsResult.success) {
+        const errorMessage = shipsResult.error.errors
+          .map((e) => `ships.${e.path.join('.')}: ${e.message}`)
+          .join(', ');
+        logger.warn('PUT Profile - Invalid ship data', {
+          route: '/api/profile',
+          userId,
+          error: errorMessage,
+        });
+        return NextResponse.json({ error: errorMessage }, { status: 400 });
       }
-      
+
       // Get existing user first
       const existingUser = await userStorage.getUserById(userId);
       if (!existingUser) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
-      
-      // Only update ships field (pass __v for optimistic locking if provided)
-      const updatedUser = await userStorage.updateUser(userId, {
-        ships: body.ships
-      }, body.__v);
-      
+
+      // Only update ships field with the validated/stripped data
+      // (pass __v for optimistic locking if provided)
+      const updatedUser = await userStorage.updateUser(
+        userId,
+        {
+          ships: shipsResult.data,
+        },
+        body.__v
+      );
+
       if (!updatedUser) {
-        logger.error('PUT Profile - Failed to update ships', undefined, { route: '/api/profile', userId });
+        logger.error('PUT Profile - Failed to update ships', undefined, {
+          route: '/api/profile',
+          userId,
+        });
         return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
       }
-      
+
       // Return the updated profile data
       const response = {
         id: updatedUser.id,
@@ -159,22 +174,31 @@ export async function PUT(request: NextRequest) {
     // Validate request body (for non-ships-only updates)
     const result = profileUpdateSchema.safeParse(body);
     if (!result.success) {
-      const errorMessage = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-      logger.warn('PUT Profile - Validation error', { route: '/api/profile', userId, error: errorMessage });
+      const errorMessage = result.error.errors
+        .map((e) => `${e.path.join('.')}: ${e.message}`)
+        .join(', ');
+      logger.warn('PUT Profile - Validation error', {
+        route: '/api/profile',
+        userId,
+        error: errorMessage,
+      });
       return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
-    
+
     // Get validated data
     const { __v: expectedVersion, ...updates } = result.data;
 
     // Update the user profile (pass __v for optimistic locking if provided)
     const updatedUser = await userStorage.updateUser(userId, updates, expectedVersion);
-    
+
     if (!updatedUser) {
-      logger.error('PUT Profile - Failed to update profile', undefined, { route: '/api/profile', userId });
+      logger.error('PUT Profile - Failed to update profile', undefined, {
+        route: '/api/profile',
+        userId,
+      });
       return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
     }
-    
+
     // Return the updated profile data
     const response = {
       id: updatedUser.id,
@@ -194,18 +218,21 @@ export async function PUT(request: NextRequest) {
     };
 
     return NextResponse.json(response);
-
   } catch (error) {
     if (error instanceof StaleDocumentError) {
       return NextResponse.json(
-        { error: 'CONFLICT', message: 'Profile was modified by another session. Please refresh and try again.' },
+        {
+          error: 'CONFLICT',
+          message: 'Profile was modified by another session. Please refresh and try again.',
+        },
         { status: 409 }
       );
     }
-    logger.error('Profile update error', error instanceof Error ? error : new Error(String(error)), { route: '/api/profile' });
-    return NextResponse.json(
-      { error: 'Failed to update profile' },
-      { status: 500 }
+    logger.error(
+      'Profile update error',
+      error instanceof Error ? error : new Error(String(error)),
+      { route: '/api/profile' }
     );
+    return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
   }
 }
