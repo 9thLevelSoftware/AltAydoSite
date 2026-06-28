@@ -7,17 +7,26 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 async function main() {
   console.log('Verifying email configuration...');
-  
+
   // Check required environment variables
   const requiredVars = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASSWORD'];
-  const missingVars = requiredVars.filter(varName => !process.env[varName]);
-  
+  const missingVars = requiredVars.filter((varName) => !process.env[varName]);
+
   if (missingVars.length > 0) {
     console.error(`❌ Missing required environment variables: ${missingVars.join(', ')}`);
     console.error('Please check your .env.local file and add the missing variables.');
     process.exit(1);
   }
-  
+
+  // Validate the email port before attempting an SMTP connection
+  const port = Number(process.env.EMAIL_PORT);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    console.error(
+      `❌ Invalid EMAIL_PORT: "${process.env.EMAIL_PORT}". Expected an integer between 1 and 65535.`
+    );
+    process.exit(1);
+  }
+
   console.log('✅ All required environment variables are present');
   console.log(`📧 Email configuration:
   - HOST: ${process.env.EMAIL_HOST}
@@ -26,11 +35,11 @@ async function main() {
   - USER: ${process.env.EMAIL_USER}
   - PASSWORD: ${'*'.repeat(8)} (hidden)
   `);
-  
+
   // Verify SMTP connection
   try {
     const isValid = await verifyEmailConfig();
-    
+
     if (isValid) {
       console.log('✅ Email configuration is valid! SMTP connection successful.');
     } else {
@@ -43,7 +52,7 @@ async function main() {
   }
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error('Unhandled error:', error);
   process.exit(1);
-}); 
+});
